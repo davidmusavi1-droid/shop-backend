@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>فروشگاه پوشاک</title>
+<style>
+body { font-family: Tahoma, sans-serif; background: #f7f7f7; margin: 0; padding: 16px; }
+h1 { text-align: center; color: #333; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; max-width: 900px; margin: 20px auto; }
+.card { background: white; border-radius: 10px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); text-align: center; }
+.card img { width: 100%; height: 120px; object-fit: cover; border-radius: 6px; background: #eee; }
+.card h3 { font-size: 14px; margin: 8px 0 4px; }
+.card p { font-size: 13px; color: #666; margin: 0; }
+.empty { text-align: center; color: #999; margin-top: 40px; }
+.admin { max-width: 500px; margin: 40px auto; background: white; padding: 16px; border-radius: 10px; }
+.admin input { width: 100%; padding: 8px; margin: 6px 0; box-sizing: border-box; }
+.admin button { background: #333; color: white; padding: 10px 16px; border: none; border-radius: 6px; width: 100%; margin-top: 8px; }
+details summary { text-align: center; cursor: pointer; color: #888; margin-top: 30px; }
+</style>
+</head>
+<body>
+<h1>فروشگاه پوشاک</h1>
+<div class="grid" id="products"></div>
+<div class="empty" id="emptyMsg" style="display:none">هنوز محصولی اضافه نشده.</div>
+
+<details>
+<summary>افزودن محصول (مدیریت)</summary>
+<div class="admin">
+<input id="title" placeholder="نام محصول">
+<input id="price" placeholder="قیمت (تومان)" type="number">
+<input id="size" placeholder="سایز مثلا M">
+<input id="color" placeholder="رنگ">
+<input id="sku" placeholder="کد یکتا (SKU)">
+<input id="stock" placeholder="موجودی" type="number">
+<button onclick="addProduct()">افزودن</button>
+</div>
+</details>
+
+<script>
+async function loadProducts() {
+  const res = await fetch('/api/products');
+  const products = await res.json();
+  const grid = document.getElementById('products');
+  const emptyMsg = document.getElementById('emptyMsg');
+  grid.innerHTML = '';
+  if (products.length === 0) {
+    emptyMsg.style.display = 'block';
+    return;
+  }
+  emptyMsg.style.display = 'none';
+  products.forEach(p => {
+    const stock = p.variants.reduce((s, v) => s + v.stock, 0);
+    grid.innerHTML += `
+      <div class="card">
+        <img src="https://placehold.co/200x150?text=%20">
+        <h3>${p.title}</h3>
+        <p>${p.basePrice.toLocaleString()} تومان</p>
+        <p>موجودی: ${stock}</p>
+      </div>`;
+  });
+}
+
+async function addProduct() {
+  const title = document.getElementById('title').value;
+  const price = parseInt(document.getElementById('price').value);
+  const size = document.getElementById('size').value;
+  const color = document.getElementById('color').value;
+  const sku = document.getElementById('sku').value;
+  const stock = parseInt(document.getElementById('stock').value);
+
+  if (!title || !price || !sku) {
+    alert('نام، قیمت و کد یکتا الزامی هستند');
+    return;
+  }
+
+  await fetch('/api/products', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      title, basePrice: price, images: [],
+      variants: [{ size, color, sku, stock }]
+    })
+  });
+  document.getElementById('title').value = '';
+  document.getElementById('price').value = '';
+  document.getElementById('size').value = '';
+  document.getElementById('color').value = '';
+  document.getElementById('sku').value = '';
+  document.getElementById('stock').value = '';
+  loadProducts();
+}
+
+loadProducts();
+</script>
+</body>
+</html>
