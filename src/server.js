@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
-
+app.use(express.static('public'));
 app.use('/api/products', productsRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/payment', paymentRouter);
