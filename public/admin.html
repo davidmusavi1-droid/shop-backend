@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>پنل مدیریت فروشگاه</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Tahoma, Arial, sans-serif;
+      background: #f4f4f4;
+      color: #222;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: auto;
+      padding: 20px 14px 60px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #777;
+      margin-bottom: 25px;
+    }
+
+    .section {
+      background: white;
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    }
+
+    .section h2 {
+      margin-top: 0;
+      font-size: 18px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      margin-top: 13px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 16px;
+      background: white;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .hint {
+      color: #777;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      background: #222;
+      color: white;
+      font-size: 17px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    button:disabled {
+      opacity: .6;
+    }
+
+    #message {
+      margin-top: 15px;
+      padding: 12px;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .success {
+      display: block !important;
+      background: #e8f7ec;
+      color: #176b2c;
+    }
+
+    .error {
+      display: block !important;
+      background: #fdeaea;
+      color: #a52020;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>پنل مدیریت فروشگاه</h1>
+  <div class="subtitle">افزودن محصول جدید</div>
+
+  <form id="productForm">
+
+    <div class="section">
+      <h2>۱. اطلاعات اصلی</h2>
+
+      <label>نام محصول *</label>
+      <input id="title" required>
+
+      <label>برند</label>
+      <input id="brand" placeholder="مثلاً Carhartt">
+
+      <label>مدل</label>
+      <input id="modelName">
+
+      <label>نوع محصول</label>
+      <input id="productType"
+             placeholder="مثلاً شلوار، نیم‌زیپ، بادگیر">
+
+      <label>توضیحات</label>
+      <textarea id="description"></textarea>
+    </div>
+
+
+    <div class="section">
+      <h2>۲. نیاز و سبک مشتری</h2>
+
+      <label>نیاز مشتری</label>
+      <input id="customerNeeds"
+             placeholder="مثلاً کاربردی و مقاوم، روزمره">
+
+      <div class="hint">
+        اگر چند مورد است با ویرگول جدا کن.
+      </div>
+
+      <label>احساس / سبک</label>
+      <input id="styles"
+             placeholder="مثلاً وینتیج">
+
+      <div class="hint">
+        اگر چند سبک است با ویرگول جدا کن.
+      </div>
+    </div>
+
+
+    <div class="section">
+      <h2>۳. کیفیت و وضعیت</h2>
+
+      <label>گرید کیفیت</label>
+
+      <select id="qualityGrade">
+        <option value="">انتخاب کنید</option>
+        <option value="N">N — نو / اکبند</option>
+        <option value="A_PLUS">A+ — در حد نو</option>
+        <option value="A">A — تمیز</option>
+        <option value="B">B — آثار استفاده معمول</option>
+        <option value="C">C — دارای ایراد</option>
+      </select>
+
+      <label>وضعیت کالا</label>
+      <input id="condition"
+             placeholder="مثلاً استوک، بسیار تمیز">
+
+      <label>شرح ایراد</label>
+      <textarea id="defect"
+                placeholder="در صورت وجود ایراد"></textarea>
+    </div>
+
+
+    <div class="section">
+      <h2>۴. قیمت و موجودی</h2>
+
+      <label>قیمت (تومان) *</label>
+      <input id="basePrice"
+             type="number"
+             min="0"
+             required>
+
+      <label>نوع موجودی</label>
+
+      <select id="inventoryMode">
+        <option value="SINGLE">
+          تک‌آیتمی
+        </option>
+
+        <option value="MULTI">
+          چندتایی / چندسایزی
+        </option>
+      </select>
+
+      <label>سایز روی لیبل *</label>
+      <input id="size" required>
+
+      <label>رنگ *</label>
+      <input id="color" required>
+
+      <label>SKU *</label>
+      <input id="sku"
+             placeholder="مثلاً CAR-PANT-001"
+             required>
+
+      <label>موجودی *</label>
+      <input id="stock"
+             type="number"
+             min="0"
+             value="1"
+             required>
+    </div>
+
+
+    <div class="section">
+      <h2>۵. اندازه‌های واقعی</h2>
+
+      <label>عرض سینه (cm)</label>
+      <input id="chestWidthCm"
+             type="number"
+             step="0.1">
+
+      <label>قد لباس (cm)</label>
+      <input id="lengthCm"
+             type="number"
+             step="0.1">
+
+      <hr>
+
+      <label>دور کمر شلوار (cm)</label>
+      <input id="waistCm"
+             type="number"
+             step="0.1">
+
+      <label>فاق (cm)</label>
+      <input id="riseCm"
+             type="number"
+             step="0.1">
+
+      <label>قد کل شلوار (cm)</label>
+      <input id="totalLengthCm"
+             type="number"
+             step="0.1">
+
+      <label>عرض ران (cm)</label>
+      <input id="thighWidthCm"
+             type="number"
+             step="0.1">
+
+      <label>عرض دمپا (cm)</label>
+      <input id="hemWidthCm"
+             type="number"
+             step="0.1">
+    </div>
+
+
+    <div class="section">
+      <h2>۶. هویت محصول</h2>
+
+      <label>خاستگاه</label>
+      <textarea id="identityOrigin"></textarea>
+
+      <label>تاریخچه</label>
+      <textarea id="identityHistory"></textarea>
+
+      <label>هدف طراحی</label>
+      <textarea id="identityPurpose"></textarea>
+
+      <label>کاربردها</label>
+      <textarea id="identityUseCases"></textarea>
+
+      <label>ویژگی‌های طراحی</label>
+      <textarea id="identityDesign"></textarea>
+
+      <label>ویژگی‌های فنی</label>
+      <textarea id="identityTechnical"></textarea>
+
+      <label>منابع اطلاعات</label>
+      <textarea id="identitySources"></textarea>
+    </div>
+
+
+    <button id="submitButton" type="submit">
+      ثبت محصول
+    </button>
+
+    <div id="message"></div>
+
+  </form>
+
+</div>
+
+
+<script>
+
+const value = (id) =>
+  document.getElementById(id).value.trim();
+
+const numberOrNull = (id) => {
+  const v = value(id);
+  return v === '' ? null : Number(v);
+};
+
+const arrayFromInput = (id) =>
+  value(id)
+    .split(',')
+    .map(item => item.trim())
+    .filter(Boolean);
+
+
+document
+  .getElementById('productForm')
+  .addEventListener('submit', async (event) => {
+
+    event.preventDefault();
+
+    const button =
+      document.getElementById('submitButton');
+
+    const message =
+      document.getElementById('message');
+
+    button.disabled = true;
+    button.textContent = 'در حال ثبت...';
+
+    message.className = '';
+    message.style.display = 'none';
+
+    const data = {
+
+      title: value('title'),
+
+      brand: value('brand') || null,
+
+      modelName:
+        value('modelName') || null,
+
+      productType:
+        value('productType') || null,
+
+      description:
+        value('description') || null,
+
+      customerNeeds:
+        arrayFromInput('customerNeeds'),
+
+      styles:
+        arrayFromInput('styles'),
+
+      qualityGrade:
+        value('qualityGrade') || null,
+
+      condition:
+        value('condition') || null,
+
+      defect:
+        value('defect') || null,
+
+      basePrice:
+        Number(value('basePrice')),
+
+      inventoryMode:
+        value('inventoryMode'),
+
+      images: [],
+
+      identityOrigin:
+        value('identityOrigin') || null,
+
+      identityHistory:
+        value('identityHistory') || null,
+
+      identityPurpose:
+        value('identityPurpose') || null,
+
+      identityUseCases:
+        value('identityUseCases') || null,
+
+      identityDesign:
+        value('identityDesign') || null,
+
+      identityTechnical:
+        value('identityTechnical') || null,
+
+      identitySources:
+        value('identitySources') || null,
+
+      variants: [
+        {
+          size: value('size'),
+          color: value('color'),
+          sku: value('sku'),
+          stock: Number(value('stock')),
+
+          priceDelta: 0,
+
+          chestWidthCm:
+            numberOrNull('chestWidthCm'),
+
+          lengthCm:
+            numberOrNull('lengthCm'),
+
+          waistCm:
+            numberOrNull('waistCm'),
+
+          riseCm:
+            numberOrNull('riseCm'),
+
+          totalLengthCm:
+            numberOrNull('totalLengthCm'),
+
+          thighWidthCm:
+            numberOrNull('thighWidthCm'),
+
+          hemWidthCm:
+            numberOrNull('hemWidthCm'),
+
+          itemImages: []
+        }
+      ]
+    };
+
+
+    try {
+
+      const response =
+        await fetch('/api/products', {
+
+          method: 'POST',
+
+          headers: {
+            'Content-Type': 'application/json'
+          },
+
+          body: JSON.stringify(data)
+        });
+
+
+      const result = await response.json();
+
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || 'خطا در ثبت محصول'
+        );
+      }
+
+
+      message.textContent =
+        'محصول با موفقیت ثبت شد ✓';
+
+      message.className = 'success';
+
+      document
+        .getElementById('productForm')
+        .reset();
+
+
+    } catch (error) {
+
+      message.textContent =
+        'خطا: ' + error.message;
+
+      message.className = 'error';
+
+    } finally {
+
+      button.disabled = false;
+
+      button.textContent = 'ثبت محصول';
+    }
+
+  });
+
+</script>
+
+</body>
+  </html>
