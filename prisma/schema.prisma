@@ -7,29 +7,90 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum InventoryMode {
+  SINGLE
+  MULTI
+}
+
+enum QualityGrade {
+  N
+  A_PLUS
+  A
+  B
+  C
+}
+
 model Product {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
   description String?
   basePrice   Int
   images      String[]
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isActive    Boolean  @default(true)
 
-  variants    Variant[]
-  orderItems  OrderItem[]
+  // اطلاعات پایه محصول
+  brand       String?
+  modelName   String?
+  productType String?
+
+  // لایه اول: نیاز مشتری
+  customerNeeds String[]
+
+  // لایه دوم: احساس / سبک
+  styles        String[]
+
+  // نحوه مدیریت موجودی
+  inventoryMode InventoryMode @default(MULTI)
+
+  // وضعیت و کیفیت
+  qualityGrade QualityGrade?
+  condition    String?
+  defect       String?
+
+  // هویت محصول
+  identityOrigin      String?
+  identityHistory     String?
+  identityPurpose     String?
+  identityUseCases    String?
+  identityDesign      String?
+  identityTechnical   String?
+  identitySources     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants   Variant[]
+  orderItems OrderItem[]
 }
 
 model Variant {
-  id         String   @id @default(uuid())
-  productId  String
-  product    Product  @relation(fields: [productId], references: [id])
+  id        String  @id @default(uuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  // اطلاعات فعلی - برای سازگاری با سیستم موجود
   size       String
   color      String
-  sku        String   @unique
-  stock      Int      @default(0)
-  priceDelta Int      @default(0)
+  sku        String @unique
+  stock      Int    @default(0)
+  priceDelta Int    @default(0)
+
+  // اندازه‌های واقعی
+  chestWidthCm Float?
+  lengthCm     Float?
+
+  // اندازه‌های شلوار
+  waistCm       Float?
+  riseCm        Float?
+  totalLengthCm Float?
+  thighWidthCm  Float?
+  hemWidthCm    Float?
+
+  // اطلاعات اختصاصی آیتم
+  itemGrade     QualityGrade?
+  itemCondition String?
+  itemDefect    String?
+  itemImages    String[]
 
   orderItems OrderItem[]
 
@@ -43,7 +104,7 @@ model Customer {
   address   String?
   createdAt DateTime @default(now())
 
-  orders    Order[]
+  orders Order[]
 }
 
 enum OrderStatus {
@@ -70,8 +131,8 @@ model Order {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
-  items      OrderItem[]
-  payment    Payment?
+  items   OrderItem[]
+  payment Payment?
 }
 
 model OrderItem {
@@ -87,12 +148,12 @@ model OrderItem {
 }
 
 model Payment {
-  id            String   @id @default(uuid())
-  orderId       String   @unique
-  order         Order    @relation(fields: [orderId], references: [id])
-  authority     String?
-  refId         String?
-  amount        Int
-  isSuccessful  Boolean  @default(false)
-  createdAt     DateTime @default(now())
+  id           String   @id @default(uuid())
+  orderId      String   @unique
+  order        Order    @relation(fields: [orderId], references: [id])
+  authority    String?
+  refId        String?
+  amount       Int
+  isSuccessful Boolean  @default(false)
+  createdAt    DateTime @default(now())
 }
