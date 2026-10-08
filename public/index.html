@@ -24,18 +24,7 @@ details summary { text-align: center; cursor: pointer; color: #888; margin-top: 
 <div class="grid" id="products"></div>
 <div class="empty" id="emptyMsg" style="display:none">هنوز محصولی اضافه نشده.</div>
 
-<details>
-<summary>افزودن محصول (مدیریت)</summary>
-<div class="admin">
-<input id="title" placeholder="نام محصول">
-<input id="price" placeholder="قیمت (تومان)" type="number">
-<input id="size" placeholder="سایز مثلا M">
-<input id="color" placeholder="رنگ">
-<input id="sku" placeholder="کد یکتا (SKU)">
-<input id="stock" placeholder="موجودی" type="number">
-<button onclick="addProduct()">افزودن</button>
-</div>
-</details>
+
 
 <script>
 async function loadProducts() {
