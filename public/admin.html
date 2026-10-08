@@ -326,7 +326,19 @@
 
 
 <script>
+function adminLogin() {
+  const token = document.getElementById('adminPassword').value;
 
+  if (!token.trim()) {
+    alert('رمز مدیریت را وارد کنید');
+    return;
+  }
+
+  sessionStorage.setItem('adminToken', token);
+  document.getElementById('adminPassword').value = '';
+
+  alert('رمز ذخیره شد');
+}
 const value = (id) =>
   document.getElementById(id).value.trim();
 
