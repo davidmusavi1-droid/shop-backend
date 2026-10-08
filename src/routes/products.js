@@ -1,6 +1,6 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
-const prisma = require('../lib/prisma');
+const requireAdmin = require('../middleware/requireAdmin');
 const router = express.Router();
 
 // لیست محصولات فعال
