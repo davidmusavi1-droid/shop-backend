@@ -19,7 +19,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // جزئیات یک محصول
-router.post('/', requireAdmin, async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const product = await prisma.product.findUnique({
       where: { id: req.params.id },
