@@ -342,7 +342,9 @@ document.getElementById('loginSection').style.display = 'none';
 document.getElementById('productForm').style.display = 'block';
 }
 const value = (id) =>
-document.getElementById(id).value.trim();
+  document.getElementById(id).value.trim();
+
+const numberOrNull = (id) => {
   const v = value(id);
   return v === '' ? null : Number(v);
 };
