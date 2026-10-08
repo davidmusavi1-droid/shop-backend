@@ -37,7 +37,7 @@ router.post('/', requireAdmin, async (req, res, next) => {
 });
 
 // افزودن محصول
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const {
       title,
