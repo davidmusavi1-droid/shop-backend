@@ -71,9 +71,39 @@ test('blank measurements remain null and public listing filters stock', async ()
     create: async args => { created = args.data; return args.data; },
     findMany: async args => { query = args; return []; },
   } });
-  await call(routes['post /'], { title: 'test', basePrice: 100, variants: [{ sku: 'test', chestWidthCm: null, lengthCm: 65 }] });
+  await call(routes['post /'], { title: 'test', basePrice: 100, variants: [{ sku: 'test', size: 'L', color: 'black', chestWidthCm: null, lengthCm: 65 }] });
   assert.equal(created.variants.create[0].chestWidthCm, null);
   assert.equal(created.variants.create[0].lengthCm, 65);
   await call(routes['get /']);
   assert.equal(query.where.variants.some.stock.gt, 0);
+});
+const productBody = { title: 'test', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'one', size: 'L', color: 'black', stock: 1 }] };
+test('all product management endpoints require admin', () => {
+  const { routes, admin } = load('products');
+  for (const key of ['get /admin/list', 'post /', 'patch /:id']) assert.equal(routes[key][0], admin);
+});
+test('invalid and duplicate variants never reach database', async () => {
+  const { routes } = load('products');
+  for (const body of [null, {...productBody, basePrice: -1}, {...productBody, variants: []}, {...productBody, variants: [productBody.variants[0], productBody.variants[0]]}, {...productBody, inventoryMode:'SINGLE', variants:[{...productBody.variants[0],stock:2}]}, {...productBody, images:['javascript:alert(1)']}]) {
+    assert.equal((await call(routes['post /'],body)).code,400);
+  }
+});
+test('editing preserves variant IDs and rejects stale stock or removed variants', async () => {
+  const updatedAt = new Date('2026-10-13T00:00:00Z');
+  const current = { id:'p1', updatedAt, variants:[{id:'v1'}] };
+  let updated=0, allowStock=true;
+  const tx={product:{findUnique:async()=>current,updateMany:async()=>({count:1})},variant:{updateMany:async args=>{assert.equal(args.where.id,'v1');assert.equal(args.where.stock,1);updated++;return {count:allowStock?1:0};}}};
+  const {routes}=load('products',{$transaction:fn=>fn(tx)});
+  const body={...productBody,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1,stock:3}]};
+  assert.equal((await call(routes['patch /:id'],body,{id:'p1'})).code,200);
+  assert.equal(updated,1);
+  allowStock=false;
+  assert.equal((await call(routes['patch /:id'],body,{id:'p1'})).code,409);
+  assert.equal((await call(routes['patch /:id'],{...body,updatedAt:'old'},{id:'p1'})).code,409);
+  assert.equal((await call(routes['patch /:id'],{...body,variants:productBody.variants},{id:'p1'})).code,400);
+});
+test('admin listing includes sold-out and inactive products',async()=>{
+  let query;
+  const {routes}=load('products',{product:{findMany:async args=>{query=args;return [];}}});
+  await call(routes['get /admin/list']);assert.equal(query.where,undefined);
 });
