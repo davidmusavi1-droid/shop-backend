@@ -28,56 +28,37 @@ details summary { text-align: center; cursor: pointer; color: #888; margin-top: 
 
 <script>
 async function loadProducts() {
-  const res = await fetch('/api/products');
-  const products = await res.json();
   const grid = document.getElementById('products');
-  const emptyMsg = document.getElementById('emptyMsg');
-  grid.innerHTML = '';
-  if (products.length === 0) {
-    emptyMsg.style.display = 'block';
-    return;
+  const message = document.getElementById('emptyMsg');
+  grid.replaceChildren();
+  try {
+    const res = await fetch('/api/products');
+    if (!res.ok) throw new Error('load failed');
+    const products = await res.json();
+    if (!Array.isArray(products)) throw new Error('invalid response');
+    message.style.display = products.length ? 'none' : 'block';
+    message.textContent = 'هنوز محصول موجودی اضافه نشده.';
+    for (const p of products) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const img = document.createElement('img');
+      const fallback = 'https://placehold.co/200x150?text=%20';
+      let src = fallback;
+      try { const url = new URL(p.images?.[0]); if (url.protocol === 'https:') src = url.href; } catch {}
+      img.src = src;
+      img.alt = p.title;
+      img.loading = 'lazy';
+      img.onerror = () => { img.onerror = null; img.src = fallback; };
+      const title = document.createElement('h3'); title.textContent = p.title;
+      const price = document.createElement('p'); price.textContent = p.basePrice.toLocaleString('fa-IR') + ' تومان';
+      const stock = document.createElement('p'); stock.textContent = 'موجودی: ' + p.variants.reduce((s, v) => s + v.stock, 0);
+      card.append(img, title, price, stock);
+      grid.append(card);
+    }
+  } catch {
+    message.style.display = 'block';
+    message.textContent = 'دریافت محصولات ناموفق بود؛ صفحه را دوباره بارگذاری کنید.';
   }
-  emptyMsg.style.display = 'none';
-  products.forEach(p => {
-    const stock = p.variants.reduce((s, v) => s + v.stock, 0);
-    grid.innerHTML += `
-      <div class="card">
-        <img src="https://placehold.co/200x150?text=%20">
-        <h3>${p.title}</h3>
-        <p>${p.basePrice.toLocaleString()} تومان</p>
-        <p>موجودی: ${stock}</p>
-      </div>`;
-  });
-}
-
-async function addProduct() {
-  const title = document.getElementById('title').value;
-  const price = parseInt(document.getElementById('price').value);
-  const size = document.getElementById('size').value;
-  const color = document.getElementById('color').value;
-  const sku = document.getElementById('sku').value;
-  const stock = parseInt(document.getElementById('stock').value);
-
-  if (!title || !price || !sku) {
-    alert('نام، قیمت و کد یکتا الزامی هستند');
-    return;
-  }
-
-  await fetch('/api/products', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      title, basePrice: price, images: [],
-      variants: [{ size, color, sku, stock }]
-    })
-  });
-  document.getElementById('title').value = '';
-  document.getElementById('price').value = '';
-  document.getElementById('size').value = '';
-  document.getElementById('color').value = '';
-  document.getElementById('sku').value = '';
-  document.getElementById('stock').value = '';
-  loadProducts();
 }
 
 loadProducts();
