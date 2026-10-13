@@ -1,0 +1,79 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+function load(name, prisma = {}) {
+  const routes = {};
+  const admin = () => {};
+  const router = Object.fromEntries(['get', 'post', 'patch'].map(method => [method, (url, ...handlers) => { routes[method + ' ' + url] = handlers; }]));
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes', name + '.js'), 'utf8'), {
+    require: name => name === 'express' ? { Router: () => router } : name.includes('requireAdmin') ? admin : prisma,
+    module: { exports: {} },
+  });
+  return { routes, admin };
+}
+async function call(handlers, body, params = {}) {
+  let code = 200, data, error;
+  await handlers.at(-1)({ body, params, query: { Authority: 'fake', Status: 'OK' } }, {
+    status(n) { code = n; return this; }, json(d) { data = d; return this; },
+  }, e => { error = e; });
+  return { code: error?.statusCode || code, data, error };
+}
+const valid = { customer: { fullName: 'Test', phone: '09000000000' }, items: [{ variantId: 'v1', quantity: 1 }] };
+test('reject invalid quantities and bodies before database use', async () => {
+  const { routes } = load('orders');
+  for (const body of [null, {}, { ...valid, customer: null }, ...[0, -1, 1.5, '1'].map(quantity => ({ ...valid, items: [{ variantId: 'v1', quantity }] }))]) {
+    assert.equal((await call(routes['post /'], body)).code, 400);
+  }
+});
+test('order details and changes require administrator middleware', () => {
+  const { routes, admin } = load('orders');
+  assert.equal(routes['get /:id'][0], admin);
+  assert.equal(routes['patch /:id/status'][0], admin);
+});
+test('stock reservation is conditional and conflicts reject the order', async () => {
+  let created = false, where;
+  const tx = {
+    customer: { upsert: async () => ({ id: 'c1' }) },
+    variant: {
+      findUnique: async () => ({ id: 'v1', productId: 'p1', priceDelta: 0, product: { isActive: true, basePrice: 100 } }),
+      updateMany: async args => { where = args.where; return { count: 0 }; },
+    }, order: { create: async () => { created = true; } },
+  };
+  const { routes } = load('orders', { $transaction: fn => fn(tx) });
+  assert.equal((await call(routes['post /'], valid)).code, 409);
+  assert.equal(where.stock.gte, 1);
+  assert.equal(where.product.isActive, true);
+  assert.equal(created, false);
+});
+test('cancellation returns reserved stock once, repeated cancellation is harmless', async () => {
+  const current = { id: 'o1', status: 'PENDING', items: [{ variantId: 'v1', quantity: 2 }] };
+  let restored = 0;
+  const tx = { order: {
+    findUnique: async () => current,
+    updateMany: async ({ data }) => { current.status = data.status; return { count: 1 }; },
+  }, variant: { update: async ({ data }) => { restored += data.stock.increment; } } };
+  const { routes } = load('orders', { $transaction: fn => fn(tx) });
+  for (let i = 0; i < 2; i++) assert.equal((await call(routes['patch /:id/status'], { status: 'CANCELED' }, { id: 'o1' })).code, 200);
+  assert.equal(restored, 2);
+  assert.equal((await call(routes['patch /:id/status'], { status: 'PAID' }, { id: 'o1' })).code, 400);
+});
+test('fake gateway requests and callbacks fail closed without database writes', async () => {
+  const { routes } = load('payment');
+  for (const key of ['post /request/:orderId', 'get /verify']) {
+    assert.equal((await call(routes[key], {}, { orderId: 'o1' })).code, 503);
+  }
+});
+test('blank measurements remain null and public listing filters stock', async () => {
+  let created, query;
+  const { routes } = load('products', { product: {
+    create: async args => { created = args.data; return args.data; },
+    findMany: async args => { query = args; return []; },
+  } });
+  await call(routes['post /'], { title: 'test', basePrice: 100, variants: [{ sku: 'test', chestWidthCm: null, lengthCm: 65 }] });
+  assert.equal(created.variants.create[0].chestWidthCm, null);
+  assert.equal(created.variants.create[0].lengthCm, 65);
+  await call(routes['get /']);
+  assert.equal(query.where.variants.some.stock.gt, 0);
+});

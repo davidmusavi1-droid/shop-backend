@@ -155,6 +155,9 @@
       <input id="productType"
              placeholder="مثلاً شلوار، نیم‌زیپ، بادگیر">
 
+      <label>لینک تصاویر (HTTPS، هر لینک در یک خط)</label>
+      <textarea id="images" placeholder="https://..."></textarea>
+
       <label>توضیحات</label>
       <textarea id="description"></textarea>
     </div>
@@ -351,7 +354,7 @@ const numberOrNull = (id) => {
 
 const arrayFromInput = (id) =>
   value(id)
-    .split(',')
+    .split(/[,،]/)
     .map(item => item.trim())
     .filter(Boolean);
 
@@ -410,7 +413,7 @@ document
       inventoryMode:
         value('inventoryMode'),
 
-      images: [],
+      images: value('images').split(/\r?\n/).map(s => s.trim()).filter(Boolean),
 
       identityOrigin:
         value('identityOrigin') || null,

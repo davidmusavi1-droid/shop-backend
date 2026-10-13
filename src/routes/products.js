@@ -7,7 +7,7 @@ const router = express.Router();
 router.get('/', async (req, res, next) => {
   try {
     const products = await prisma.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, variants: { some: { stock: { gt: 0 } } } },
       include: { variants: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -26,7 +26,7 @@ router.get('/:id', async (req, res, next) => {
       include: { variants: true },
     });
 
-    if (!product) {
+    if (!product || !product.isActive || !product.variants.some(v => v.stock > 0)) {
       return res.status(404).json({ error: 'محصول پیدا نشد' });
     }
 
@@ -117,37 +117,37 @@ router.post('/', requireAdmin, async (req, res, next) => {
             priceDelta: Number(v.priceDelta || 0),
 
             chestWidthCm:
-              v.chestWidthCm !== undefined && v.chestWidthCm !== ''
+              v.chestWidthCm != null && v.chestWidthCm !== ''
                 ? Number(v.chestWidthCm)
                 : null,
 
             lengthCm:
-              v.lengthCm !== undefined && v.lengthCm !== ''
+              v.lengthCm != null && v.lengthCm !== ''
                 ? Number(v.lengthCm)
                 : null,
 
             waistCm:
-              v.waistCm !== undefined && v.waistCm !== ''
+              v.waistCm != null && v.waistCm !== ''
                 ? Number(v.waistCm)
                 : null,
 
             riseCm:
-              v.riseCm !== undefined && v.riseCm !== ''
+              v.riseCm != null && v.riseCm !== ''
                 ? Number(v.riseCm)
                 : null,
 
             totalLengthCm:
-              v.totalLengthCm !== undefined && v.totalLengthCm !== ''
+              v.totalLengthCm != null && v.totalLengthCm !== ''
                 ? Number(v.totalLengthCm)
                 : null,
 
             thighWidthCm:
-              v.thighWidthCm !== undefined && v.thighWidthCm !== ''
+              v.thighWidthCm != null && v.thighWidthCm !== ''
                 ? Number(v.thighWidthCm)
                 : null,
 
             hemWidthCm:
-              v.hemWidthCm !== undefined && v.hemWidthCm !== ''
+              v.hemWidthCm != null && v.hemWidthCm !== ''
                 ? Number(v.hemWidthCm)
                 : null,
 
