@@ -20,6 +20,8 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  assert.equal(await page.locator('.card').count(),1);assert((await page.locator('.card').innerText()).includes('۱۸۰'));
  await page.screenshot({path:'/tmp/motif-measurements-mobile.png',fullPage:true});
  await page.locator('.card').click();await page.locator('#detail').waitFor();
+ assert(new URL(page.url()).pathname.startsWith('/products/'));
+ assert.equal(await page.locator('link[rel=canonical]').getAttribute('href'),'https://motifdress.com/products/'+encodeURIComponent('بادگیر'));
  assert.equal(await page.locator('.choices button[aria-pressed=true]').count(),1);
  assert((await page.locator('.price').innerText()).includes('۱۸۰'));
  await page.locator('.choices button').first().click();assert((await page.locator('.match-note').innerText()).includes('منطبق نیست'));
@@ -30,6 +32,9 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.locator('#resetFilters').click();await page.getByRole('button',{name:'پاییزه',exact:true}).click();assert.equal(await page.locator('.card').count(),1);
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await page.setViewportSize({width:1280,height:900});await page.screenshot({path:'/tmp/motif-measurements-desktop.png',fullPage:true});
+ await page.goto('http://motif.test/products/'+encodeURIComponent('بادگیر')+'?variant=fit');await page.locator('#detail').waitFor();assert((await page.locator('.price').innerText()).includes('۱۸۰'));
+ await page.reload();await page.locator('#detail').waitFor();assert((await page.locator('.price').innerText()).includes('۱۸۰'));
+ await page.goto('http://motif.test/#product/'+encodeURIComponent('بادگیر')+'?variant=fit');await page.locator('#detail').waitFor();assert(new URL(page.url()).pathname.startsWith('/products/'));
  assert.deepEqual(errors,[]);console.log('PASS: exact needs, Persian ranges, matched price/variant, unknown/legacy exclusion, bounds, reset, mobile. Mock API.');
  }finally{await browser.close();}
 })();
