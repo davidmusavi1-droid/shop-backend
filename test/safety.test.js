@@ -107,3 +107,14 @@ test('admin listing includes sold-out and inactive products',async()=>{
   const {routes}=load('products',{product:{findMany:async args=>{query=args;return [];}}});
   await call(routes['get /admin/list']);assert.equal(query.where,undefined);
 });
+test('flat waistband is validated separately and never inferred from legacy waist', async () => {
+  let data;
+  const {routes}=load('products',{product:{create:async args=>{data=args.data;return data;}}});
+  const body={...productBody,variants:[{...productBody.variants[0],waistCm:84,waistWidthCm:42}]};
+  assert.equal((await call(routes['post /'],body)).code,201);
+  assert.equal(data.variants.create[0].waistWidthCm,42);
+  assert.equal(data.variants.create[0].waistCm,84);
+  for(const n of [0,-1,'42',Infinity])assert.equal((await call(routes['post /'],{...body,variants:[{...body.variants[0],waistWidthCm:n}]})).code,400);
+  await call(routes['post /'],productBody);
+  assert.equal(data.variants.create[0].waistWidthCm,undefined);
+});

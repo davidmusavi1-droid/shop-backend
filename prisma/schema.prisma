@@ -81,6 +81,8 @@ model Variant {
 
   // اندازه‌های شلوار
   waistCm       Float?
+  // Flat garment waistband width, explicitly measured; never inferred from waistCm.
+  waistWidthCm  Float?
   riseCm        Float?
   totalLengthCm Float?
   thighWidthCm  Float?

@@ -12,7 +12,7 @@ router.get('/admin/list', requireAdmin, async (req, res, next) => {
 
 const invalid = message => Object.assign(new Error(message), { statusCode: 400 });
 const conflict = () => Object.assign(new Error('محصول یا موجودی تغییر کرده؛ دوباره بارگذاری کنید'), { statusCode: 409 });
-const measures = ['chestWidthCm', 'lengthCm', 'waistCm', 'riseCm', 'totalLengthCm', 'thighWidthCm', 'hemWidthCm'];
+const measures = ['chestWidthCm', 'lengthCm', 'waistCm', 'waistWidthCm', 'riseCm', 'totalLengthCm', 'thighWidthCm', 'hemWidthCm'];
 const texts = ['description', 'brand', 'modelName', 'productType', 'condition', 'defect', 'identityOrigin', 'identityHistory', 'identityPurpose', 'identityUseCases', 'identityDesign', 'identityTechnical', 'identitySources'];
 const grades = ['N', 'A_PLUS', 'A', 'B', 'C'];
 function normalize(body) {
@@ -46,6 +46,8 @@ function normalize(body) {
     if (skus.has(out.sku) || combinations.has(combination)) throw invalid('SKU یا ترکیب سایز و رنگ تکراری است');
     skus.add(out.sku); combinations.add(combination);
     for (const key of measures) {
+      // Older editors do not know this field; preserve it on updates.
+      if (key === 'waistWidthCm' && v[key] === undefined) continue;
       out[key] = v[key] == null || v[key] === '' ? null : v[key];
       if (out[key] !== null && (typeof out[key] !== 'number' || !Number.isFinite(out[key]) || out[key] <= 0)) throw invalid('اندازه نامعتبر است');
     }

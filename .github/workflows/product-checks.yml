@@ -35,5 +35,5 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npx prisma generate
       - run: npx prisma db push
-      - run: node --test test/safety.test.js
+      - run: node --test test/*.test.js
       - run: node test/product-integration.cjs

@@ -57,10 +57,15 @@ async function main() {
   await page.locator('#addVariant').click();
   const second = page.locator('#variants fieldset').nth(1);
   for (const [key, value] of Object.entries({ size: 'XL', color: 'black', sku: 'integration-XL' })) await second.locator('[data-key=' + key + ']').fill(value);
+  await page.locator('[data-key=customerNeeds] input[value="پاییزه"]').check();
+  await page.locator('#variants fieldset').first().locator('[data-key=waistWidthCm]').fill('42');
+  assert.equal(await page.locator('[data-key=styles]').count(),0);
   await page.locator('#save').click();
   await page.getByText('محصول ذخیره شد.', { exact: true }).waitFor();
   p = await prisma.product.findUnique({ where: { id: p.id }, include: { variants: true } });
   assert.equal(p.title, 'Edited in browser'); assert.equal(p.variants.length, 2);
+  assert.deepEqual(p.customerNeeds, ['پاییزه']);
+  assert.equal(p.variants.find(v=>v.id===originalId).waistWidthCm,42);
   assert(p.variants.some(v => v.id === originalId && v.stock === 0));
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
   assert.deepEqual(errors, []);
