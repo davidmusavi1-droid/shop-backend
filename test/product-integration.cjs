@@ -28,10 +28,23 @@ async function main() {
   assert.equal(created.status, 201, JSON.stringify(created.data));
   let p = created.data;
   const originalId = p.variants[0].id;
-  // A real order changes stock after the administrator has loaded the form.
+  // Closed checkout must not change customers, orders, or inventory.
   const stale = edit(p);
-  const order = await api('/api/orders', 'POST', { customer: { fullName: 'Integration test', phone: '09000000000' }, items: [{ variantId: originalId, quantity: 1 }] }, false);
-  assert.equal(order.status, 201);
+  const before = { customers: await prisma.customer.count(), orders: await prisma.order.count() };
+  const blocked = await api('/api/orders', 'POST', { customer: { fullName: 'Integration test', phone: '09000000000' }, items: [{ variantId: originalId, quantity: 1 }] }, false);
+  assert.equal(blocked.status, 503);
+  assert.equal(blocked.data.code, 'CHECKOUT_NOT_CONFIGURED');
+  assert.equal(await prisma.customer.count(), before.customers);
+  assert.equal(await prisma.order.count(), before.orders);
+  assert.equal((await prisma.variant.findUnique({ where: { id: originalId } })).stock, 1);
+  // Seed a historical reservation in this disposable database to retain the
+  // admin conflict and order-reference checks while public checkout is closed.
+  const order = await prisma.$transaction(async tx => {
+    const customer = await tx.customer.create({ data: { fullName: 'Integration fixture', phone: '09000000000' } });
+    await tx.variant.update({ where: { id: originalId }, data: { stock: { decrement: 1 } } });
+    return tx.order.create({ data: { customerId: customer.id, totalPrice: 100,
+      items: { create: [{ productId: p.id, variantId: originalId, quantity: 1, unitPrice: 100 }] } } });
+  });
   stale.title = 'Must roll back';
   assert.equal((await api('/api/products/' + p.id, 'PATCH', stale)).status, 409);
   p = await prisma.product.findUnique({ where: { id: p.id }, include: { variants: true } });
@@ -69,7 +82,7 @@ async function main() {
   p = (await api('/api/products/admin/list')).data.find(x => x.id === p.id);
   const results = await Promise.all(['A', 'B'].map(title => api('/api/products/' + p.id, 'PATCH', { ...edit(p), title })));
   assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
-  assert.equal((await prisma.orderItem.findFirst({ where: { orderId: order.data.id } })).variantId, originalId);
+  assert.equal((await prisma.orderItem.findFirst({ where: { orderId: order.id } })).variantId, originalId);
   console.log('PASS: real PostgreSQL create/edit, stock conflict rollback, sold-out visibility, mobile browser login/edit/multiple sizes/logout, concurrent editors and order references');
 }
 main().catch(err => { console.error(err); process.exitCode = 1; }).finally(async () => {
