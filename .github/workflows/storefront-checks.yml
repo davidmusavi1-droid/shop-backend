@@ -19,6 +19,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node test/storefront.cjs
       - run: node test/measurement-browser.cjs
+      - run: node test/upload-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
