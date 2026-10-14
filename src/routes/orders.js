@@ -5,7 +5,15 @@ const fail = (statusCode, message) => Object.assign(new Error(message), { status
 
 const router = express.Router();
 
-router.post('/', async (req, res, next) => {
+// Payment is unavailable: do not let public requests reserve stock indefinitely.
+// Remove this gate only with verified payments and reservation expiry in place.
+function checkoutUnavailable(req, res) {
+  return res.status(503).json({
+    error: 'خرید آنلاین هنوز فعال نشده است', code: 'CHECKOUT_NOT_CONFIGURED',
+  });
+}
+
+router.post('/', checkoutUnavailable, async (req, res, next) => {
   const { customer, source, items } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {

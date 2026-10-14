@@ -21,6 +21,22 @@ async function call(handlers, body, params = {}) {
   return { code: error?.statusCode || code, data, error };
 }
 const valid = { customer: { fullName: 'Test', phone: '09000000000' }, items: [{ variantId: 'v1', quantity: 1 }] };
+test('public checkout stops before customer writes or stock reservation', async () => {
+  let transactions = 0;
+  const { routes } = load('orders', { $transaction: () => { transactions++; throw Error('unexpected database access'); } });
+  for (const body of [valid, {}, null]) {
+    let code, data, continued = false;
+    await routes['post /'][0]({ body }, {
+      status(value) { code = value; return this; },
+      json(value) { data = value; return this; },
+    }, () => { continued = true; });
+    assert.equal(code, 503);
+    assert.equal(data.code, 'CHECKOUT_NOT_CONFIGURED');
+    assert.equal(continued, false);
+  }
+  assert.equal(transactions, 0);
+});
+// The following handler-level tests retain coverage for future checkout activation.
 test('reject invalid quantities and bodies before database use', async () => {
   const { routes } = load('orders');
   for (const body of [null, {}, { ...valid, customer: null }, ...[0, -1, 1.5, '1'].map(quantity => ({ ...valid, items: [{ variantId: 'v1', quantity }] }))]) {
