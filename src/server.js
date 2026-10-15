@@ -7,13 +7,14 @@ const paymentRouter = require('./routes/payment');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({limit:'256kb'}));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.use(require('./routes/storefront'));
 app.use(express.static('public'));
 app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
 app.use('/api/uploads', require('./routes/uploads'));
+app.use('/api/site', require('./routes/site-content'));
 app.use('/api/products', productsRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/payment', paymentRouter);

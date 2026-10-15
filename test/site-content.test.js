@@ -1,0 +1,29 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {defaults,validate,targetHref}=require('../public/site-content');
+const {queryFilter,filterProducts}=require('../public/catalog');
+const view=require('../src/lib/storefront');
+const copy=()=>structuredClone(defaults);
+const slide=id=>({id,enabled:true,image:'https://images.example/a.jpg',mobileImage:'',alt:'لباس',title:'پاییزه',subtitle:'',button:'دیدن',target:{kind:'need',value:'پاییزه'},mobileX:50,mobileY:50,desktopX:50,desktopY:50});
+test('content accepts five active slides and rejects unsafe URLs, crops and overflow',()=>{
+ const c=copy();c.slides=Array.from({length:5},(_,i)=>slide(String(i)));assert.equal(validate(c).slides.length,5);
+ c.slides.push(slide('six'));assert.throws(()=>validate(c));c.slides.pop();
+ for(const patch of [{image:'javascript:alert(1)'},{image:'https://user:secret@host/x'},{mobileX:-1},{desktopY:101},{enabled:'true'}]){const bad=copy();bad.slides=[{...slide('a'),...patch}];assert.throws(()=>validate(bad));}
+});
+test('social network hosts, blank configured links, duplicates and malicious destinations reject',()=>{
+ for(const url of ['javascript:x','https://instagram.com.evil.test/x','https://evil.test']){const c=copy();c.socials=[{platform:'instagram',enabled:true,label:'اینستاگرام',url}];assert.throws(()=>validate(c));}
+ const c=copy();c.socials=[{platform:'whatsapp',enabled:true,label:'واتساپ',url:'https://wa.me/989120000000'}];assert.equal(validate(c).socials.length,1);
+ c.categories[0].target={kind:'url',value:'javascript:alert(1)'};assert.throws(()=>validate(c));
+ assert.equal(targetHref({kind:'product',value:'a/b'}),'/products/a%2Fb');
+});
+test('exact garment dimensions become inclusive tolerance ranges and preserve same-variant stock matching',()=>{
+ const params=new URLSearchParams('width=۵۶&length=۷۰');const f=queryFilter(params);assert.equal(f.width.min,54);assert.equal(f.length.max,73);
+ const p={isActive:true,variants:[{stock:0,chestWidthCm:56,lengthCm:70},{stock:1,chestWidthCm:54,lengthCm:73},{stock:1,chestWidthCm:null,lengthCm:70}]};assert.equal(filterProducts([p],params).length,1);
+ assert.equal(filterProducts([p],new URLSearchParams('width=bad')).length,0);
+ const pants={isActive:true,variants:[{stock:1,waistCm:84}]};assert.equal(filterProducts([pants],new URLSearchParams('kind=pants&width=42')).length,0);
+});
+test('published copy is escaped in crawlable home and all product brands are dynamic',()=>{
+ const c=copy();c.text.aboutTitle='<script>x</script>';
+ const p={id:'one',title:'لباس',isActive:true,basePrice:100,brand:'THE NORTH FACE',images:[],variants:[{stock:1,size:'L',color:'مشکی',priceDelta:0}]};
+ const html=view.renderHome([p],c);assert(html.includes('&lt;script&gt;'));assert(!html.includes('<script>x</script>'));
+ assert(view.renderProduct(p,c).includes('THE NORTH FACE / MOTIF SELECTION'));
+});
