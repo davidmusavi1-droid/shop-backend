@@ -25,7 +25,7 @@
 
 ## استقرار
 
-این تغییر یک جدول افزایشی `SiteContent` دارد. قبل از انتشار کد:
+این تغییر یک جدول افزایشی `SiteContent` دارد. `railway.json` تولید Prisma Client را در build و ساخت جدول را در pre-deploy تنظیم می‌کند. Prisma CLI برای این مرحله در dependencies عملیاتی است. معادل دستی، در صورت استقرار بیرون از این تنظیمات:
 
 ```sh
 npx prisma generate
