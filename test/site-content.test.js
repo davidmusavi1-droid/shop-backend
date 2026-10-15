@@ -27,3 +27,8 @@ test('published copy is escaped in crawlable home and all product brands are dyn
  const html=view.renderHome([p],c);assert(html.includes('&lt;script&gt;'));assert(!html.includes('<script>x</script>'));
  assert(view.renderProduct(p,c).includes('THE NORTH FACE / MOTIF SELECTION'));
 });
+test('crawlable result prices come only from matching in-stock items',()=>{
+ const p={id:'one',title:'لباس',isActive:true,basePrice:100,images:[],variants:[{stock:1,chestWidthCm:40,priceDelta:0},{stock:1,chestWidthCm:56,priceDelta:80}]};
+ const html=view.renderCollection([p],new URLSearchParams('width=56'));
+ assert(html.includes('۱۸۰ تومان'));assert(!html.includes('۱۰۰ تومان'));
+});
