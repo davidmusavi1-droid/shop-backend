@@ -4,8 +4,14 @@
   else root.MotifSite = api;
 })(typeof globalThis === 'undefined' ? this : globalThis, function() {
   'use strict';
+  const fonts = Object.freeze({
+    vazirmatn: {label:'وزیرمتن',family:'"Vazirmatn Variable", Tahoma, sans-serif'},
+    estedad: {label:'استعداد',family:'"Estedad Variable", Tahoma, sans-serif'},
+    tahoma: {label:'تاهوما (فونت دستگاه)',family:'Tahoma, sans-serif'}
+  });
+  const fontKey = key => Object.hasOwn(fonts,key) ? key : 'vazirmatn';
   const defaults = {
-    logo: '', accent: 'rust', slides: [], featuredIds: [],
+    logo: '', accent: 'rust', font: 'vazirmatn', slides: [], featuredIds: [],
     text: {
       heroTitle: 'برای روزهایی که در جریانی.', heroSubtitle: 'انتخاب‌هایی برای پوشیدن و زندگی کردن.',
       heroButton: 'دیدن انتخاب‌های پاییزه', measureTitle: 'اندازهٔ خودت، انتخابِ خودت.',
@@ -48,7 +54,8 @@
   function validate(input) {
     if (!input || typeof input!=='object' || Array.isArray(input)) fail('تنظیمات نامعتبر است');
     if (!['rust','orange'].includes(input.accent)) fail('رنگ نامعتبر است');
-    const out={logo:https(input.logo),accent:input.accent,text:{},slides:[],categories:[],featuredIds:[],socials:[]};
+    if (input.font !== undefined && (typeof input.font !== 'string' || !Object.hasOwn(fonts,input.font))) fail('فونت نامعتبر است');
+    const out={logo:https(input.logo),accent:input.accent,font:fontKey(input.font),text:{},slides:[],categories:[],featuredIds:[],socials:[]};
     for (const key of Object.keys(defaults.text)) out.text[key]=text(input.text?.[key],key==='aboutBody'?1200:160,true);
     const ids=new Set();
     out.slides=array(input.slides,20).map(s=>{
@@ -72,5 +79,5 @@
     });
     return out;
   }
-  return {defaults,validate,targetHref};
+  return {defaults,fonts,fontKey,validate,targetHref};
 });

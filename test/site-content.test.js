@@ -32,3 +32,12 @@ test('crawlable result prices come only from matching in-stock items',()=>{
  const html=view.renderCollection([p],new URLSearchParams('width=56'));
  assert(html.includes('۱۸۰ تومان'));assert(!html.includes('۱۰۰ تومان'));
 });
+
+test('font choices are safe, old revisions keep default and every server page uses the published font',()=>{
+ const c=copy();delete c.font;assert.equal(validate(c).font,'vazirmatn');
+ for(const font of ['estedad','tahoma','vazirmatn']){
+  c.font=font;assert.equal(validate(c).font,font);
+  for(const html of [view.renderHome([],c),view.renderCollection([],new URLSearchParams(),c),view.renderUtility('contact',c),view.renderProduct({id:'x',title:'لباس',images:[],variants:[]},c)])assert(html.includes(`data-font="${font}"`));
+ }
+ for(const font of ['__proto__','constructor','x" onload="alert(1)',null,{}]){c.font=font;assert.throws(()=>validate(c));assert(view.renderHome([],c).includes('data-font="vazirmatn"'));}
+});
