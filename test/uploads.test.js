@@ -12,7 +12,7 @@ function setup({ configured = true, parseError, invalid = false, failure = false
   const admin = () => {};
   const multer = () => ({ single: () => (req, res, cb) => cb(parseError) }); multer.memoryStorage = () => ({});
   const module = { exports: {} };
-  vm.runInNewContext(fs.readFileSync('src/routes/uploads.js', 'utf8'), { module, require(name) {
+  vm.runInNewContext(fs.readFileSync('src/routes/uploads.js', 'utf8'), { module, process: { env: {} }, require(name) {
     return ({ express: { Router: () => ({ post(path, ...args) { handlers = args; } }) }, multer, sharp: () => { decoded = true; return picture; }, cloudinary: { v2: provider }, '../middleware/requireAdmin': admin })[name];
   }});
   assert.equal(handlers[0], admin, 'admin guard precedes multipart parsing');

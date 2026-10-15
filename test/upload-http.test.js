@@ -26,3 +26,12 @@ test('real multipart and image decoder enforce authentication, limits and photo 
     assert.equal(metadata.format, 'webp'); assert.equal(metadata.width, 2000); assert.equal(metadata.exif, undefined);
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); delete process.env.ADMIN_TOKEN; }
 });
+test('complete Railway credential set is configured without mixing URL credentials', () => {
+  let configured;
+  const provider = { config: value => { configured = value; } };
+  createRouter({ provider, env: { CLOUDINARY_CLOUD_NAME: 'test-cloud', CLOUDINARY_API_KEY: 'test-key', CLOUDINARY_API_SECRET: 'test-secret' } });
+  assert.deepEqual(configured, { cloud_name: 'test-cloud', api_key: 'test-key', api_secret: 'test-secret', secure: true });
+  configured = undefined;
+  createRouter({ provider, env: { CLOUDINARY_CLOUD_NAME: 'partial' } });
+  assert.equal(configured, undefined);
+});

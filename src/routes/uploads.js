@@ -5,7 +5,11 @@ const cloudinary = require('cloudinary').v2;
 const requireAdmin = require('../middleware/requireAdmin');
 
 // Dependencies can be replaced in HTTP tests; production always uses the real provider.
-function createRouter({ provider = cloudinary, decode = sharp } = {}) {
+function createRouter({ provider = cloudinary, decode = sharp, env = process.env } = {}) {
+  // Prefer one complete credential set; never mix credentials from two accounts.
+  if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
+    provider.config({ cloud_name: env.CLOUDINARY_CLOUD_NAME, api_key: env.CLOUDINARY_API_KEY, api_secret: env.CLOUDINARY_API_SECRET, secure: true });
+  }
   const router = express.Router();
   const parse = multer({ storage: multer.memoryStorage(), limits: {
     fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1
