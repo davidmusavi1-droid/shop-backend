@@ -61,7 +61,9 @@ async function main() {
 
   // A real order changes stock after the administrator has loaded the form.
   const stale = edit(p);
-  const order = await api('/api/orders', 'POST', { customer: { fullName: 'Integration test', phone: '09000000000' }, items: [{ variantId: originalId, quantity: 1 }] }, false);
+  const orderBody = { customer: { fullName: 'Integration test', phone: '09000000000' }, items: [{ variantId: originalId, quantity: 1 }] };
+  assert.equal((await api('/api/orders', 'POST', orderBody, false)).status, 401);
+  const order = await api('/api/orders', 'POST', orderBody);
   assert.equal(order.status, 201);
   stale.title = 'Must roll back';
   assert.equal((await api('/api/products/' + p.id, 'PATCH', stale)).status, 409);
