@@ -29,7 +29,7 @@ test('home and sitemap use stable product paths and exclude inactive or sold-out
  assert(!xml.includes('inactive'));assert(!xml.includes('/sold'));
  assert(!xml.includes('lastmod')); // Stock changes do not reliably update Product.updatedAt.
 });
-function loadRoutes(prisma){const routes={};const router={get:(path,fn)=>{routes[path]=fn;}};vm.runInNewContext(fs.readFileSync(require.resolve('../src/routes/storefront'),'utf8'),{module:{exports:{}},require:name=>name==='express'?{Router:()=>router}:name.includes('prisma')?prisma:view,console:{error:()=>{}}});return routes;}
+function loadRoutes(prisma){const routes={};const router={get:(path,fn)=>{routes[path]=fn;}};vm.runInNewContext(fs.readFileSync(require.resolve('../src/routes/storefront'),'utf8'),{module:{exports:{}},URLSearchParams,require:name=>name==='express'?{Router:()=>router}:name.includes('site-content')?{published:async()=>require('../public/site-content').defaults}:name.includes('prisma')?prisma:view,console:{error:()=>{}}});return routes;}
 async function call(fn,id='p1',path='/products/p1'){let status=200,body,redirect,headers={};const res={set(k,v){headers[k]=v;return this;},status(n){status=n;return this;},type(t){headers.type=t;return this;},send(b){body=b;return this;},redirect(n,url){status=n;redirect=url;return this;}};await fn({params:{id},path},res);return {status,body,redirect,headers};}
 test('public product route uses actual 404 and temporary DB failure uses 503',async()=>{
  for(const p of [null,{...product,isActive:false},{...product,variants:[{stock:0}]}]){

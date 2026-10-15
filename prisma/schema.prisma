@@ -159,3 +159,12 @@ model Payment {
   isSuccessful Boolean  @default(false)
   createdAt    DateTime @default(now())
 }
+
+model SiteContent {
+  id        String   @id
+  version   Int      @default(0)
+  draft     Json
+  published Json
+  history   Json
+  updatedAt DateTime @updatedAt
+}

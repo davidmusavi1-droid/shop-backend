@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [feat/motif-storefront]
+    branches: [feat/motif-storefront, feat/motif-design-content-panel]
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,7 @@ jobs:
       - run: node test/storefront.cjs
       - run: node test/measurement-browser.cjs
       - run: node test/upload-browser.cjs
+      - run: node test/content-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

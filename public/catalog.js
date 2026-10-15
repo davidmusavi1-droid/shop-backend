@@ -27,5 +27,14 @@
     return (product.variants || []).filter(v => v.stock > 0 &&
       (!filter.size || v.size === filter.size) && within(v[widthKey], filter.width) && within(v[lengthKey], filter.length));
   }
-  return { needs, range, within, variants };
+  function queryFilter(params) {
+    const exact=(key,tolerance)=>{const n=number(params.get(key));return n===null?null:Number.isNaN(n)?{min:NaN,max:NaN,valid:false}:{min:Math.max(0.1,n-tolerance),max:n+tolerance,valid:true};};
+    return {kind:params.get('kind')==='pants'?'pants':'garment',size:params.get('size')||'',width:exact('width',2)||range(params.get('wmin'),params.get('wmax')),length:exact('length',3)||range(params.get('lmin'),params.get('lmax'))};
+  }
+  const normalize=s=>String(s||'').replace(/ي/g,'ی').replace(/ك/g,'ک').toLocaleLowerCase().trim();
+  function filterProducts(products,params) {
+    const f=queryFilter(params),q=normalize(params.get('q')),need=params.get('need'),type=params.get('type');
+    return products.filter(p=>p.isActive&&(!need||(p.customerNeeds||[]).includes(need))&&(!type||p.productType===type)&&normalize([p.title,p.brand,p.modelName].join(' ')).includes(q)&&variants(p,f).length);
+  }
+  return { needs, range, within, variants, queryFilter, filterProducts, number };
 });

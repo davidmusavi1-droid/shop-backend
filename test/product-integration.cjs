@@ -24,6 +24,26 @@ async function main() {
     await delay(500);
   }
   assert.equal((await api('/api/products/admin/list', 'GET', null, false)).status, 401);
+  assert.equal((await api('/api/site/admin', 'GET', null, false)).status, 401);
+  let site=(await api('/api/site/admin')).data;
+  const original=structuredClone(site.published),draft=structuredClone(site.draft);
+  draft.text.aboutTitle='منتخب تازهٔ MOTIF';
+  draft.socials=[{platform:'instagram',label:'اینستاگرام MOTIF',enabled:true,url:'https://www.instagram.com/motif.test/'}];
+  assert.equal((await api('/api/site/admin/draft','POST',{version:site.version,content:draft},false)).status,401);
+  const competing=await Promise.all([1,2].map(()=>api('/api/site/admin/draft','POST',{version:site.version,content:draft})));
+  assert.deepEqual(competing.map(r=>r.status).sort(),[200,409]);
+  assert.deepEqual((await api('/api/site','GET',null,false)).data,original);
+  site=(await api('/api/site/admin')).data;
+  const invalid=structuredClone(draft);invalid.socials[0].url='javascript:alert(1)';
+  assert.equal((await api('/api/site/admin/draft','POST',{version:site.version,content:invalid})).status,400);
+  site=(await api('/api/site/admin/publish','POST',{version:site.version})).data;
+  assert.equal((await api('/api/site','GET',null,false)).data.text.aboutTitle,draft.text.aboutTitle);
+  assert((await (await fetch(base+'/')).text()).includes('منتخب تازهٔ MOTIF'));
+  assert((await (await fetch(base+'/contact')).text()).includes('اینستاگرام MOTIF'));
+  assert.equal((await api('/api/site/admin/publish','POST',{version:site.version-1})).status,409);
+  site=(await api('/api/site/admin/restore','POST',{version:site.version,revisionId:site.history[0].id})).data;
+  assert.deepEqual(site.draft,original);
+  assert.equal((await api('/api/site','GET',null,false)).data.text.aboutTitle,draft.text.aboutTitle);
   const created = await api('/api/products', 'POST', { title: 'Integration product', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'integration-L', size: 'L', color: 'black', stock: 1 }] });
   assert.equal(created.status, 201, JSON.stringify(created.data));
   let p = created.data;
@@ -88,7 +108,7 @@ async function main() {
   const results = await Promise.all(['A', 'B'].map(title => api('/api/products/' + p.id, 'PATCH', { ...edit(p), title })));
   assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
   assert.equal((await prisma.orderItem.findFirst({ where: { orderId: order.data.id } })).variantId, originalId);
-  console.log('PASS: real PostgreSQL create/edit, stock conflict rollback, sold-out visibility, mobile browser login/edit/multiple sizes/logout, concurrent editors and order references');
+  console.log('PASS: PostgreSQL product editing, stock conflicts, mobile admin, content auth, draft/public isolation, concurrent content editors, publish, stale writes, restore-to-draft and SSR content');
 }
 main().catch(err => { console.error(err); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();
