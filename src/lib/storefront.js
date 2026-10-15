@@ -20,7 +20,8 @@ function images(p) {
   });
 }
 function page({title = HOME_TITLE, summary = HOME_DESCRIPTION, pathname = '/', body = '', product = false, settings=site.defaults}) {
-  return template.replace('<title>MOTIF | پوشاک برای هر روز</title>', () => `<title>${escape(title)}</title>`)
+  return template.replace('<html lang="fa" dir="rtl">', () => `<html lang="fa" dir="rtl" data-font="${site.fontKey(settings.font)}">`)
+    .replace('<title>MOTIF | پوشاک برای هر روز</title>', () => `<title>${escape(title)}</title>`)
     .replace('<!--SEO_HEAD-->', () => `<meta name="description" content="${escape(summary)}"><link rel="canonical" href="${escape(ORIGIN + pathname)}"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(summary)}"><meta property="og:url" content="${escape(ORIGIN + pathname)}"><meta property="og:type" content="website">`)
     .replace('<!--SERVER_CONTENT-->', () => `<section id="serverContent">${body}</section>`)
     .replace('<div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div>',()=>`<div id="socials" class="socials" aria-label="شبکه‌های اجتماعی">${socials(settings)}</div>`);

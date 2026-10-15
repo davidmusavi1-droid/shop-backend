@@ -14,6 +14,7 @@ function options(id,values){const select=$(id);select.replaceChildren(select.opt
 function productCard(p,variants,featured=false){const prices=variants.map(v=>p.basePrice+v.priceDelta),v=variants[0];const a=el('a',null,'card');a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);a.append(picture(safeImages([...(p.images||[]),...variants.flatMap(v=>v.itemImages||[])])[0],p.title));if(p.brand)a.append(el('span',p.brand,'tag'));a.append(el('h3',p.title));if(!featured)a.append(el('p',(new Set(prices).size>1?'از ':'')+money(Math.min(...prices))),el('p','سایزهای منطبق و موجود: '+[...new Set(variants.map(v=>v.size))].join(' · '),'sizes'));return a;}
 function socialLinks(root){root.replaceChildren();for(const s of content.socials.filter(s=>s.enabled)){const a=el('a');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';if(s.platform!=='other'){const img=el('img');img.src='/icons/'+s.platform+'.svg';img.alt='';img.width=20;img.height=20;a.append(img);}a.append(el('span',s.label));root.append(a);}}
 function renderContent(){
+ document.documentElement.dataset.font=MotifSite.fontKey(content.font);
  document.documentElement.style.setProperty('--accent',content.accent==='orange'?'#a54b22':'#99452f');
  document.querySelectorAll('[data-copy]').forEach(n=>n.textContent=content.text[n.dataset.copy]);
  document.querySelectorAll('.logo').forEach(n=>{n.replaceChildren();if(content.logo){const img=el('img');img.alt='MOTIF';img.src=content.logo;n.append(img);}else n.append(document.createTextNode('MOTIF'),el('span','.'));});
