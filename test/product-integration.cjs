@@ -28,6 +28,16 @@ async function main() {
   assert.equal(created.status, 201, JSON.stringify(created.data));
   let p = created.data;
   const originalId = p.variants[0].id;
+  // Direct HTML is useful without JavaScript and has a stable canonical URL.
+  const direct = await fetch(base + '/products/' + p.id + '?variant=' + p.variants[0].id);
+  assert.equal(direct.status, 200);
+  const html = await direct.text();
+  assert(html.includes('<h1>Integration product</h1>'));
+  assert(html.includes('href="https://motifdress.com/products/' + p.id + '"'));
+  const home = await (await fetch(base + '/')).text();
+  assert(home.includes('href="/products/' + p.id + '"'));
+  assert((await (await fetch(base + '/sitemap.xml')).text()).includes('/products/' + p.id));
+
   // A real order changes stock after the administrator has loaded the form.
   const stale = edit(p);
   const order = await api('/api/orders', 'POST', { customer: { fullName: 'Integration test', phone: '09000000000' }, items: [{ variantId: originalId, quantity: 1 }] }, false);
@@ -37,6 +47,9 @@ async function main() {
   p = await prisma.product.findUnique({ where: { id: p.id }, include: { variants: true } });
   assert.equal(p.title, 'Integration product');
   assert.equal(p.variants[0].stock, 0);
+  assert.equal((await fetch(base + '/products/' + p.id)).status, 404);
+  assert(!(await (await fetch(base + '/sitemap.xml')).text()).includes('/products/' + p.id));
+
   assert.equal((await api('/api/products/' + p.id, 'GET', null, false)).status, 404);
   assert((await api('/api/products/admin/list')).data.some(x => x.id === p.id));
   // Browser uses actual API and database; no request mocking.
@@ -57,10 +70,15 @@ async function main() {
   await page.locator('#addVariant').click();
   const second = page.locator('#variants fieldset').nth(1);
   for (const [key, value] of Object.entries({ size: 'XL', color: 'black', sku: 'integration-XL' })) await second.locator('[data-key=' + key + ']').fill(value);
+  await page.locator('[data-key=customerNeeds] input[value="پاییزه"]').check();
+  await page.locator('#variants fieldset').first().locator('[data-key=waistWidthCm]').fill('42');
+  assert.equal(await page.locator('[data-key=styles]').count(),0);
   await page.locator('#save').click();
   await page.getByText('محصول ذخیره شد.', { exact: true }).waitFor();
   p = await prisma.product.findUnique({ where: { id: p.id }, include: { variants: true } });
   assert.equal(p.title, 'Edited in browser'); assert.equal(p.variants.length, 2);
+  assert.deepEqual(p.customerNeeds, ['پاییزه']);
+  assert.equal(p.variants.find(v=>v.id===originalId).waistWidthCm,42);
   assert(p.variants.some(v => v.id === originalId && v.stock === 0));
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
   assert.deepEqual(errors, []);

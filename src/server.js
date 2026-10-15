@@ -10,10 +10,15 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ ok: true }));
+app.use(require('./routes/storefront'));
 app.use(express.static('public'));
+app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
+app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/products', productsRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/payment', paymentRouter);
+
+app.use((req, res) => res.status(404).type('html').send(require('./lib/storefront').errorPage('صفحه پیدا نشد')));
 
 app.use((err, req, res, next) => {
   console.error(err);
