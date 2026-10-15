@@ -24,6 +24,7 @@ async function main() {
     await delay(500);
   }
   assert.equal((await api('/api/products/admin/list', 'GET', null, false)).status, 401);
+  assert.equal((await api('/health','GET',null,false)).data.contentReady,true);
   assert.equal((await api('/api/site/admin', 'GET', null, false)).status, 401);
   let site=(await api('/api/site/admin')).data;
   const original=structuredClone(site.published),draft=structuredClone(site.draft);
