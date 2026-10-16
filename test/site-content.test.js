@@ -14,6 +14,12 @@ test('image-only slides can be saved without copy or a button',()=>{
  const c=copy();c.slides=[{...slide('image-only'),alt:'',title:'',subtitle:'',button:'',target:{kind:'newest',value:''}}];
  const saved=validate(c);assert.equal(saved.slides[0].image,'https://images.example/a.jpg');assert.equal(saved.slides[0].alt,'');assert.equal(saved.slides[0].title,'');assert.equal(saved.slides[0].button,'');assert.deepEqual(saved.slides[0].target,{kind:'newest',value:''});
 });
+test('blank global copy falls back to defaults so an image-only slide can be saved',()=>{
+ const c=copy();for(const key of Object.keys(c.text))c.text[key]='';
+ c.slides=[{...slide('image-only'),alt:'',title:'',subtitle:'',button:'',target:{kind:'newest',value:''}}];
+ const saved=validate(c);assert.equal(saved.slides[0].image,'https://images.example/a.jpg');
+ for(const [key,value] of Object.entries(defaults.text))assert.equal(saved.text[key],value);
+});
 test('social network hosts, blank configured links, duplicates and malicious destinations reject',()=>{
  for(const url of ['javascript:x','https://instagram.com.evil.test/x','https://evil.test']){const c=copy();c.socials=[{platform:'instagram',enabled:true,label:'اینستاگرام',url}];assert.throws(()=>validate(c));}
  const c=copy();c.socials=[{platform:'whatsapp',enabled:true,label:'واتساپ',url:'https://wa.me/989120000000'}];assert.equal(validate(c).socials.length,1);
