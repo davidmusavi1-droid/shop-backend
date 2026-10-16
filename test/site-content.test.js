@@ -9,6 +9,11 @@ test('content accepts five active slides and rejects unsafe URLs, crops and over
  c.slides.push(slide('six'));assert.throws(()=>validate(c));c.slides.pop();
  for(const patch of [{image:'javascript:alert(1)'},{image:'https://user:secret@host/x'},{mobileX:-1},{desktopY:101},{enabled:'true'}]){const bad=copy();bad.slides=[{...slide('a'),...patch}];assert.throws(()=>validate(bad));}
 });
+
+test('image-only slides can be saved without copy or a button',()=>{
+ const c=copy();c.slides=[{...slide('image-only'),alt:'',title:'',subtitle:'',button:'',target:{kind:'newest',value:''}}];
+ const saved=validate(c);assert.equal(saved.slides[0].image,'https://images.example/a.jpg');assert.equal(saved.slides[0].alt,'');assert.equal(saved.slides[0].title,'');assert.equal(saved.slides[0].button,'');assert.deepEqual(saved.slides[0].target,{kind:'newest',value:''});
+});
 test('social network hosts, blank configured links, duplicates and malicious destinations reject',()=>{
  for(const url of ['javascript:x','https://instagram.com.evil.test/x','https://evil.test']){const c=copy();c.socials=[{platform:'instagram',enabled:true,label:'اینستاگرام',url}];assert.throws(()=>validate(c));}
  const c=copy();c.socials=[{platform:'whatsapp',enabled:true,label:'واتساپ',url:'https://wa.me/989120000000'}];assert.equal(validate(c).socials.length,1);
