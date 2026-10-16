@@ -56,7 +56,7 @@
     if (!['rust','orange'].includes(input.accent)) fail('رنگ نامعتبر است');
     if (input.font !== undefined && (typeof input.font !== 'string' || !Object.hasOwn(fonts,input.font))) fail('فونت نامعتبر است');
     const out={logo:https(input.logo),accent:input.accent,font:fontKey(input.font),text:{},slides:[],categories:[],featuredIds:[],socials:[]};
-    for (const key of Object.keys(defaults.text)) out.text[key]=text(input.text?.[key],key==='aboutBody'?1200:160,true);
+    for (const key of Object.keys(defaults.text)) { const value=text(input.text?.[key],key==='aboutBody'?1200:160); out.text[key]=value||defaults.text[key]; }
     const ids=new Set();
     out.slides=array(input.slides,20).map(s=>{
       if (!s || typeof s.enabled!=='boolean') fail('وضعیت اسلاید نامعتبر است');
