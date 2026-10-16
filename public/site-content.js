@@ -108,5 +108,5 @@
     }).filter(s=>s.enabled||s.label||s.url);
     return out;
   }
-  return {defaults,fonts,fontKey,validate,targetHref};
+  return {defaults,fonts,fontKey,validate,validateDraft,targetHref};
 });
