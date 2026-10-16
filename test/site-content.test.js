@@ -20,6 +20,12 @@ test('blank global copy falls back to defaults so an image-only slide can be sav
  const saved=validate(c);assert.equal(saved.slides[0].image,'https://images.example/a.jpg');
  for(const [key,value] of Object.entries(defaults.text))assert.equal(saved.text[key],value);
 });
+test('empty optional homepage rows do not block saving an image-only slide',()=>{
+ const c=copy();for(const key of Object.keys(c.text))c.text[key]='';
+ c.slides=[{...slide('image-only'),alt:'',title:'',subtitle:'',button:'',target:{kind:'newest',value:''}}];
+ c.categories.push({label:'',target:{kind:'need',value:''}});c.featuredIds.push('');c.socials=[{platform:'instagram',label:'',url:'',enabled:false}];
+ const saved=validate(c);assert.equal(saved.slides[0].image,'https://images.example/a.jpg');assert.equal(saved.categories.length,defaults.categories.length);assert.equal(saved.featuredIds.length,0);assert.equal(saved.socials.length,0);
+});
 test('social network hosts, blank configured links, duplicates and malicious destinations reject',()=>{
  for(const url of ['javascript:x','https://instagram.com.evil.test/x','https://evil.test']){const c=copy();c.socials=[{platform:'instagram',enabled:true,label:'اینستاگرام',url}];assert.throws(()=>validate(c));}
  const c=copy();c.socials=[{platform:'whatsapp',enabled:true,label:'واتساپ',url:'https://wa.me/989120000000'}];assert.equal(validate(c).socials.length,1);

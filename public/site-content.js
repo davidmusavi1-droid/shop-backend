@@ -40,7 +40,9 @@
   }
   function target(t) {
     if (!t || !['newest','need','type','product'].includes(t.kind)) fail('مقصد دکمه را انتخاب کنید');
-    return {kind:t.kind,value:t.kind==='newest'?'':text(t.value,100,true)};
+    if(t.kind==='newest')return {kind:'newest',value:''};
+    const value=typeof t.value==='string'?text(t.value,100):'';
+    return value?{kind:t.kind,value}:{kind:'newest',value:''};
   }
   function targetHref(t) {
     if (t.kind==='product') return '/products/'+encodeURIComponent(t.value);
@@ -66,17 +68,19 @@
         mobileX:focus(s.mobileX),mobileY:focus(s.mobileY),desktopX:focus(s.desktopX),desktopY:focus(s.desktopY)};
     });
     if (out.slides.filter(s=>s.enabled).length>5) fail('حداکثر پنج اسلاید فعال مجاز است');
-    out.categories=array(input.categories,8).map(c=>({label:text(c?.label,80,true),target:target(c?.target)}));
-    out.featuredIds=[...new Set(array(input.featuredIds,12).map(id=>text(id,100,true)))];
+    out.categories=array(input.categories,8).filter(c=>typeof c?.label==='string'&&c.label.trim()).map(c=>({label:text(c.label,80),target:target(c.target)}));
+    out.featuredIds=[...new Set(array(input.featuredIds,12).map(id=>text(id,100)).filter(Boolean))];
     const platforms=new Set();
     out.socials=array(input.socials,6).map(s=>{
       if (!s || !['instagram','telegram','whatsapp','other'].includes(s.platform) || typeof s.enabled!=='boolean') fail('شبکهٔ اجتماعی نامعتبر است');
       if(s.platform!=='other'&&platforms.has(s.platform))fail('شبکهٔ اجتماعی تکراری است');platforms.add(s.platform);
-      const url=https(s.url,true),host=new URL(url).hostname.toLowerCase();
-      const hosts={instagram:['instagram.com','www.instagram.com'],telegram:['t.me','telegram.me'],whatsapp:['wa.me','api.whatsapp.com','www.whatsapp.com','whatsapp.com']};
-      if(hosts[s.platform]&&!hosts[s.platform].includes(host))fail('آدرس با شبکهٔ اجتماعی انتخاب‌شده سازگار نیست');
-      return {platform:s.platform,label:text(s.label,80,true),url,enabled:s.enabled};
-    });
+      const label=text(s.label||'',80),url=https(s.url||'');
+      if(s.enabled&&(!label||!url))fail('برای شبکهٔ اجتماعی فعال، نام و لینک را وارد کنید');
+      if(url){const host=new URL(url).hostname.toLowerCase();
+        const hosts={instagram:['instagram.com','www.instagram.com'],telegram:['t.me','telegram.me'],whatsapp:['wa.me','api.whatsapp.com','www.whatsapp.com','whatsapp.com']};
+        if(hosts[s.platform]&&!hosts[s.platform].includes(host))fail('آدرس با شبکهٔ اجتماعی انتخاب‌شده سازگار نیست');}
+      return {platform:s.platform,label,url,enabled:s.enabled};
+    }).filter(s=>s.enabled||s.label||s.url);
     return out;
   }
   return {defaults,fonts,fontKey,validate,targetHref};
