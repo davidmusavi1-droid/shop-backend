@@ -61,8 +61,8 @@
     out.slides=array(input.slides,20).map(s=>{
       if (!s || typeof s.enabled!=='boolean') fail('وضعیت اسلاید نامعتبر است');
       const id=text(s.id,80,true);if(ids.has(id))fail('شناسهٔ اسلاید تکراری است');ids.add(id);
-      return {id,enabled:s.enabled,image:https(s.image,true),mobileImage:https(s.mobileImage||''),alt:text(s.alt,200,true),
-        title:text(s.title,160,true),subtitle:text(s.subtitle,240),button:text(s.button,80,true),target:target(s.target),
+      return {id,enabled:s.enabled,image:https(s.image,true),mobileImage:https(s.mobileImage||''),alt:text(s.alt||'',200),
+        title:text(s.title||'',160),subtitle:text(s.subtitle||'',240),button:text(s.button||'',80),target:s.button?.trim()?target(s.target):{kind:'newest',value:''},
         mobileX:focus(s.mobileX),mobileY:focus(s.mobileY),desktopX:focus(s.desktopX),desktopY:focus(s.desktopY)};
     });
     if (out.slides.filter(s=>s.enabled).length>5) fail('حداکثر پنج اسلاید فعال مجاز است');
