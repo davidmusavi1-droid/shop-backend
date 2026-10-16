@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const {defaults,validate,targetHref}=require('../public/site-content');
+const {defaults,validate,validateDraft,targetHref}=require('../public/site-content');
 const {queryFilter,filterProducts}=require('../public/catalog');
 const view=require('../src/lib/storefront');
 const copy=()=>structuredClone(defaults);
@@ -10,6 +10,12 @@ test('content accepts five active slides and rejects unsafe URLs, crops and over
  for(const patch of [{image:'javascript:alert(1)'},{image:'https://user:secret@host/x'},{mobileX:-1},{desktopY:101},{enabled:'true'}]){const bad=copy();bad.slides=[{...slide('a'),...patch}];assert.throws(()=>validate(bad));}
 });
 
+test('draft save accepts every field blank, including slide images',()=>{
+ const c=copy();c.logo='';for(const key of Object.keys(c.text))c.text[key]='';
+ c.slides=[{id:'',enabled:true,image:'',mobileImage:'',alt:'',title:'',subtitle:'',button:'',target:{kind:'product',value:''},mobileX:null,mobileY:null,desktopX:null,desktopY:null}];
+ c.categories=[{label:'',target:{kind:'need',value:''}}];c.featuredIds=[''];c.socials=[{platform:'instagram',label:'',url:'',enabled:true}];
+ const draft=validateDraft(c);assert.equal(draft.logo,'');assert.ok(Object.values(draft.text).every(value=>value===''));assert.equal(draft.slides[0].image,'');assert.equal(draft.slides[0].title,'');assert.equal(draft.slides[0].enabled,true);assert.equal(draft.slides[0].target.kind,'newest');assert.equal(draft.categories[0].label,'');assert.equal(draft.featuredIds.length,0);assert.equal(draft.socials[0].enabled,false);
+});
 test('image-only slides can be saved without copy or a button',()=>{
  const c=copy();c.slides=[{...slide('image-only'),alt:'',title:'',subtitle:'',button:'',target:{kind:'newest',value:''}}];
  const saved=validate(c);assert.equal(saved.slides[0].image,'https://images.example/a.jpg');assert.equal(saved.slides[0].alt,'');assert.equal(saved.slides[0].title,'');assert.equal(saved.slides[0].button,'');assert.deepEqual(saved.slides[0].target,{kind:'newest',value:''});

@@ -53,6 +53,31 @@
   }
   function array(value, max) { if (!Array.isArray(value) || value.length>max) fail('تعداد گزینه‌ها بیش از حد مجاز است'); return value; }
   function focus(value) { if (!Number.isFinite(value)||value<0||value>100) fail('محل برش عکس باید بین صفر و صد باشد'); return value; }
+  function draftText(value,max) { return typeof value==='string'?value.slice(0,max).trim():''; }
+  function draftHttps(value) {
+    const s=draftText(value,2048);if(!s)return '';
+    try { const u=new URL(s);if(u.protocol==='https:'&&!u.username&&!u.password)return u.href; } catch {}
+    return '';
+  }
+  function draftTarget(value) {
+    if(!value||!['newest','need','type','product'].includes(value.kind)||value.kind==='newest')return {kind:'newest',value:''};
+    const targetValue=draftText(value.value,100);return targetValue?{kind:value.kind,value:targetValue}:{kind:'newest',value:''};
+  }
+  function draftFocus(value) { return Number.isFinite(value)&&value>=0&&value<=100?value:50; }
+  function validateDraft(input) {
+    if(!input||typeof input!=='object'||Array.isArray(input))fail('تنظیمات نامعتبر است');
+    const inputText=input.text&&typeof input.text==='object'&&!Array.isArray(input.text)?input.text:{};
+    const text={};for(const key of Object.keys(defaults.text))text[key]=draftText(inputText[key],key==='aboutBody'?1200:160);
+    const ids=new Set();
+    const slides=(Array.isArray(input.slides)?input.slides:[]).slice(0,20).map((s,i)=>{
+      s=s&&typeof s==='object'?s:{};let id=draftText(s.id,80)||'draft-slide-'+(i+1);if(ids.has(id))id+='-'+(i+1);ids.add(id);
+      return {id,enabled:s.enabled===true,image:draftHttps(s.image),mobileImage:draftHttps(s.mobileImage),alt:draftText(s.alt,200),title:draftText(s.title,160),subtitle:draftText(s.subtitle,240),button:draftText(s.button,80),target:draftTarget(s.target),mobileX:draftFocus(s.mobileX),mobileY:draftFocus(s.mobileY),desktopX:draftFocus(s.desktopX),desktopY:draftFocus(s.desktopY)};
+    });
+    const categories=(Array.isArray(input.categories)?input.categories:[]).slice(0,8).map(c=>{c=c&&typeof c==='object'?c:{};return {label:draftText(c.label,80),target:draftTarget(c.target)};});
+    const featuredIds=[...new Set((Array.isArray(input.featuredIds)?input.featuredIds:[]).slice(0,12).map(id=>draftText(id,100)).filter(Boolean))];
+    const socials=(Array.isArray(input.socials)?input.socials:[]).slice(0,6).map(s=>{s=s&&typeof s==='object'?s:{};const label=draftText(s.label,80),url=draftHttps(s.url);return {platform:['instagram','telegram','whatsapp','other'].includes(s.platform)?s.platform:'other',label,url,enabled:s.enabled===true&&!!label&&!!url};});
+    return {logo:draftHttps(input.logo),accent:['rust','orange'].includes(input.accent)?input.accent:defaults.accent,font:fontKey(input.font),text,slides,categories,featuredIds,socials};
+  }
   function validate(input) {
     if (!input || typeof input!=='object' || Array.isArray(input)) fail('تنظیمات نامعتبر است');
     if (!['rust','orange'].includes(input.accent)) fail('رنگ نامعتبر است');
@@ -83,5 +108,5 @@
     }).filter(s=>s.enabled||s.label||s.url);
     return out;
   }
-  return {defaults,fonts,fontKey,validate,targetHref};
+  return {defaults,fonts,fontKey,validate,validateDraft,targetHref};
 });
