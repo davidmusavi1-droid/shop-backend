@@ -44,3 +44,9 @@ test('canonical ignores host and query; trailing slash redirects; sitemap is not
  const slash=await call(routes['/products/:id'],'p1','/products/p1/');assert.equal(slash.status,301);assert.equal(slash.redirect,'/products/p1');
  const sitemap=await call(routes['/sitemap.xml']);assert.equal(sitemap.headers['Cache-Control'],'no-store');
 });
+
+test('published settings seed round-trips safely without executable script injection',()=>{
+ const settings=structuredClone(require('../public/site-content').defaults);settings.text.aboutTitle='</script><script>alert(1)</script>';
+ const html=view.renderHome([],settings),match=html.match(/<script type="application\/json" id="publishedSiteContent">([\s\S]*?)<\/script>/);
+ assert(match);assert.equal(JSON.parse(match[1]).text.aboutTitle,settings.text.aboutTitle);assert(!match[1].includes('<'));
+});
