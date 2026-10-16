@@ -3,7 +3,8 @@ const $=id=>document.getElementById(id), el=(tag,text,cls)=>{const n=document.cr
 const money=n=>Number(n).toLocaleString('fa-IR')+' تومان', fa=n=>Number(n).toLocaleString('fa-IR');
 const available=p=>(p.variants||[]).filter(v=>v.stock>0);
 const safeImages=values=>[...new Set((values||[]).filter(v=>{try{return new URL(v).protocol==='https:';}catch{return false;}}))];
-let products=[],content=structuredClone(MotifSite.defaults),requestId=0,loaded=false,query=new URLSearchParams(location.search),returnUrl='/collection',slideIndex=0;
+function initialContent(){const seed=$('publishedSiteContent');if(seed){try{return MotifSite.validate(JSON.parse(seed.textContent));}catch{}}return structuredClone(MotifSite.defaults);}
+let products=[],content=initialContent(),requestId=0,loaded=false,query=new URLSearchParams(location.search),returnUrl='/collection',slideIndex=0,heroSnapshot='';
 let cart=[];try { const saved=JSON.parse(localStorage.getItem('motif-cart')||'[]');if(Array.isArray(saved))cart=saved.filter(x=>x&&typeof x.productId==='string'&&typeof x.variantId==='string'&&Number.isInteger(x.quantity)&&x.quantity>0).slice(0,100); } catch {}
 function saveCart(){try{localStorage.setItem('motif-cart',JSON.stringify(cart));}catch{}$('cartCount').textContent=cart.length?fa(cart.reduce((sum,x)=>sum+x.quantity,0)):'';}
 const currentFilter=()=>MotifCatalog.queryFilter(query),matching=p=>MotifCatalog.variants(p,currentFilter());
@@ -28,6 +29,7 @@ function renderContent(){
 function renderHero(){
  let slides=content.slides.filter(s=>s.enabled);
  if(!slides.length){const image=safeImages(products.flatMap(p=>[...(p.images||[]),...p.variants.flatMap(v=>v.itemImages||[])]))[0];slides=[{image,mobileX:50,mobileY:50,desktopX:50,desktopY:50,title:content.text.heroTitle,subtitle:content.text.heroSubtitle,button:content.text.heroButton,target:{kind:'need',value:'پاییزه'},alt:'انتخاب‌های MOTIF'}];}
+ const snapshot=JSON.stringify(slides);if(snapshot===heroSnapshot&&$('hero').children.length)return;heroSnapshot=snapshot;
  slideIndex=Math.min(slideIndex,slides.length-1);$('hero').replaceChildren();
  const panels=slides.map((s,i)=>{const panel=el('div',null,'slide');panel.hidden=i!==slideIndex;for(const key of ['mobileX','mobileY','desktopX','desktopY'])panel.style.setProperty('--'+key.replace(/[A-Z]/g,c=>'-'+c.toLowerCase()),s[key]+'%');
  if(s.image){const pic=el('picture');if(s.mobileImage){const source=el('source');source.media='(max-width:700px)';source.srcset=s.mobileImage;pic.append(source);}const img=el('img');img.src=s.image;img.alt=s.alt;img.fetchPriority=i===0?'high':'auto';pic.append(img);panel.append(pic);}
