@@ -87,6 +87,16 @@ async function main() {
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = []; page.on('pageerror', err => errors.push(err.message));
+  // A failing settings refresh must not erase the already published SSR banner.
+  await page.route('**/api/site',r=>r.fulfill({status:503,json:{error:'Temporary settings failure'}}));
+  await page.route('https://images.example/banner.jpg',r=>r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1EAAAAASUVORK5CYII=','base64')}));
+  await page.goto(base+'/');
+  await page.waitForFunction(()=>document.querySelector('#featuredStatus')?.textContent==='فعلاً محصول موجودی برای نمایش نیست.');
+  await page.locator('#hero img').waitFor({state:'visible'});
+  assert.equal(await page.locator('#hero img').getAttribute('src'),'https://images.example/banner.jpg');
+  await page.waitForFunction(()=>document.querySelector('#hero img')?.naturalWidth>0);
+  await page.unroute('**/api/site');
+
   await page.goto(base + '/admin.html');
   await page.locator('#token').fill('wrong');
   await page.locator('#loginForm button').click();
