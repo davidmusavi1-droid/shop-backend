@@ -1,6 +1,6 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-const {defaults,validate}=require('../public/site-content');
+const {defaults,validate,validateDraft}=require('../public/site-content');
 (async()=>{
  const browser=await chromium.launch({headless:true});
  try{
@@ -20,7 +20,7 @@ const {defaults,validate}=require('../public/site-content');
   if(u.pathname==='/api/site')return r.fulfill({json:state.published});
   if(u.pathname.startsWith('/api/site/admin')){
    assert.equal(r.request().headers()['x-admin-token'],'test');
-   if(r.request().method()==='POST'){const body=r.request().postDataJSON();assert.equal(body.version,state.version);state.version++;if(u.pathname.endsWith('/draft'))state.draft=validate(body.content);else if(u.pathname.endsWith('/publish')){state.history.unshift({id:'old',at:new Date().toISOString(),content:state.published});state.published=structuredClone(state.draft);}}
+   if(r.request().method()==='POST'){const body=r.request().postDataJSON();assert.equal(body.version,state.version);state.version++;if(u.pathname.endsWith('/draft'))state.draft=validateDraft(body.content);else if(u.pathname.endsWith('/publish')){state.history.unshift({id:'old',at:new Date().toISOString(),content:state.published});state.published=validate(state.draft);}}
    return r.fulfill({json:state});
   }
   const name=(u.pathname.startsWith('/icons/')||u.pathname.startsWith('/fonts/'))?u.pathname.slice(1):path.basename(u.pathname),file=path.join(__dirname,'../public',name||'index.html');const exists=fs.existsSync(file)&&fs.statSync(file).isFile();const f=exists?file:path.join(__dirname,'../public/index.html');return r.fulfill({contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.woff2')?'font/woff2':f.endsWith('.svg')?'image/svg+xml':'text/html',body:fs.readFileSync(f)});
