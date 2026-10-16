@@ -85,10 +85,10 @@
     const out={logo:https(input.logo),accent:input.accent,font:fontKey(input.font),text:{},slides:[],categories:[],featuredIds:[],socials:[]};
     for (const key of Object.keys(defaults.text)) { const value=text(input.text?.[key],key==='aboutBody'?1200:160); out.text[key]=value||defaults.text[key]; }
     const ids=new Set();
-    out.slides=array(input.slides,20).map(s=>{
+    out.slides=array(input.slides,20).filter(s=>s && (s.image || s.mobileImage)).map(s=>{
       if (!s || typeof s.enabled!=='boolean') fail('وضعیت اسلاید نامعتبر است');
       const id=text(s.id,80,true);if(ids.has(id))fail('شناسهٔ اسلاید تکراری است');ids.add(id);
-      return {id,enabled:s.enabled,image:https(s.image,true),mobileImage:https(s.mobileImage||''),alt:text(s.alt||'',200),
+      return {id,enabled:s.enabled,image:https(s.image||s.mobileImage,true),mobileImage:https(s.mobileImage||''),alt:text(s.alt||'',200),
         title:text(s.title||'',160),subtitle:text(s.subtitle||'',240),button:text(s.button||'',80),target:s.button?.trim()?target(s.target):{kind:'newest',value:''},
         mobileX:focus(s.mobileX),mobileY:focus(s.mobileY),desktopX:focus(s.desktopX),desktopY:focus(s.desktopY)};
     });

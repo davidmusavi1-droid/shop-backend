@@ -64,3 +64,12 @@ test('font choices are safe, old revisions keep default and every server page us
  }
  for(const font of ['__proto__','constructor','x" onload="alert(1)',null,{}]){c.font=font;assert.throws(()=>validate(c));assert(view.renderHome([],c).includes('data-font="vazirmatn"'));}
 });
+
+test('publishing saved drafts ignores empty slides while keeping the photographed slide',()=>{
+ const c=copy();c.slides=[{...slide('photo'),alt:'',title:'',subtitle:'',button:''},{...slide('empty'),enabled:false,image:'',alt:'',title:'',subtitle:'',button:''}];
+ const saved=validateDraft(c),published=validate(saved);
+ assert.equal(saved.slides.length,2);assert.equal(published.slides.length,1);assert.equal(published.slides[0].id,'photo');
+ assert.equal(saved.slides[1].image,'');
+ c.slides=[{...slide('empty-active'),image:'',alt:'',title:'',button:''}];assert.equal(validate(validateDraft(c)).slides.length,0);
+ c.slides=[{...slide('mobile-only'),image:'',mobileImage:'https://images.example/mobile.jpg'}];assert.equal(validate(validateDraft(c)).slides[0].image,'https://images.example/mobile.jpg');
+});
