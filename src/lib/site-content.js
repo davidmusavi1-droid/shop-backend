@@ -1,5 +1,5 @@
 const prisma = require('./prisma');
-const {defaults,validate} = require('../../public/site-content');
+const {defaults,validate,validateDraft} = require('../../public/site-content');
 const clone = value => JSON.parse(JSON.stringify(value));
 const conflict = () => Object.assign(new Error('تنظیمات در نشست دیگری تغییر کرده؛ دوباره بارگذاری کنید'),{statusCode:409});
 async function published() {
@@ -11,7 +11,7 @@ async function getAdmin() {
 }
 async function change(action, body) {
   if(!Number.isInteger(body?.version)||body.version<0)throw Object.assign(new Error('نسخهٔ تنظیمات نامعتبر است'),{statusCode:400});
-  const draft=action==='draft'?validate(body.content):null;
+  const draft=action==='draft'?validateDraft(body.content):null;
   return prisma.$transaction(async tx=>{
     const row=await tx.siteContent.findUnique({where:{id:'main'}});
     if(!row||row.version!==body.version)throw conflict();
