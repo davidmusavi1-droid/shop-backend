@@ -1,0 +1,25 @@
+name: Security checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, security/motif-resilience-2026-10-15]
+  schedule:
+    - cron: '15 5 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm audit --audit-level=high

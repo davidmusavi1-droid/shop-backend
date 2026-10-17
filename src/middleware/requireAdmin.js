@@ -1,6 +1,14 @@
 const crypto = require('crypto');
+const { rateLimit } = require('express-rate-limit');
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 20,
+  standardHeaders: 'draft-8', legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: req => req.adminAuthenticated === true,
+  message: { error: 'تلاش‌های ورود زیاد است؛ ۱۵ دقیقه بعد دوباره تلاش کنید' },
+});
 
-function requireAdmin(req, res, next) {
+function authenticate(req, res, next) {
   const expected = process.env.ADMIN_TOKEN;
   const provided = req.get('X-Admin-Token');
 
@@ -32,7 +40,8 @@ function requireAdmin(req, res, next) {
     });
   }
 
+  req.adminAuthenticated = true;
   next();
 }
 
-module.exports = requireAdmin;
+module.exports = (req, res, next) => loginLimiter(req, res, () => authenticate(req, res, next));
