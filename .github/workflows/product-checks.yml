@@ -12,7 +12,7 @@ jobs:
     timeout-minutes: 12
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18
         env:
           POSTGRES_USER: motif_test
           POSTGRES_PASSWORD: local_test_only
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-package-lock
+      - run: npm ci
       - run: npm install --no-save --no-package-lock playwright@1.56.1
       - run: npx playwright install --with-deps chromium
       - run: npx prisma generate
@@ -39,3 +39,14 @@ jobs:
       - run: npx prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma
       - run: node --test test/*.test.js
       - run: node test/product-integration.cjs
+      - run: node test/order-postgres.cjs
+      - name: Restore a synthetic backup into a different disposable database
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          umask 077
+          docker exec "$PG_CONTAINER" pg_dump -U motif_test -d motif_test -Fc > /tmp/motif-synthetic.dump
+          docker exec "$PG_CONTAINER" createdb -U motif_test motif_restore_test
+          docker exec -i "$PG_CONTAINER" pg_restore -U motif_test -d motif_restore_test --no-owner --no-acl --exit-on-error < /tmp/motif-synthetic.dump
+          DATABASE_URL=postgresql://motif_test:local_test_only@127.0.0.1:5432/motif_restore_test node test/restore-verify.cjs

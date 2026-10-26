@@ -30,6 +30,7 @@ test('reject invalid quantities and bodies before database use', async () => {
 test('order details and changes require administrator middleware', () => {
   const { routes, admin } = load('orders');
   assert.equal(routes['get /:id'][0], admin);
+  assert.equal(routes['post /'][0], admin);
   assert.equal(routes['patch /:id/status'][0], admin);
 });
 test('stock reservation is conditional and conflicts reject the order', async () => {

@@ -5,7 +5,9 @@ const fail = (statusCode, message) => Object.assign(new Error(message), { status
 
 const router = express.Router();
 
-router.post('/', async (req, res, next) => {
+// The public storefront is a local cart only. Until verified checkout,
+// idempotency and expiring reservations exist, only admins may reserve stock.
+router.post('/', requireAdmin, async (req, res, next) => {
   const { customer, source, items } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -13,8 +15,9 @@ router.post('/', async (req, res, next) => {
   }
 
   if (!customer || typeof customer.fullName !== 'string' || !customer.fullName.trim() ||
-      typeof customer.phone !== 'string' || !customer.phone.trim() ||
-      (customer.address != null && typeof customer.address !== 'string') ||
+      customer.fullName.length > 200 ||
+      typeof customer.phone !== 'string' || !/^09\d{9}$/.test(customer.phone) ||
+      (customer.address != null && (typeof customer.address !== 'string' || customer.address.length > 2000)) ||
       (source != null && source !== 'WEB') || items.length > 100 ||
       items.some(item => !item || typeof item.variantId !== 'string' || !item.variantId.trim() ||
         !Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > 2147483647)) {
@@ -25,7 +28,8 @@ router.post('/', async (req, res, next) => {
     const order = await prisma.$transaction(async (tx) => {
       const dbCustomer = await tx.customer.upsert({
         where: { phone: customer.phone },
-        update: { fullName: customer.fullName, address: customer.address },
+        // A phone number is not proof of identity. Preserve existing data.
+        update: {},
         create: {
           fullName: customer.fullName,
           phone: customer.phone,
