@@ -1,15 +1,13 @@
 const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
-const cloudinary = require('cloudinary').v2;
+const { createStorage } = require('../lib/image-storage');
+const { prepareImage } = require('../lib/product-image');
 const requireAdmin = require('../middleware/requireAdmin');
 
 // Dependencies can be replaced in HTTP tests; production always uses the real provider.
-function createRouter({ provider = cloudinary, decode = sharp, env = process.env } = {}) {
-  // Prefer one complete credential set; never mix credentials from two accounts.
-  if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET) {
-    provider.config({ cloud_name: env.CLOUDINARY_CLOUD_NAME, api_key: env.CLOUDINARY_API_KEY, api_secret: env.CLOUDINARY_API_SECRET, secure: true });
-  }
+function createRouter({ provider, decode = sharp, env = process.env } = {}) {
+  provider = provider || createStorage(env);
   const router = express.Router();
   const parse = multer({ storage: multer.memoryStorage(), limits: {
     fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1
@@ -17,9 +15,8 @@ function createRouter({ provider = cloudinary, decode = sharp, env = process.env
   let busy = false;
   router.post('/images', requireAdmin, (req, res) => {
     res.set('Cache-Control', 'no-store');
-    const config = provider.config();
-    if (!config.cloud_name || !config.api_key || !config.api_secret) {
-      return res.status(503).json({ error: 'فضای ذخیرهٔ عکس هنوز به سایت متصل نشده است.' });
+    if (!provider.configured) {
+      return res.status(503).json({ error: 'اتصال فضای عکس لیارا تنظیم نشده است؛ تنظیمات ذخیره‌سازی را بررسی کنید.' });
     }
     if (busy) return res.status(429).json({ error: 'آپلود دیگری در حال انجام است؛ کمی بعد دوباره تلاش کنید.' });
     busy = true;
@@ -30,26 +27,19 @@ function createRouter({ provider = cloudinary, decode = sharp, env = process.env
           error: err.code === 'LIMIT_FILE_SIZE' ? 'حجم هر عکس باید حداکثر ۱۰ مگابایت باشد.' : 'هر بار فقط یک فایل عکس ارسال کنید.'
         });
         if (!req.file) return res.status(400).json({ error: 'یک عکس انتخاب کنید.' });
-        let buffer;
+        let photo;
         try {
-          const picture = decode(req.file.buffer, { limitInputPixels: 50000000, failOn: 'warning' });
-          const metadata = await picture.metadata();
-          if (!['jpeg', 'png', 'webp'].includes(metadata.format) || (metadata.pages || 1) > 1) throw new Error('format');
-          // Decode and re-encode instead of trusting MIME/extension. No EXIF/GPS retained.
-          buffer = await picture.rotate().resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toBuffer();
-        } catch (_) {
+          photo = await prepareImage(req.file.buffer, decode);
+        } catch (error) {
+          if (error.code === 'IMAGE_TOO_LARGE') return res.status(413).json({ error: 'حجم عکس با حفظ کیفیت از ۳ مگابایت بیشتر است؛ عکس را کمی کوچک‌تر کنید.' });
           return res.status(400).json({ error: 'عکس معتبر JPG، PNG یا WebP انتخاب کنید (حداکثر ۵۰ مگاپیکسل).' });
         }
         if (res.destroyed) return;
-        const result = await new Promise((resolve, reject) => {
-          const stream = provider.uploader.upload_stream({ resource_type: 'image', folder: 'motif/products', format: 'webp', timeout: 60000 }, (error, result) => error ? reject(error) : resolve(result));
-          stream.on('error', reject);
-          stream.end(buffer);
-        });
-        if (!result || !/^https:\/\//.test(result.secure_url || '')) throw new Error('upload result');
-        res.status(201).json({ url: result.secure_url, width: result.width, height: result.height });
+        const result = await provider.upload(photo.buffer);
+        if (!result || !/^https:\/\//.test(result.url || '')) throw new Error('upload result');
+        res.status(201).json({ url: result.url, width: photo.width, height: photo.height });
       } catch (_) {
-        res.status(502).json({ error: 'ذخیرهٔ عکس انجام نشد؛ دوباره تلاش کنید.' });
+        res.status(502).json({ error: 'ذخیرهٔ عکس در لیارا انجام نشد؛ دوباره تلاش کنید.' });
       } finally { busy = false; }
     });
   });
