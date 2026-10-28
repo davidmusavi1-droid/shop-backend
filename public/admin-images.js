@@ -15,7 +15,7 @@ window.MotifImages = (() => {
     const heading = document.createElement('p');
     heading.textContent = key === 'images' ? 'عکس‌های محصول' : 'عکس‌های مخصوص این سایز';
     const hint = document.createElement('small');
-    hint.textContent = 'عکس اول، عکس اصلی است. JPG، PNG یا WebP؛ هر عکس حداکثر ۱۰ مگابایت. پس از آپلود، «ذخیره محصول» را بزنید.';
+    hint.textContent = 'عکس اول، عکس اصلی است. JPG، PNG یا WebP؛ فایل ورودی حداکثر ۱۰ مگابایت؛ نسخهٔ سایت با حفظ جزئیات تا سقف ۳ مگابایت آماده می‌شود. پس از آپلود، «ذخیره محصول» را بزنید.';
     const pickerLabel = document.createElement('label');
     pickerLabel.textContent = 'انتخاب عکس از گوشی یا رایانه';
     const picker = document.createElement('input');
