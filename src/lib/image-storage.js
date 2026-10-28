@@ -19,7 +19,7 @@ function readConfig(env) {
     try {
       const target = httpsUrl(endpoint);
       // Explicit Liara endpoint only: no implicit AWS or Cloudinary fallback.
-      if (!['liara.cloud', 'liara.space', 'liara.ir'].some(domain => target.hostname.endsWith('.' + domain))) continue;
+      if (!['liara.cloud', 'liara.space', 'liara.ir', 'liara.site'].some(domain => target.hostname.endsWith('.' + domain))) continue;
       if (target.pathname !== '/' || target.port) continue;
       httpsUrl(publicUrl);
       if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)) continue;

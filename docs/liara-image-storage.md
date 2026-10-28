@@ -19,7 +19,7 @@ Configure one complete family on the existing Liara application. Do not buy or c
 | LIARA_PUBLIC_URL | Public HTTPS base URL of that bucket, including the bucket path if required; object keys are appended to this URL |
 | LIARA_REGION | Region expected by the S3 endpoint; defaults to `us-east-1` signing scope |
 
-For compatibility, a complete `S3_` family with identical suffixes is supported. Within a family, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `BUCKET_NAME`, and `PUBLIC_BASE_URL` are accepted aliases. Do not mix incomplete families. Endpoint and public URL are distinct settings. A `.liara.cloud`, `.liara.space` or `.liara.ir` suffix alone does not establish Iran residency: confirm the bucket's region in the panel. Public URL must point to this same domestic bucket/custom domain.
+For compatibility, a complete `S3_` family with identical suffixes is supported. Within a family, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `BUCKET_NAME`, and `PUBLIC_BASE_URL` are accepted aliases. Do not mix incomplete families. Endpoint and public URL are distinct settings. A `.liara.cloud`, `.liara.space` , `.liara.ir` or `.liara.site` suffix alone does not establish Iran residency: confirm the bucket's region in the panel. Public URL must point to this same domestic bucket/custom domain.
 
 The existing bucket needs public read access for product images. Upload credentials must permit PutObject. This code does not modify bucket ACLs, create buckets, or log credentials. Missing/invalid configuration returns a safe 503 after the admin check; storage failures return 502.
 
@@ -42,3 +42,5 @@ The existing bucket needs public read access for product images. Upload credenti
 5. Save the product and confirm the image persists after reloading. Verify the deployed commit matches GitHub so an automatic build cannot restore the old upload implementation.
 
 Local tests use fake storage and do not establish live credentials, residency, or public access. A real upload remains required.
+
+The provided panel screenshots show endpoint `https://storage.iran.liara.site`, bucket `motif-images` and public base `https://motif-images.storage.iran.liara.site`. The variable names are truncated in the mobile inputs; verify their complete names before release. No credential values are recorded here.

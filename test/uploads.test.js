@@ -46,3 +46,10 @@ test('oversized detailed photos are rejected instead of silently compressing at 
     resize() { return this; }, webp() { return this; }, async toBuffer() { return { data: Buffer.alloc(MAX_IMAGE_BYTES + 1), info: {} }; } };
   await assert.rejects(prepareImage(Buffer.from('source'), () => picture), { code: 'IMAGE_TOO_LARGE' });
 });
+
+ test('existing Iran liara.site endpoint is accepted without accepting lookalike hosts', () => {
+  const config = { ...env, LIARA_ENDPOINT: 'https://storage.iran.liara.site', LIARA_PUBLIC_URL: 'https://motif-images.storage.iran.liara.site' };
+  assert.equal(readConfig(config).endpoint, config.LIARA_ENDPOINT);
+  assert.equal(readConfig(config).publicUrl, config.LIARA_PUBLIC_URL);
+  assert.equal(readConfig({ ...config, LIARA_ENDPOINT: 'https://storage.iran.liara.site.evil.test' }), null);
+});
