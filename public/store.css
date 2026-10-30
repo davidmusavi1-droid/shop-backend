@@ -7,3 +7,16 @@
 @media(max-width:700px){.wrap{padding:0 16px}.head{padding-top:10px;padding-bottom:10px}.logo{font-size:29px}.head-actions{gap:3px}.hero,.slide{min-height:345px}.slide{padding:25px 20px 55px}.slide img{object-position:var(--mobile-x,50%) var(--mobile-y,50%)}.hero h1{font-size:29px}.section{padding:21px 0}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.category-grid{grid-template-columns:1fr 1fr;gap:8px}.need-block{padding:18px 15px}.category-grid a{font-size:13px}.about{padding:20px}.measure-grid{grid-template-columns:1fr}.detail{grid-template-columns:1fr;gap:18px}.detail .main-photo .photo{aspect-ratio:4/4.5}.sort-label>select{max-width:150px}.two-fields{gap:10px}h1{font-size:25px}h2{font-size:19px}.cart-row{grid-template-columns:65px 1fr}.cart-row>button{grid-column:2}}
 
 .cart-icon{position:relative}.cart-icon svg{flex-shrink:0}#cartCount{position:absolute;top:0;right:-3px;min-width:18px;height:18px;padding:0 4px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-size:11px;line-height:18px;text-align:center}#quickForm{padding-top:16px}#quickForm>label,#quickForm>details{margin-bottom:12px}#quickForm>.hint{margin-top:12px}#quickToggle[aria-expanded=true]>span:last-child{transform:rotate(180deg)}
+
+/* Each surface owns its readable foreground, including draft previews. */
+body{color:var(--on-paper,var(--ink))}
+h1,h2,h3,label,legend,button{color:inherit}
+header,footer,.type-menu nav,.category-grid a{color:var(--on-paper,var(--ink))}
+.logo span,.section-head>a,.text-button{color:var(--accent-text,var(--accent))}
+.warm{color:var(--warm-text,var(--warm))}
+.quick-measure p,.hint,.guide,.card .sizes,.tag,.breadcrumb,.fact span:first-child{color:var(--sub-paper,var(--sub))}
+input,select,.button,.needs button,.choices button,.measure-panel,.cart-row button{color:var(--on-soft,var(--ink))}
+input::placeholder,.measure-panel .guide,.measure-panel .hint,.notice{color:var(--sub-soft,var(--sub))}
+.need-block,.need-block h2{color:var(--on-highlight,var(--ink))}
+.about,.about h2,.needs button[aria-pressed=true],.choices button[aria-pressed=true]{color:var(--on-ink,var(--paper))}
+.about:after{border-color:var(--on-ink,var(--paper))}

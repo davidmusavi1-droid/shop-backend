@@ -62,8 +62,9 @@ async function main() {
   assert.deepEqual((await api('/api/site','GET',null,false)).data.theme,draft.theme);
   const unreadable={...structuredClone(draft),theme:{...draft.theme,ink:draft.theme.paper}};
   const badSave=await api('/api/site/admin/draft','POST',{version:site.version,content:unreadable});assert.equal(badSave.status,200);
-  assert.equal((await api('/api/site/admin/publish','POST',{version:badSave.data.version})).status,400);
-  assert.deepEqual((await api('/api/site','GET',null,false)).data.theme,draft.theme);
+  assert.equal((await api('/api/site/admin/publish','POST',{version:badSave.data.version})).status,200);
+  assert.deepEqual((await api('/api/site','GET',null,false)).data.theme,unreadable.theme);
+  assert((await (await fetch(base+'/')).text()).includes('--on-paper:#000000'));
   assert.equal((await api('/api/site','GET',null,false)).data.text.aboutTitle,draft.text.aboutTitle);
   const created = await api('/api/products', 'POST', { title: 'Integration product', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'integration-L', size: 'L', color: 'black', stock: 1 }] });
   assert.equal(created.status, 201, JSON.stringify(created.data));
@@ -105,6 +106,8 @@ async function main() {
   await page.locator('#hero img').waitFor({state:'visible'});
   assert.equal(await page.locator('#hero img').getAttribute('src'),'https://images.example/banner.jpg');
   await page.waitForFunction(()=>document.querySelector('#hero img')?.naturalWidth>0);
+  assert.equal(await page.locator('header .logo').evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
+  assert.equal(await page.locator('.category-grid a').first().evaluate(el=>getComputedStyle(el).color),'rgb(0, 0, 0)');
   await page.unroute('**/api/site');
 
   await page.goto(base + '/admin.html');
