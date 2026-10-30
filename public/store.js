@@ -16,7 +16,7 @@ function productCard(p,variants,featured=false){const prices=variants.map(v=>p.b
 function socialLinks(root){root.replaceChildren();for(const s of content.socials.filter(s=>s.enabled)){const a=el('a');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';if(s.platform!=='other'){const img=el('img');img.src='/icons/'+s.platform+'.svg';img.alt='';img.width=20;img.height=20;a.append(img);}a.append(el('span',s.label));root.append(a);}}
 function renderContent(){
  document.documentElement.dataset.font=MotifSite.fontKey(content.font);
- const theme=MotifSite.themeOf(content);for(const [key,value] of Object.entries(theme))document.documentElement.style.setProperty('--'+key,value);document.documentElement.style.setProperty('--on-accent',MotifSite.onColor(theme.accent));
+ const theme=MotifSite.themeVariables(content);for(const [key,value] of Object.entries(theme))document.documentElement.style.setProperty('--'+key,value);document.documentElement.style.setProperty('--on-accent',MotifSite.onColor(theme.accent));
  document.querySelectorAll('[data-copy]').forEach(n=>n.textContent=content.text[n.dataset.copy]);
  document.querySelectorAll('.logo').forEach(n=>{n.replaceChildren();if(content.logo){const img=el('img');img.alt='MOTIF';img.src=content.logo;n.append(img);}else n.append(document.createTextNode('MOTIF'),el('span','.'));});
  $('homeCategories').replaceChildren();for(const c of content.categories){const a=el('a',c.label);a.href=MotifSite.targetHref(c.target);$('homeCategories').append(a);}
