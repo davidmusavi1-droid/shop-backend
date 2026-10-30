@@ -7,7 +7,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  page.on('pageerror',e=>errors.push(e.message));
  const product=(id,productType,customerNeeds,variants)=>({id,title:id,productType,customerNeeds,isActive:true,basePrice:100,images:[],variants});
  const v=(id,width,stock=1)=>({id,size:'L',color:'مشکی',stock,priceDelta:0,chestWidthCm:width,itemImages:[]});
- const products=[product('بادگیر','بادگیر',['پاییزه','روزمره'],[{...v('wrong',50),priceDelta:10},{...v('fit',60),priceDelta:80},{...v('sold',60,0)}]),product('بدون اندازه','دورس',['روزمره'],[v('unknown',null)]),product('کمر قبلی','شلوار',['مناسب کار'],[{...v('old',null),waistCm:84}]),product('شلوار مناسب','شلوار',['مناسب کار'],[{...v('new',null),waistWidthCm:42,totalLengthCm:100}])];
+ const products=[product('بادگیر','بادگیر',['پاییزه','روزمره'],[{...v('wrong',50),priceDelta:10},{...v('fit',60),priceDelta:80},{...v('sold',60,0)}]),product('بدون اندازه','دورس',['روزمره'],[v('unknown',null)]),product('کمر قبلی','شلوار',['مناسب کار'],[{...v('old',null),waistCm:84}]),product('شلوار مناسب','شلوار',['مناسب کار'],[{...v('new',null),waistWidthCm:42,totalLengthCm:100,riseCm:30,thighWidthCm:32,hemWidthCm:20}])];
  await page.route('http://motif.test/**',route=>{
   const u=new URL(route.request().url());
   if(u.pathname.startsWith('/api/'))return route.fulfill({contentType:'application/json',body:JSON.stringify(u.pathname==='/api/products'?products:products.find(p=>p.id===decodeURIComponent(u.pathname.split('/').at(-1))))});
@@ -35,6 +35,11 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.goto('http://motif.test/products/'+encodeURIComponent('بادگیر')+'?variant=fit');await page.locator('#detail').waitFor();assert((await page.locator('.price').innerText()).includes('۱۸۰'));
  await page.reload();await page.locator('#detail').waitFor();assert((await page.locator('.price').innerText()).includes('۱۸۰'));
  await page.goto('http://motif.test/#product/'+encodeURIComponent('بادگیر')+'?variant=fit');await page.locator('#detail').waitFor();assert(new URL(page.url()).pathname.startsWith('/products/'));
+ await page.setViewportSize({width:390,height:844});await page.goto('http://motif.test/');await page.locator('#featured .card').first().waitFor();
+ assert.equal(await page.locator('#quickForm').isVisible(),false);await page.locator('#quickToggle').click();await page.selectOption('#quickKind','pants');await page.fill('#quickWidth','۴۲');await page.fill('#quickLength','۱۰۰');await page.selectOption('#quickSize','L');await page.locator('#quickExtra>summary').click();await page.fill('#quickRise','۳۰');await page.fill('#quickThigh','۳۲');await page.fill('#quickHem','۲۰');
+ await page.screenshot({path:'/tmp/motif-fit-finder-mobile.png',fullPage:true});await page.locator('#quickForm button').click();await page.locator('#products .card').waitFor();assert.equal(await page.locator('#products .card').count(),1);assert.match(page.url(),/rise=30/);assert.match(page.url(),/size=L/);
+ await page.locator('#editMeasurements').click();assert.equal(await page.inputValue('#resultRise'),'30');await page.fill('#resultRise','۴۰');await page.locator('#exactForm button').click();assert.equal(await page.locator('#products .card').count(),0);
+ await page.goto('http://motif.test/');await page.locator('#quickToggle').click();await page.fill('#quickWidth','۵۶');await page.locator('#quickToggle').click();await page.locator('#quickToggle').click();assert.equal(await page.inputValue('#quickWidth'),'۵۶');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  assert.deepEqual(errors,[]);console.log('PASS: exact needs, Persian ranges, matched price/variant, unknown/legacy exclusion, bounds, reset, mobile. Mock API.');
  }finally{await browser.close();}
 })();

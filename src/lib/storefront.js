@@ -20,7 +20,7 @@ function images(p) {
   });
 }
 function page({title = HOME_TITLE, summary = HOME_DESCRIPTION, pathname = '/', body = '', product = false, settings=site.defaults}) {
-  return template.replace('<html lang="fa" dir="rtl">', () => `<html lang="fa" dir="rtl" data-font="${site.fontKey(settings.font)}">`)
+  return template.replace('<html lang="fa" dir="rtl">', () => `<html lang="fa" dir="rtl" data-font="${site.fontKey(settings.font)}" style="${site.themeStyle(settings)}">`)
     .replace('<title>MOTIF | پوشاک برای هر روز</title>', () => `<title>${escape(title)}</title>`)
     .replace('<!--SEO_HEAD-->', () => `<meta name="description" content="${escape(summary)}"><link rel="canonical" href="${escape(ORIGIN + pathname)}"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(summary)}"><meta property="og:url" content="${escape(ORIGIN + pathname)}"><meta property="og:type" content="website">`)
     .replace('<!--SITE_CONTENT-->', () => '<script type="application/json" id="publishedSiteContent">'+JSON.stringify(settings).replace(/</g,'\\u003c')+'</script>')

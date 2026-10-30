@@ -9,6 +9,31 @@
     estedad: {label:'استعداد',family:'"Estedad Variable", Tahoma, sans-serif'},
     tahoma: {label:'تاهوما (فونت دستگاه)',family:'Tahoma, sans-serif'}
   });
+  const palettes = {
+    rust:{label:'آجری و کرم (فعلی)',paper:'#f7f3eb',soft:'#ede5d8',ink:'#252520',sub:'#5d554a',accent:'#99452f',warm:'#ad4d25',highlight:'#e8dbc9'},
+    teal:{label:'کله‌غازی و استخوانی',paper:'#f5f2ea',soft:'#e6e7df',ink:'#242a28',sub:'#505c57',accent:'#245653',warm:'#245653',highlight:'#d8c9ae'},
+    olive:{label:'زیتونی و شنی',paper:'#f3f0e7',soft:'#e5e3d6',ink:'#292c26',sub:'#53584b',accent:'#505b3e',warm:'#895039',highlight:'#ddcfb8'},
+    plum:{label:'آلویی و سنگی',paper:'#f4f0ed',soft:'#e8dfe3',ink:'#2d282c',sub:'#65545e',accent:'#634454',warm:'#634454',highlight:'#dcc5c1'},
+    blue:{label:'آبی و سفید',paper:'#f7f8fa',soft:'#e5eaf3',ink:'#202737',sub:'#505a70',accent:'#244bc5',warm:'#244bc5',highlight:'#e7bc36'},
+    red:{label:'قرمز و کرم',paper:'#faf3e8',soft:'#eee2d6',ink:'#2c2827',sub:'#62514b',accent:'#b52d35',warm:'#b52d35',highlight:'#d3ddeb'}
+  };
+  const colorLabels={paper:'زمینهٔ صفحه',soft:'زمینهٔ کارت‌ها و فیلدها',ink:'متن اصلی',sub:'متن توضیحات',accent:'دکمه‌ها و لینک‌های اصلی',warm:'عنوان‌های رنگی',highlight:'زمینهٔ بخش‌های تأکیدی'};
+  const hex=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
+  function luminance(c){const a=c.slice(1).match(/../g).map(v=>parseInt(v,16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);return a[0]*.2126+a[1]*.7152+a[2]*.0722;}
+  function contrast(a,b){const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
+  function onColor(c){return contrast(c,'#ffffff')>=contrast(c,'#000000')?'#ffffff':'#000000';}
+  function readColors(value,fallback=palettes.rust,strict=false){
+    if(strict&&(!value||typeof value!=='object'||Array.isArray(value)))fail('پالت نامعتبر است');
+    const out={};for(const key of Object.keys(colorLabels)){if(strict&&!hex(value[key]))fail('کد رنگ '+colorLabels[key]+' باید شش‌رقمی باشد');out[key]=hex(value?.[key])?value[key].toLowerCase():fallback[key];}return out;
+  }
+  function themeOf(input){const fallback={...palettes.rust};if(input?.accent==='orange')fallback.accent='#a54b22';return readColors(input?.theme,fallback);}
+  function colorWarnings(t){return [['ink','paper'],['ink','soft'],['ink','highlight'],['sub','paper'],['sub','soft'],['accent','paper'],['warm','paper']].filter(([a,b])=>contrast(t[a],t[b])<4.5).map(([a,b])=>colorLabels[a]+' / '+colorLabels[b]);}
+  function savedPalettes(value,strict=false){
+    if(value===undefined)return [];
+    if(strict&&(!Array.isArray(value)||value.length>12))fail('حداکثر ۱۲ پالت شخصی مجاز است');
+    return (Array.isArray(value)?value:[]).slice(0,12).map(p=>({name:strict?text(p?.name,60,true):draftText(p?.name,60),colors:readColors(p?.colors,palettes.rust,strict)}));
+  }
+  function themeStyle(input){const t=themeOf(input);return Object.entries(t).map(([k,v])=>'--'+k+':'+v).join(';')+';--on-accent:'+onColor(t.accent);}
   const fontKey = key => Object.hasOwn(fonts,key) ? key : 'vazirmatn';
   const defaults = {
     logo: '', accent: 'rust', font: 'vazirmatn', slides: [], featuredIds: [],
@@ -76,7 +101,7 @@
     const categories=(Array.isArray(input.categories)?input.categories:[]).slice(0,8).map(c=>{c=c&&typeof c==='object'?c:{};return {label:draftText(c.label,80),target:draftTarget(c.target)};});
     const featuredIds=[...new Set((Array.isArray(input.featuredIds)?input.featuredIds:[]).slice(0,12).map(id=>draftText(id,100)).filter(Boolean))];
     const socials=(Array.isArray(input.socials)?input.socials:[]).slice(0,6).map(s=>{s=s&&typeof s==='object'?s:{};const label=draftText(s.label,80),url=draftHttps(s.url);return {platform:['instagram','telegram','whatsapp','other'].includes(s.platform)?s.platform:'other',label,url,enabled:s.enabled===true&&!!label&&!!url};});
-    return {logo:draftHttps(input.logo),accent:['rust','orange'].includes(input.accent)?input.accent:defaults.accent,font:fontKey(input.font),text,slides,categories,featuredIds,socials};
+    return {logo:draftHttps(input.logo),accent:['rust','orange'].includes(input.accent)?input.accent:defaults.accent,font:fontKey(input.font),theme:themeOf(input),palettes:savedPalettes(input.palettes),text,slides,categories,featuredIds,socials};
   }
   function validate(input) {
     if (!input || typeof input!=='object' || Array.isArray(input)) fail('تنظیمات نامعتبر است');
@@ -84,6 +109,9 @@
     if (input.font !== undefined && (typeof input.font !== 'string' || !Object.hasOwn(fonts,input.font))) fail('فونت نامعتبر است');
     const out={logo:https(input.logo),accent:input.accent,font:fontKey(input.font),text:{},slides:[],categories:[],featuredIds:[],socials:[]};
     for (const key of Object.keys(defaults.text)) { const value=text(input.text?.[key],key==='aboutBody'?1200:160); out.text[key]=value||defaults.text[key]; }
+    out.theme=input.theme===undefined?themeOf(input):readColors(input.theme,palettes.rust,true);
+    out.palettes=savedPalettes(input.palettes,true);
+    if(colorWarnings(out.theme).length)fail('خوانایی رنگ‌ها کافی نیست: '+colorWarnings(out.theme).join('، '));
     const ids=new Set();
     out.slides=array(input.slides,20).filter(s=>s && (s.image || s.mobileImage)).map(s=>{
       if (!s || typeof s.enabled!=='boolean') fail('وضعیت اسلاید نامعتبر است');
@@ -108,5 +136,5 @@
     }).filter(s=>s.enabled||s.label||s.url);
     return out;
   }
-  return {defaults,fonts,fontKey,validate,validateDraft,targetHref};
+  return {defaults,fonts,fontKey,validate,validateDraft,targetHref,palettes,colorLabels,themeOf,themeStyle,colorWarnings,onColor};
 });
