@@ -14,7 +14,7 @@
     teal:{label:'کله‌غازی و استخوانی',paper:'#f5f2ea',soft:'#e6e7df',ink:'#242a28',sub:'#505c57',accent:'#245653',warm:'#245653',highlight:'#d8c9ae'},
     olive:{label:'زیتونی و شنی',paper:'#f3f0e7',soft:'#e5e3d6',ink:'#292c26',sub:'#53584b',accent:'#505b3e',warm:'#895039',highlight:'#ddcfb8'},
     plum:{label:'آلویی و سنگی',paper:'#f4f0ed',soft:'#e8dfe3',ink:'#2d282c',sub:'#65545e',accent:'#634454',warm:'#634454',highlight:'#dcc5c1'},
-    blue:{label:'آبی و سفید',paper:'#f7f8fa',soft:'#e5eaf3',ink:'#202737',sub:'#505a70',accent:'#244bc5',warm:'#244bc5',highlight:'#e7bc36'},
+    blue:{label:'آبی و سفید',paper:'#f7f8fa',soft:'#e5eaf3',ink:'#202737',sub:'#505a70',accent:'#244bc5',warm:'#244bc5',highlight:'#e8dbc9'},
     red:{label:'قرمز و کرم',paper:'#faf3e8',soft:'#eee2d6',ink:'#2c2827',sub:'#62514b',accent:'#b52d35',warm:'#b52d35',highlight:'#d3ddeb'}
   };
   const colorLabels={paper:'زمینهٔ صفحه',soft:'زمینهٔ کارت‌ها و فیلدها',ink:'متن اصلی',sub:'متن توضیحات',accent:'دکمه‌ها و لینک‌های اصلی',warm:'عنوان‌های رنگی',highlight:'زمینهٔ بخش‌های تأکیدی'};
@@ -27,13 +27,22 @@
     const out={};for(const key of Object.keys(colorLabels)){if(strict&&!hex(value[key]))fail('کد رنگ '+colorLabels[key]+' باید شش‌رقمی باشد');out[key]=hex(value?.[key])?value[key].toLowerCase():fallback[key];}return out;
   }
   function themeOf(input){const fallback={...palettes.rust};if(input?.accent==='orange')fallback.accent='#a54b22';return readColors(input?.theme,fallback);}
-  function colorWarnings(t){return [['ink','paper'],['ink','soft'],['ink','highlight'],['sub','paper'],['sub','soft'],['accent','paper'],['warm','paper']].filter(([a,b])=>contrast(t[a],t[b])<4.5).map(([a,b])=>colorLabels[a]+' / '+colorLabels[b]);}
+  function themeVariables(input){
+    const t=themeOf(input);
+    const readable=(foreground,background)=>contrast(foreground,background)>=4.5?foreground:onColor(background);
+    return {...t,'on-paper':readable(t.ink,t.paper),'on-soft':readable(t.ink,t.soft),
+      'on-highlight':readable(t.ink,t.highlight),'on-ink':readable(t.paper,t.ink),
+      'sub-paper':readable(t.sub,t.paper),'sub-soft':readable(t.sub,t.soft),
+      'accent-text':readable(t.accent,t.paper),'warm-text':readable(t.warm,t.paper),
+      'on-accent':onColor(t.accent)};
+  }
+  function colorWarnings(t){const v=themeVariables({theme:t});return [['on-paper','paper'],['on-soft','soft'],['on-highlight','highlight'],['on-ink','ink'],['sub-paper','paper'],['sub-soft','soft'],['accent-text','paper'],['warm-text','paper']].filter(([a,b])=>contrast(v[a],v[b])<4.5).map(([a,b])=>a+' / '+b);}
   function savedPalettes(value,strict=false){
     if(value===undefined)return [];
     if(strict&&(!Array.isArray(value)||value.length>12))fail('حداکثر ۱۲ پالت شخصی مجاز است');
     return (Array.isArray(value)?value:[]).slice(0,12).map(p=>({name:strict?text(p?.name,60,true):draftText(p?.name,60),colors:readColors(p?.colors,palettes.rust,strict)}));
   }
-  function themeStyle(input){const t=themeOf(input);return Object.entries(t).map(([k,v])=>'--'+k+':'+v).join(';')+';--on-accent:'+onColor(t.accent);}
+  function themeStyle(input){return Object.entries(themeVariables(input)).map(([k,v])=>'--'+k+':'+v).join(';');}
   const fontKey = key => Object.hasOwn(fonts,key) ? key : 'vazirmatn';
   const defaults = {
     logo: '', accent: 'rust', font: 'vazirmatn', slides: [], featuredIds: [],
@@ -136,5 +145,5 @@
     }).filter(s=>s.enabled||s.label||s.url);
     return out;
   }
-  return {defaults,fonts,fontKey,validate,validateDraft,targetHref,palettes,colorLabels,themeOf,themeStyle,colorWarnings,onColor};
+  return {defaults,fonts,fontKey,validate,validateDraft,targetHref,palettes,colorLabels,themeOf,themeVariables,themeStyle,colorWarnings,onColor};
 });
