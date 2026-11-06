@@ -185,7 +185,10 @@ function display(view) {
     settings: "تنظیمات",
   }[view];
   document.querySelectorAll("[data-view]").forEach((b) => {
-    if (b.dataset.view === (view === "editor" ? "create" : view))
+    if (
+      b.dataset.view ===
+      (view === "editor" ? (editing ? "products" : "create") : view)
+    )
       b.setAttribute("aria-current", "page");
     else b.removeAttribute("aria-current");
   });
@@ -252,7 +255,7 @@ function openEditor(p = null, recover = null) {
       d.append(
         el(
           "p",
-          "نمای لیبل (Label)، جلو (Front)، پشت (Back) و جزئیات (Detail) را اضافه کنید. نام فایل و کد محصول را پیش از انتخاب بررسی کنید. نقش نماها در API فعلی ذخیره نمی‌شود؛ ترتیب و تصویر اصلی ذخیره می‌شوند.",
+          "نمای لیبل (Label)، جلو (Front)، پشت (Back) و جزئیات (Detail) را اضافه کنید. نام فایل و کد محصول را پیش از انتخاب بررسی کنید.",
         ),
       );
     }
@@ -585,10 +588,11 @@ function card(p) {
     el("div", MotifCatalog.formatPriceInput(p.basePrice) + " تومان", "price"),
   );
   const grade = el("div", null, "product-stock");
-  grade.append(
-    el("span", "گرید " + (MotifCatalog.gradeLetter(p.qualityGrade) || "—")),
-    el("small", "موجودی " + stock(p)),
-  );
+  const gradeLabel = el("span", "گرید "),
+    letter = el("bdi", MotifCatalog.gradeLetter(p.qualityGrade) || "—");
+  letter.dir = "ltr";
+  gradeLabel.append(letter);
+  grade.append(gradeLabel, el("small", "موجودی " + stock(p)));
   row.append(grade);
   const state = el("div", null, "product-status");
   state.append(
