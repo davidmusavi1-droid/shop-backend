@@ -136,6 +136,28 @@ async function main() {
   assert(p.variants.some(v => v.id === originalId && v.stock === 0));
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile horizontal overflow');
   assert.deepEqual(errors, []);
+  // Single item creation needs no label size and cannot lose its inventory row.
+  await page.locator('#newProduct').click();
+  await page.locator('#productFields [data-key=title]').fill('Single unknown size');
+  await page.locator('#productFields [data-key=productCode]').fill('motif-test-004');
+  await page.locator('#productFields [data-key=basePrice]').fill('350000');
+  assert(await page.locator('#addVariant').isHidden());
+  await page.getByRole('button',{name:'حذف این سایز جدید',exact:true}).click();
+  assert.equal(await page.locator('#variants fieldset').count(),1);
+  await page.locator('#variants [data-key=color]').fill('black');
+  assert.equal(await page.locator('#variants [data-key=sku]').inputValue(),'MOTIF-TEST-004');
+  await page.locator('#save').click();
+  await page.getByText('محصول ذخیره شد.',{exact:true}).waitFor();
+  const single=await prisma.product.findUnique({where:{productCode:'MOTIF-TEST-004'},include:{variants:true}});
+  assert(single);assert.equal(single.variants.length,1);assert.equal(single.variants[0].size,'نامشخص');
+  assert.equal(single.variants[0].stock,1);
+  const duplicate=await api('/api/products','POST',{title:'Duplicate',productCode:'motif-test-004',basePrice:1,inventoryMode:'SINGLE',variants:[{sku:'different-sku',size:null,color:'red',stock:1}]});
+  assert.equal(duplicate.status,409);assert.match(duplicate.data.error,/کد یکتای محصول/);
+  await page.locator('#variants [data-key=lengthCm]').fill('69');
+  await page.locator('#save').click();
+  await page.waitForFunction(()=>document.querySelector('#save').disabled===false);
+  const savedSingle=await prisma.product.findUnique({where:{id:single.id},include:{variants:true}});
+  assert.equal(savedSingle.productCode,'MOTIF-TEST-004');assert.equal(savedSingle.variants[0].lengthCm,69);
   await page.locator('#logout').click(); assert(await page.locator('#workspace').isHidden());
   // Two concurrent edits cannot both save a stale snapshot.
   p = (await api('/api/products/admin/list')).data.find(x => x.id === p.id);
@@ -148,3 +170,4 @@ main().catch(err => { console.error(err); process.exitCode = 1; }).finally(async
   if (browser) await browser.close();
   await prisma.$disconnect(); server.kill('SIGTERM');
 });
+

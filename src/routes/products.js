@@ -22,6 +22,11 @@ function normalize(body) {
   if (!['SINGLE', 'MULTI'].includes(body.inventoryMode || 'MULTI')) throw invalid('نوع موجودی نامعتبر است');
   if (body.isActive !== undefined && typeof body.isActive !== 'boolean') throw invalid('وضعیت محصول نامعتبر است');
   const data = { title: body.title.trim(), basePrice: body.basePrice, inventoryMode: body.inventoryMode || 'MULTI', isActive: body.isActive ?? true };
+  // Older clients may omit this field; PATCH must preserve the existing code.
+  if (body.productCode !== undefined) {
+    if (typeof body.productCode !== 'string' || !/^[A-Z0-9][A-Z0-9-]{0,63}$/i.test(body.productCode.trim())) throw invalid('کد محصول باید شامل حروف انگلیسی، عدد و خط تیره باشد (حداکثر ۶۴ کاراکتر)');
+    data.productCode = body.productCode.trim().toUpperCase();
+  }
   for (const key of texts) {
     if (body[key] != null && typeof body[key] !== 'string') throw invalid('متن نامعتبر است');
     data[key] = body[key] || null;
@@ -36,12 +41,13 @@ function normalize(body) {
   data.styles = array(body.styles);
   data.qualityGrade = body.qualityGrade || null;
   if (data.qualityGrade && !grades.includes(data.qualityGrade)) throw invalid('گرید نامعتبر است');
-  if (!Array.isArray(body.variants) || !body.variants.length || body.variants.length > 100) throw invalid('حداقل یک سایز لازم است');
+  if (!Array.isArray(body.variants) || !body.variants.length || body.variants.length > 100) throw invalid('حداقل یک ردیف سایز و موجودی لازم است؛ برای کالای تک‌آیتمی هم یک ردیف ثبت کنید');
   const skus = new Set(), combinations = new Set();
   const variants = body.variants.map(v => {
     if (!v || typeof v.sku !== 'string' || !v.sku.trim() || !integer(v.stock ?? 0) || !integer(v.priceDelta ?? 0, -2147483648) || !integer(data.basePrice + (v.priceDelta ?? 0))) throw invalid('قیمت، موجودی یا SKU سایز نامعتبر است');
-    if (typeof v.size !== 'string' || !v.size.trim() || typeof v.color !== 'string' || !v.color.trim()) throw invalid('سایز و رنگ الزامی است');
-    const out = { sku: v.sku.trim(), size: v.size.trim(), color: v.color.trim(), stock: v.stock ?? 0, priceDelta: v.priceDelta ?? 0 };
+    const size = data.inventoryMode === 'SINGLE' && (v.size == null || v.size === '') ? 'نامشخص' : v.size;
+    if (typeof size !== 'string' || !size.trim() || typeof v.color !== 'string' || !v.color.trim()) throw invalid('سایز و رنگ الزامی است');
+    const out = { sku: v.sku.trim(), size: size.trim(), color: v.color.trim(), stock: v.stock ?? 0, priceDelta: v.priceDelta ?? 0 };
     const combination = JSON.stringify([out.size, out.color]);
     if (skus.has(out.sku) || combinations.has(combination)) throw invalid('SKU یا ترکیب سایز و رنگ تکراری است');
     skus.add(out.sku); combinations.add(combination);
@@ -64,7 +70,7 @@ function normalize(body) {
   return { data, variants };
 }
 function productError(err, next) {
-  if (err.code === 'P2002') return next(Object.assign(new Error('SKU یا سایز و رنگ تکراری است'), { statusCode: 409 }));
+  if (err.code === 'P2002') return next(Object.assign(new Error(err.meta?.target?.includes('productCode') ? 'کد یکتای محصول قبلاً ثبت شده است' : 'SKU یا سایز و رنگ تکراری است'), { statusCode: 409 }));
   if (err.code === 'P2034') return next(conflict());
   next(err);
 }
@@ -133,3 +139,4 @@ router.post('/', requireAdmin, async (req, res, next) => {
   } catch (err) { productError(err, next); }
 });
 module.exports = router;
+

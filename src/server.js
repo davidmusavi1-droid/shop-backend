@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const prisma = require('./lib/prisma');
+const productSchema = require('./lib/prepare-products');
 const contentSchema = require('./lib/prepare-content');
 
 const productsRouter = require('./routes/products');
@@ -33,7 +34,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 // Startup is the final guard even when platform pre-deploy hooks are skipped.
-contentSchema.prepare(prisma).then(()=>{
+productSchema.prepare(prisma).then(()=>contentSchema.prepare(prisma)).then(()=>{
   console.log('Content schema readiness verified');
   app.listen(PORT, () => console.log(`سرور روی پورت ${PORT} اجرا شد`));
 }).catch(err=>{
@@ -41,3 +42,4 @@ contentSchema.prepare(prisma).then(()=>{
   process.exitCode=1;
   prisma.$disconnect();
 });
+

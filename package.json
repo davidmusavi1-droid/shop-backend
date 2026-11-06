@@ -6,7 +6,7 @@
   "scripts": {
     "build": "prisma generate",
     "test": "node --test test/*.test.js",
-    "deploy:prepare": "prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma",
+    "deploy:prepare": "prisma db execute --file db/add-product-code.sql --schema prisma/schema.prisma && prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "prisma:migrate": "prisma migrate dev",
@@ -25,3 +25,4 @@
     "nodemon": "^3.1.4"
   }
 }
+
