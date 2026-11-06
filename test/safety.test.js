@@ -118,3 +118,35 @@ test('flat waistband is validated separately and never inferred from legacy wais
   await call(routes['post /'],productBody);
   assert.equal(data.variants.create[0].waistWidthCm,undefined);
 });
+
+
+test('product codes normalize, reject invalid input, and report uniqueness conflicts', async () => {
+  let data;
+  const {routes}=load('products',{product:{create:async args=>{data=args.data;return data;}}});
+  assert.equal((await call(routes['post /'],{...productBody,productCode:' motif-004 '})).code,201);
+  assert.equal(data.productCode,'MOTIF-004');
+  for(const productCode of ['', 4, 'MOTIF 004', 'x'.repeat(65)])assert.equal((await call(routes['post /'],{...productBody,productCode})).code,400);
+  const conflict=load('products',{product:{create:async()=>{throw {code:'P2002',meta:{target:['productCode']}};}}});
+  const result=await call(conflict.routes['post /'],{...productBody,productCode:'MOTIF-004'});
+  assert.equal(result.code,409);assert.match(result.error.message,/کد یکتای محصول/);
+});
+test('single items accept unknown label size while multi-size items still require it',async()=>{
+  let data;
+  const {routes}=load('products',{product:{create:async args=>{data=args.data;return data;}}});
+  const body={...productBody,inventoryMode:'SINGLE',variants:[{...productBody.variants[0],size:null}]};
+  assert.equal((await call(routes['post /'],body)).code,201);
+  assert.equal(data.variants.create[0].size,'نامشخص');
+  assert.equal((await call(routes['post /'],{...body,inventoryMode:'MULTI'})).code,400);
+  assert.equal((await call(routes['post /'],{...body,variants:[]})).code,400);
+});
+test('legacy editors preserve product codes when omitted from updates',async()=>{
+  let changed;
+  const updatedAt=new Date('2026-11-06T00:00:00Z');
+  const current={id:'p1',productCode:'MOTIF-004',updatedAt,variants:[{id:'v1'}]};
+  const tx={product:{findUnique:async()=>current,updateMany:async({data})=>{changed=data;return {count:1};}},variant:{updateMany:async()=>({count:1})}};
+  const {routes}=load('products',{$transaction:fn=>fn(tx)});
+  assert.equal((await call(routes['patch /:id'],{...productBody,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
+  assert.equal(Object.hasOwn(changed,'productCode'),false);
+  assert.equal((await call(routes['patch /:id'],{...productBody,productCode:null,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
+  assert.equal(Object.hasOwn(changed,'productCode'),false);
+});

@@ -23,6 +23,7 @@ enum QualityGrade {
 model Product {
   id          String   @id @default(uuid())
   title       String
+  productCode String?  @unique
   description String?
   basePrice   Int
   images      String[]
@@ -168,3 +169,4 @@ model SiteContent {
   history   Json
   updatedAt DateTime @updatedAt
 }
+
