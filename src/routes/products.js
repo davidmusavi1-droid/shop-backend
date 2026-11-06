@@ -16,6 +16,7 @@ const measures = ['chestWidthCm', 'lengthCm', 'sleeveFromNeckCm', 'waistCm', 'wa
 const texts = ['description', 'brand', 'modelName', 'productType', 'condition', 'defect', 'identityOrigin', 'identityHistory', 'identityPurpose', 'identityUseCases', 'identityDesign', 'identityTechnical', 'identitySources', 'mainFabric', 'garmentDesign', 'fabricTechnology', 'technologyEvidence', 'fabricNote'];
 const grades = ['N', 'A_PLUS', 'A', 'B', 'C'];
 function normalize(body, current = null) {
+  if (!body || !Array.isArray(body.variants)) throw invalid('فهرست سایزها نامعتبر است');
   const suppliedCode = body?.productCode;
   // Merge omitted fields so older clients cannot erase grades, photos or metadata.
   if (current) body = { ...current, ...body, variants: body.variants?.map(v => ({ ...current.variants.find(old => old.id === v.id), ...v })) };

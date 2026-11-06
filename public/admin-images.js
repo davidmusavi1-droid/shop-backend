@@ -10,6 +10,7 @@ window.MotifImages = (() => {
     if (pending) { event.preventDefault(); event.returnValue = ''; }
   });
   function control(key, title, value, getToken) {
+    const defect = /Defect|defect/.test(key);
     const box = document.createElement('div');
     box.className = 'image-editor';
     const heading = document.createElement('p');
@@ -38,11 +39,11 @@ window.MotifImages = (() => {
         if (/^https:\/\//.test(url)) img.src = url;
         card.append(img);
         for (const [label, action] of [
-          [index === 0 ? 'عکس اصلی' : 'انتخاب به‌عنوان اصلی', () => { const a = urls(); a.unshift(a.splice(index, 1)[0]); set(a); }],
+          [index === 0 ? (defect ? 'اولین عکس ایراد' : 'عکس اصلی') : (defect ? 'انتخاب به‌عنوان اولین عکس ایراد' : 'انتخاب به‌عنوان اصلی'), () => { const a = urls(); a.unshift(a.splice(index, 1)[0]); set(a); }],
           ['حذف از محصول', () => set(urls().filter((_, i) => i !== index))]
         ]) {
           const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
-          button.disabled = pending > 0 || label === 'عکس اصلی'; button.onclick = () => { if (!guard()) action(); }; card.append(button);
+          button.disabled = pending > 0 || index === 0 && label !== 'حذف از محصول'; button.onclick = () => { if (!guard()) action(); }; card.append(button);
         }
         gallery.append(card);
       });
@@ -63,7 +64,8 @@ window.MotifImages = (() => {
           try {
             const form = new FormData(); form.append('image', file);
             const response = await fetch('/api/uploads/images', { method: 'POST', headers: { 'X-Admin-Token': getToken() }, body: form });
-            const data = await response.json();
+            let data;
+            try { data = await response.json(); } catch { throw new Error('پاسخ سرور آپلود قابل خواندن نیست؛ وضعیت HTTP '+response.status); }
             if (!response.ok) throw new Error(data.error || 'آپلود ناموفق');
             if (!/^https:\/\//.test(data.url || '')) throw new Error('پاسخ نامعتبر از سرور');
             set([...urls(), data.url]); success++;
