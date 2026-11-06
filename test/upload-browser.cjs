@@ -30,7 +30,7 @@ const assert = require('node:assert/strict');
     assert.equal(await images.inputValue(), 'https://images.test/3.webp\nhttps://images.test/1.webp');
     await page.locator('#variants input[type=file]').setInputFiles(file('size.jpg'));
     await page.waitForFunction(() => !document.querySelector('#save').disabled);
-    for (const [key, value] of [['title', 'کاپشن'], ['size', 'L'], ['color', 'سبز'], ['sku', 'photo-test']]) await page.locator(`[data-key=${key}]`).fill(value);
+    for (const [key, value] of [['productCode', 'MOTIF-UPLOAD-TEST'], ['title', 'کاپشن'], ['size', 'L'], ['color', 'سبز'], ['sku', 'photo-test']]) await page.locator(`[data-key=${key}]`).fill(value);
     await page.locator('#save').click();
     await page.waitForFunction(() => document.querySelector('#message').textContent.includes('capturing'));
     assert.deepEqual(saved.images, ['https://images.test/3.webp', 'https://images.test/1.webp']);
@@ -38,3 +38,4 @@ const assert = require('node:assert/strict');
     await page.screenshot({ path: '/tmp/motif-upload-mobile.png', fullPage: true });
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });
+

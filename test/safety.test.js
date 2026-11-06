@@ -125,7 +125,7 @@ test('product codes normalize, reject invalid input, and report uniqueness confl
   const {routes}=load('products',{product:{create:async args=>{data=args.data;return data;}}});
   assert.equal((await call(routes['post /'],{...productBody,productCode:' motif-004 '})).code,201);
   assert.equal(data.productCode,'MOTIF-004');
-  for(const productCode of ['', null, 4, 'MOTIF 004', 'x'.repeat(65)])assert.equal((await call(routes['post /'],{...productBody,productCode})).code,400);
+  for(const productCode of ['', 4, 'MOTIF 004', 'x'.repeat(65)])assert.equal((await call(routes['post /'],{...productBody,productCode})).code,400);
   const conflict=load('products',{product:{create:async()=>{throw {code:'P2002',meta:{target:['productCode']}};}}});
   const result=await call(conflict.routes['post /'],{...productBody,productCode:'MOTIF-004'});
   assert.equal(result.code,409);assert.match(result.error.message,/کد یکتای محصول/);
@@ -146,5 +146,7 @@ test('legacy editors preserve product codes when omitted from updates',async()=>
   const tx={product:{findUnique:async()=>current,updateMany:async({data})=>{changed=data;return {count:1};}},variant:{updateMany:async()=>({count:1})}};
   const {routes}=load('products',{$transaction:fn=>fn(tx)});
   assert.equal((await call(routes['patch /:id'],{...productBody,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
+  assert.equal(Object.hasOwn(changed,'productCode'),false);
+  assert.equal((await call(routes['patch /:id'],{...productBody,productCode:null,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
   assert.equal(Object.hasOwn(changed,'productCode'),false);
 });

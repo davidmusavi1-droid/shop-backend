@@ -23,7 +23,7 @@ function normalize(body) {
   if (body.isActive !== undefined && typeof body.isActive !== 'boolean') throw invalid('وضعیت محصول نامعتبر است');
   const data = { title: body.title.trim(), basePrice: body.basePrice, inventoryMode: body.inventoryMode || 'MULTI', isActive: body.isActive ?? true };
   // Older clients may omit this field; PATCH must preserve the existing code.
-  if (body.productCode !== undefined) {
+  if (body.productCode != null) {
     if (typeof body.productCode !== 'string' || !/^[A-Z0-9][A-Z0-9-]{0,63}$/i.test(body.productCode.trim())) throw invalid('کد محصول باید شامل حروف انگلیسی، عدد و خط تیره باشد (حداکثر ۶۴ کاراکتر)');
     data.productCode = body.productCode.trim().toUpperCase();
   }
