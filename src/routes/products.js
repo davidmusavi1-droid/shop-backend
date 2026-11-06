@@ -12,10 +12,14 @@ router.get('/admin/list', requireAdmin, async (req, res, next) => {
 
 const invalid = message => Object.assign(new Error(message), { statusCode: 400 });
 const conflict = () => Object.assign(new Error('محصول یا موجودی تغییر کرده؛ دوباره بارگذاری کنید'), { statusCode: 409 });
-const measures = ['chestWidthCm', 'lengthCm', 'waistCm', 'waistWidthCm', 'riseCm', 'totalLengthCm', 'thighWidthCm', 'hemWidthCm'];
-const texts = ['description', 'brand', 'modelName', 'productType', 'condition', 'defect', 'identityOrigin', 'identityHistory', 'identityPurpose', 'identityUseCases', 'identityDesign', 'identityTechnical', 'identitySources'];
+const measures = ['chestWidthCm', 'lengthCm', 'sleeveFromNeckCm', 'waistCm', 'waistWidthCm', 'riseCm', 'totalLengthCm', 'thighWidthCm', 'hemWidthCm'];
+const texts = ['description', 'brand', 'modelName', 'productType', 'condition', 'defect', 'identityOrigin', 'identityHistory', 'identityPurpose', 'identityUseCases', 'identityDesign', 'identityTechnical', 'identitySources', 'mainFabric', 'garmentDesign', 'fabricTechnology', 'technologyEvidence', 'fabricNote'];
 const grades = ['N', 'A_PLUS', 'A', 'B', 'C'];
-function normalize(body) {
+function normalize(body, current = null) {
+  if (!body || !Array.isArray(body.variants)) throw invalid('فهرست سایزها نامعتبر است');
+  const suppliedCode = body?.productCode;
+  // Merge omitted fields so older clients cannot erase grades, photos or metadata.
+  if (current) body = { ...current, ...body, variants: body.variants?.map(v => ({ ...current.variants.find(old => old.id === v.id), ...v })) };
   if (!body || typeof body.title !== 'string' || !body.title.trim()) throw invalid('نام محصول الزامی است');
   const integer = (n, min = 0) => Number.isInteger(n) && n >= min && n <= 2147483647;
   if (!integer(body.basePrice)) throw invalid('قیمت نامعتبر است');
@@ -39,6 +43,17 @@ function normalize(body) {
   data.images = array(body.images, true);
   data.customerNeeds = array(body.customerNeeds);
   data.styles = array(body.styles);
+  data.defectImages = array(body.defectImages, true);
+  data.complementaryFabrics = array(body.complementaryFabrics);
+  data.seasons = array(body.seasons);
+  data.uses = array(body.uses);
+  if (data.seasons.some(s => !['بهار','تابستان','پاییز','زمستان'].includes(s))) throw invalid('فصل نامعتبر است');
+  if (body.hasHood != null && typeof body.hasHood !== 'boolean') throw invalid('وضعیت کلاه نامعتبر است');
+  data.hasHood = body.hasHood ?? null;
+  if (body.technologyVerified != null && typeof body.technologyVerified !== 'boolean') throw invalid('تأیید فناوری نامعتبر است');
+  data.technologyVerified = body.technologyVerified ?? false;
+  if (data.fabricTechnology && (!data.technologyVerified || !data.technologyEvidence?.trim())) throw invalid('ثبت فناوری واقعی پارچه نیازمند تأیید مدیر و مستندات است؛ توضیح غیرقطعی را در یادداشت جنس وارد کنید');
+  if ([data.mainFabric, ...data.complementaryFabrics].some(s => /gore[ -]?tex|گور?[تط]کس|کوهنوردی/i.test(s || ''))) throw invalid('گورتکس را در فناوری مستند یا یادداشت جنس و کوهنوردی را در کاربرد ثبت کنید');
   data.qualityGrade = body.qualityGrade || null;
   if (data.qualityGrade && !grades.includes(data.qualityGrade)) throw invalid('گرید نامعتبر است');
   if (!Array.isArray(body.variants) || !body.variants.length || body.variants.length > 100) throw invalid('حداقل یک ردیف سایز و موجودی لازم است؛ برای کالای تک‌آیتمی هم یک ردیف ثبت کنید');
@@ -53,7 +68,7 @@ function normalize(body) {
     skus.add(out.sku); combinations.add(combination);
     for (const key of measures) {
       // Older editors do not know this field; preserve it on updates.
-      if (key === 'waistWidthCm' && v[key] === undefined) continue;
+      if (['waistWidthCm', 'sleeveFromNeckCm'].includes(key) && v[key] === undefined) continue;
       out[key] = v[key] == null || v[key] === '' ? null : v[key];
       if (out[key] !== null && (typeof out[key] !== 'number' || !Number.isFinite(out[key]) || out[key] <= 0)) throw invalid('اندازه نامعتبر است');
     }
@@ -64,9 +79,15 @@ function normalize(body) {
       out[key] = v[key] || null;
     }
     out.itemImages = array(v.itemImages, true);
+    out.itemDefectImages = array(v.itemDefectImages, true);
     return out;
   });
   if (data.inventoryMode === 'SINGLE' && (variants.length !== 1 || variants[0].stock > 1)) throw invalid('کالای تک‌آیتمی فقط یک سایز و حداکثر یک موجودی دارد');
+  if (data.isActive) {
+    if (data.defect?.trim() && !data.defectImages.length) throw invalid('انتشار محصول دارای ایراد ثبت‌شده نیازمند حداقل یک عکس اختصاصی ایراد است');
+    for (const v of variants) if (v.itemDefect?.trim() && !v.itemDefectImages.length) throw invalid('انتشار سایز دارای ایراد ثبت‌شده نیازمند عکس اختصاصی ایراد همان سایز است');
+  }
+  if (current && suppliedCode == null) delete data.productCode;
   return { data, variants };
 }
 function productError(err, next) {
@@ -76,11 +97,11 @@ function productError(err, next) {
 }
 router.patch('/:id', requireAdmin, async (req, res, next) => {
   try {
-    const { data, variants } = normalize(req.body);
     const result = await prisma.$transaction(async tx => {
       const current = await tx.product.findUnique({ where: { id: req.params.id }, include: { variants: true } });
       if (!current) throw Object.assign(new Error('محصول پیدا نشد'), { statusCode: 404 });
       if (req.body.updatedAt !== current.updatedAt.toISOString()) throw conflict();
+      const { data, variants } = normalize(req.body, current);
       const ids = req.body.variants.filter(v => v.id).map(v => v.id);
       if (new Set(ids).size !== ids.length || ids.some(id => !current.variants.some(v => v.id === id)) || current.variants.some(v => !ids.includes(v.id))) throw invalid('حذف یا جایگزینی سایز موجود مجاز نیست؛ موجودی آن را صفر کنید');
       const changed = await tx.product.updateMany({ where: { id: current.id, updatedAt: current.updatedAt }, data });

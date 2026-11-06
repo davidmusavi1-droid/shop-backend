@@ -33,6 +33,8 @@ test('HTTP upload enforces authentication, formats, limits, missing config and s
     assert.equal(metadata.format, 'webp'); assert.equal(metadata.width, 3200); assert.equal(metadata.exif, undefined);
     assert.ok(received[0].length <= MAX_IMAGE_BYTES);
     assert.equal((await result.json()).width, metadata.width);
+    const png = await sharp({create:{width:120,height:80,channels:3,background:'green'}}).png().toBuffer();
+    assert.equal((await upload(png)).status,201);assert.equal((await sharp(received.at(-1)).metadata()).format,'webp');
     failure = true;
     const failed = await upload(photo); assert.equal(failed.status, 502); assert.ok(!(await failed.text()).includes('SECRET'));
     failure = false; assert.equal((await upload(photo)).status, 201);

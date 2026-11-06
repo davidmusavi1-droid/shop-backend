@@ -38,8 +38,21 @@ function createRouter({ provider, decode = sharp, env = process.env } = {}) {
         const result = await provider.upload(photo.buffer);
         if (!result || !/^https:\/\//.test(result.url || '')) throw new Error('upload result');
         res.status(201).json({ url: result.url, width: photo.width, height: photo.height });
-      } catch (_) {
-        res.status(502).json({ error: 'ذخیرهٔ عکس در لیارا انجام نشد؛ دوباره تلاش کنید.' });
+      } catch (error) {
+        const code = error.name || error.code || 'Unknown';
+        const reasons = {
+          AccessDenied: 'مجوز نوشتن در فضای عکس لیارا کافی نیست.',
+          InvalidAccessKeyId: 'شناسه کلید فضای عکس لیارا معتبر نیست.',
+          SignatureDoesNotMatch: 'کلید یا تنظیم امضای فضای عکس لیارا درست نیست.',
+          NoSuchBucket: 'باکت تنظیم‌شده در لیارا پیدا نشد.',
+          TimeoutError: 'زمان اتصال به فضای عکس لیارا تمام شد.',
+          AbortError: 'زمان ارسال عکس به لیارا تمام شد.',
+          ENOTFOUND: 'آدرس فضای عکس لیارا پیدا نشد.',
+          ECONNREFUSED: 'اتصال به فضای عکس لیارا برقرار نشد.'
+        };
+        const reason = reasons[code] || reasons[error.code];
+        // Do not expose provider messages, URLs, keys or signatures.
+        res.status(502).json({ error: reason || 'خطای سرویس ذخیره‌سازی لیارا؛ شناسه خطا: STORAGE_UPLOAD_FAILED', code: reason ? code : 'STORAGE_UPLOAD_FAILED' });
       } finally { busy = false; }
     });
   });

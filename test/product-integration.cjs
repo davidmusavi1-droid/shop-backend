@@ -95,7 +95,7 @@ async function main() {
   assert.equal((await api('/api/products/' + p.id, 'GET', null, false)).status, 404);
   assert((await api('/api/products/admin/list')).data.some(x => x.id === p.id));
   // Browser uses actual API and database; no request mocking.
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, ...(process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : {}) });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = []; page.on('pageerror', err => errors.push(err.message));
   // A failing settings refresh must not erase the already published SSR banner.
@@ -139,6 +139,7 @@ async function main() {
   // Single item creation needs no label size and cannot lose its inventory row.
   await page.locator('#newProduct').click();
   await page.locator('#productFields [data-key=title]').fill('Single unknown size');
+  await page.locator('#productFields [data-key=productType]').fill('کاپشن');
   await page.locator('#productFields [data-key=productCode]').fill('motif-test-004');
   await page.locator('#productFields [data-key=basePrice]').fill('350000');
   assert(await page.locator('#addVariant').isHidden());
