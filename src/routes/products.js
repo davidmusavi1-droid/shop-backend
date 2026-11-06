@@ -20,7 +20,7 @@ function normalize(body, current = null) {
   const suppliedCode = body?.productCode;
   // Merge omitted fields so older clients cannot erase grades, photos or metadata.
   if (current) body = { ...current, ...body, variants: body.variants?.map(v => ({ ...current.variants.find(old => old.id === v.id), ...v })) };
-  if (!body || typeof body.title !== 'string' || !body.title.trim()) throw invalid('نام محصول الزامی است');
+  if (!body || typeof body.title !== 'string' || (!body.title.trim() && body.isActive !== false)) throw invalid('نام محصول الزامی است');
   const integer = (n, min = 0) => Number.isInteger(n) && n >= min && n <= 2147483647;
   if (!integer(body.basePrice)) throw invalid('قیمت نامعتبر است');
   if (!['SINGLE', 'MULTI'].includes(body.inventoryMode || 'MULTI')) throw invalid('نوع موجودی نامعتبر است');
@@ -61,8 +61,9 @@ function normalize(body, current = null) {
   const variants = body.variants.map(v => {
     if (!v || typeof v.sku !== 'string' || !v.sku.trim() || !integer(v.stock ?? 0) || !integer(v.priceDelta ?? 0, -2147483648) || !integer(data.basePrice + (v.priceDelta ?? 0))) throw invalid('قیمت، موجودی یا SKU سایز نامعتبر است');
     const size = data.inventoryMode === 'SINGLE' && (v.size == null || v.size === '') ? 'نامشخص' : v.size;
-    if (typeof size !== 'string' || !size.trim() || typeof v.color !== 'string' || !v.color.trim()) throw invalid('سایز و رنگ الزامی است');
-    const out = { sku: v.sku.trim(), size: size.trim(), color: v.color.trim(), stock: v.stock ?? 0, priceDelta: v.priceDelta ?? 0 };
+    const color = !data.isActive && v.color == null ? '' : v.color;
+    if (typeof size !== 'string' || !size.trim() || typeof color !== 'string' || (!color.trim() && data.isActive)) throw invalid('سایز و رنگ الزامی است');
+    const out = { sku: v.sku.trim(), size: size.trim(), color: color.trim(), stock: v.stock ?? 0, priceDelta: v.priceDelta ?? 0 };
     const combination = JSON.stringify([out.size, out.color]);
     if (skus.has(out.sku) || combinations.has(combination)) throw invalid('SKU یا ترکیب سایز و رنگ تکراری است');
     skus.add(out.sku); combinations.add(combination);
@@ -83,6 +84,10 @@ function normalize(body, current = null) {
     return out;
   });
   if (data.inventoryMode === 'SINGLE' && (variants.length !== 1 || variants[0].stock > 1)) throw invalid('کالای تک‌آیتمی فقط یک سایز و حداکثر یک موجودی دارد');
+  if (data.isActive && (body.publicationIntent === true || current?.isActive === false)) {
+    const missing = require('../../public/admin-readiness').issues({ ...data, variants });
+    if (missing.length) throw invalid('اطلاعات لازم برای انتشار ناقص است: ' + missing.map(x => x.label).join('، '));
+  }
   if (data.isActive) {
     if (data.defect?.trim() && !data.defectImages.length) throw invalid('انتشار محصول دارای ایراد ثبت‌شده نیازمند حداقل یک عکس اختصاصی ایراد است');
     for (const v of variants) if (v.itemDefect?.trim() && !v.itemDefectImages.length) throw invalid('انتشار سایز دارای ایراد ثبت‌شده نیازمند عکس اختصاصی ایراد همان سایز است');

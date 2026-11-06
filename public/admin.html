@@ -1,55 +1,183 @@
-<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مدیریت محصولات MOTIF</title>
-<link rel="stylesheet" href="/fonts.css">
-<style>body{font:15px Tahoma,sans-serif;background:#f2f3f0;color:#222;margin:0}main{max-width:960px;margin:auto;padding:24px}section,fieldset{background:white;border:1px solid #ddd;border-radius:12px;padding:20px;margin:16px 0}label{display:block;margin:12px 0}input,textarea,select,button{font:inherit;padding:11px;border:1px solid #bbb;border-radius:7px;box-sizing:border-box}input,textarea,select{display:block;width:100%;margin-top:7px}button{cursor:pointer;background:#163e34;color:white;margin:5px}button:disabled{opacity:.5}textarea{min-height:70px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #ddd;padding:12px;flex-wrap:wrap}#message{position:sticky;top:0;background:#fff4c7;padding:14px;z-index:2}small{color:#555}[hidden]{display:none!important}.image-editor{grid-column:1/-1}.image-previews{display:flex;gap:12px;flex-wrap:wrap}.image-previews>div{width:150px}.image-previews img{width:150px;height:150px;object-fit:contain;background:#eee}.image-previews button{font-size:12px;width:100%;margin:3px 0}</style>
-<main><h1>MOTIF · مدیریت محصولات</h1><p id="message" role="status" hidden></p>
-<section id="login"><form id="loginForm"><label>رمز مدیریت<input id="token" type="password" required autocomplete="current-password"></label><button>ورود</button></form></section>
-<div id="workspace" hidden><button id="logout">خروج</button><button id="newProduct">محصول جدید</button><button id="reload">بارگذاری مجدد فهرست</button><button id="siteButton">مدیریت صفحهٔ اصلی</button>
-<section id="sitePanel" hidden></section>
-<section id="productListSection"><h2>محصولات</h2><label>جست‌وجوی کد محصول، نام، برند یا SKU<input id="search" type="search"></label><label>نمایش<select id="filter"><option value="all">همه</option><option value="available">موجود و فعال</option><option value="sold">ناموجود</option><option value="inactive">غیرفعال</option></select></label><div id="list"></div></section>
-<form id="editor" hidden><h2 id="editorTitle"></h2><section><div id="productFields" class="grid"></div></section><section><h2>سایزها و موجودی</h2><p>سایزهای ثبت‌شده حذف نمی‌شوند؛ برای توقف فروش، موجودی را صفر کنید. قیمت نهایی = قیمت پایه + اختلاف قیمت سایز.</p><p>اندازه‌ها مربوط به خود لباس روی سطح صاف‌اند، نه بدن. مقدار نامعلوم را خالی بگذارید. عرض کمر بدون کشش اندازه‌گیری شود؛ عدد قدیمی کمر خودکار تبدیل نمی‌شود.</p><div id="variants"></div><button type="button" id="addVariant">افزودن سایز</button></section><button id="save">ذخیره محصول</button><button type="button" id="cancel">بستن فرم</button></form></div></main>
-<script src="/catalog.js"></script>
-<script src="/admin-images.js"></script>
-<script src="/site-content.js?v=20261030-theme"></script>
-<script src="/admin-site.js?v=20261030-theme"></script>
-<script>
-const $=id=>document.getElementById(id);
-let token='', products=[], editing=null;
-const fields=[['productType','دسته اصلی','suggest',MotifCatalog.productTypes],['productCode','کد یکتای محصول (مثلاً MOTIF-004)'],['title','نام محصول','text'],['brand','برند'],['modelName','مدل'],['mainFabric','جنس اصلی پارچه','suggest',MotifCatalog.fabrics],['complementaryFabrics','جنس مکمل (چندانتخابی)','multi',MotifCatalog.fabrics],['garmentDesign','مدل و طراحی لباس','suggest',['نیم‌زیپ','تمام‌زیپ','یقه‌گرد']],['hasHood','کلاه','select',[['','نامشخص'],['true','دارد'],['false','ندارد']]],['seasons','فصل استفاده','multi',MotifCatalog.seasons],['uses','کاربرد محصول','multi',MotifCatalog.uses],['fabricTechnology','فناوری واقعی پارچه (فقط مستند)'],['technologyVerified','تأیید مستندات فناوری توسط مدیر','select',[['false','تأیید نشده'],['true','تأیید می‌کنم']]],['technologyEvidence','مستندات فناوری پارچه','textarea'],['fabricNote','یادداشت جنس؛ نامشخص یا توصیف غیرقطعی','textarea'],['basePrice','قیمت پایه (تومان)','money'],['inventoryMode','نوع موجودی','select',[['SINGLE','تک‌آیتمی'],['MULTI','چندسایزی']]],['isActive','نمایش محصول','select',[['true','فعال'],['false','غیرفعال']]],['description','توضیحات','textarea'],['images','تصاویر HTTPS؛ هر لینک در یک خط','textarea'],['customerNeeds','نیاز مشتری؛ یک یا چند مورد','needs'],['qualityGrade','گرید','grade'],['condition','وضعیت'],['defect','ایراد مشخص؛ برای انتشار نیازمند عکس مرتبط','textarea'],['defectImages','تصاویر اختصاصی ایراد','images'],['identityOrigin','خاستگاه','textarea'],['identityHistory','تاریخچه','textarea'],['identityPurpose','هدف طراحی','textarea'],['identityUseCases','کاربردها','textarea'],['identityDesign','طراحی','textarea'],['identityTechnical','ویژگی فنی','textarea'],['identitySources','منابع','textarea']];
-const variantFields=[['size','سایز لیبل (برای تک‌آیتمی می‌تواند نامشخص باشد)'],['color','رنگ'],['sku','SKU'],['stock','موجودی قابل فروش','number'],['priceDelta','اختلاف قیمت (تومان)','money'],['chestWidthCm','عرض زیربغل تا زیربغل، روی سطح صاف (cm)','measure'],['lengthCm','قد لباس (cm)','measure'],['sleeveFromNeckCm','طول آستین از کنار گردن تا انتهای سرآستین، با احتساب مسیر شانه (cm)','measure'],['waistCm','دور کمر (cm)','measure'],['waistWidthCm','عرض کمر روی سطح صاف، بدون کشش (cm)','measure'],['riseCm','فاق (cm)','measure'],['totalLengthCm','قد شلوار (cm)','measure'],['thighWidthCm','عرض ران (cm)','measure'],['hemWidthCm','عرض دمپا (cm)','measure'],['itemGrade','گرید این سایز','grade'],['itemCondition','وضعیت این سایز'],['itemDefect','ایراد این سایز'],['itemDefectImages','تصاویر اختصاصی ایراد این سایز','images'],['itemImages','تصاویر این سایز HTTPS؛ هر لینک در یک خط','textarea']];
-function notice(text){$('message').textContent=text;$('message').hidden=!text;}
-function control(spec,value){const [key,title,type,options]=spec;if(['images','itemImages','defectImages','itemDefectImages'].includes(key))return MotifImages.control(key,title,value,()=>token);const label=document.createElement('label');label.append(document.createTextNode(title));if(type==='needs'||type==='multi'){const box=document.createElement('fieldset');box.dataset.key=key;const legend=document.createElement('legend');legend.textContent=title;box.append(legend);for(const n of [...new Set([...(options||MotifCatalog.needs),...(value||[])])]){const l=document.createElement('label'),c=document.createElement('input');c.type='checkbox';c.value=n;c.checked=(value||[]).includes(n);c.style.cssText='display:inline-block;width:auto;margin:0 8px';l.append(c,document.createTextNode(n+((options||MotifCatalog.needs).includes(n)?'':' (برچسب قبلی؛ بازبینی شود)')));box.append(l);}return box;}const input=document.createElement(type==='textarea'?'textarea':type==='select'||type==='grade'?'select':'input');input.dataset.key=key;
-if(type==='select'||type==='grade'){for(const [v,t] of options||[['','انتخاب نشده'],...MotifCatalog.qualityGrades.map(([g,t])=>[g,MotifCatalog.gradeLetter(g)+' — '+t])]){const o=document.createElement('option');o.value=v;o.textContent=t;input.append(o);}}
-else if(type==='number'||type==='measure'){input.type='number';input.step=type==='measure'?'0.1':'1';if(key!=='priceDelta')input.min=type==='measure'?'0.1':'0';}
-if(['title','basePrice','size','color','sku','stock'].includes(key))input.required=true;
-input.value=Array.isArray(value)?value.join(['images','itemImages'].includes(key)?'\n':'، '):value??'';if(type==='suggest'){const list=document.createElement('datalist');list.id='options-'+key;for(const v of [...new Set([...(options||[]),value].filter(Boolean))]){const o=document.createElement('option');o.value=v;list.append(o);}input.setAttribute('list',list.id);label.append(list);}
-if(type==='money'){input.type='text';input.inputMode='numeric';input.dir='ltr';input.value=MotifCatalog.formatPriceInput(value??0);input.oninput=()=>{const pos=input.selectionStart,old=input.value,digits=old.slice(0,pos).replace(/[,٬\s]/g,'').length;input.value=MotifCatalog.formatPriceInput(old);let i=0,count=0;while(i<input.value.length&&count<digits){if(input.value[i]!==',')count++;i++;}input.setSelectionRange(i,i);};}
-label.append(input);return label;}
-function read(container,specs){const data={};for(const [key,,type] of specs){if(type==='needs'||type==='multi'){data[key]=[...container.querySelectorAll('[data-key="'+key+'"] input:checked')].map(n=>n.value);continue;}const v=container.querySelector('[data-key="'+key+'"]').value.trim();data[key]=type==='money'?MotifCatalog.priceNumber(v):type==='number'?Number(v):type==='measure'?(v===''?null:Number(v)):['images','itemImages','defectImages','itemDefectImages'].includes(key)?v.split(/\r?\n/).filter(Boolean):['styles','customerNeeds'].includes(key)?v.split(/[,،]/).map(x=>x.trim()).filter(Boolean):key==='hasHood'?(v===''?null:v==='true'):['isActive','technologyVerified'].includes(key)?v==='true':v||null;}return data;}
-function addVariant(v={stock:1,priceDelta:0}){const box=document.createElement('fieldset');if(v.id){box.dataset.id=v.id;box.dataset.expectedStock=v.stock;}const grid=document.createElement('div');grid.className='grid';for(const spec of variantFields)grid.append(control(spec,spec[2]==='measure'&&!(v[spec[0]]>0)?null:v[spec[0]]));box.append(grid);if(v.waistCm>0){const note=document.createElement('p');note.textContent='اندازهٔ کمر قبلی: '+v.waistCm+' سانتی‌متر؛ در فیلتر عرض کمر استفاده نمی‌شود. عرض کمر را دوباره روی سطح صاف اندازه بگیرید.';box.append(note);}if(!v.id){const remove=document.createElement('button');remove.type='button';remove.textContent='حذف این سایز جدید';remove.onclick=()=>{if(MotifImages.guard())return;if($('variants').children.length<=1){notice('حداقل یک ردیف برای ثبت موجودی لازم است.');return;}box.remove();syncInventory();};box.append(remove);}$('variants').append(box);syncDefects(box,'itemGrade','itemDefectImages','itemDefect');syncInventory();}
-function syncDefects(container,gradeKey,imagesKey,defectKey){const grade=container.querySelector('[data-key="'+gradeKey+'"]'),images=container.querySelector('[data-key="'+imagesKey+'"]'),defect=container.querySelector('[data-key="'+defectKey+'"]');if(!grade||!images)return;const update=()=>{const selected=grade.value||$('productFields').querySelector('[data-key=qualityGrade]')?.value;images.closest('.image-editor').hidden=!['B','C'].includes(selected)&&!images.value.trim()&&!defect?.value.trim();};grade.addEventListener('change',update);defect?.addEventListener('input',update);if(gradeKey==='itemGrade')$('productFields').querySelector('[data-key=qualityGrade]').addEventListener('change',update);update();}
-function syncInventory(){
- const single=$('productFields').querySelector('[data-key="inventoryMode"]')?.value==='SINGLE';
- $('addVariant').hidden=single;
- const boxes=[...$('variants').children];
- for(const box of boxes){
-  const size=box.querySelector('[data-key="size"]'),stock=box.querySelector('[data-key="stock"]'),sku=box.querySelector('[data-key="sku"]');
-  size.required=!single;size.placeholder=single?'نامشخص':'';
-  if(single)stock.max='1';else stock.removeAttribute('max');
-  const code=$('productFields').querySelector('[data-key="productCode"]').value.trim().toUpperCase();
-  if(single&&!box.dataset.id&&(!sku.value||sku.dataset.auto==='true')){sku.value=code;sku.dataset.auto='true';}
-  sku.oninput=()=>{sku.dataset.auto='false';};
- }
- const mode=$('productFields').querySelector('[data-key="inventoryMode"]');
- mode?.setCustomValidity(single&&boxes.length!==1?'برای حالت تک‌آیتمی باید دقیقاً یک ردیف موجودی داشته باشید.':'');
-}
-function openEditor(p=null){if(MotifImages.guard()||!MotifSiteAdmin.close())return;editing=p;$('editorTitle').textContent=p?'ویرایش: '+p.title:'محصول جدید';$('productFields').replaceChildren();$('variants').replaceChildren();const defaults={basePrice:0,inventoryMode:'SINGLE',isActive:true};for(const spec of fields)$('productFields').append(control(spec,(p||defaults)[spec[0]]));for(const v of p?.variants||[{stock:1,priceDelta:0}])addVariant(v);const code=$('productFields').querySelector('[data-key=productCode]');code.required=!p||!!p.productCode;$('productFields').querySelector('[data-key=productType]').required=!p||!!p.productType;code.maxLength=64;code.pattern='[A-Za-z0-9][A-Za-z0-9-]{0,63}';code.dir='ltr';code.oninput=syncInventory;$('productFields').querySelector('[data-key=inventoryMode]').onchange=syncInventory;syncInventory();syncDefects($('productFields'),'qualityGrade','defectImages','defect');$('editor').hidden=false;$('editor').scrollIntoView({behavior:'smooth'});}
-async function api(path,options={}){const response=await fetch(path,{...options,headers:{'Content-Type':'application/json','X-Admin-Token':token}});const data=await response.json();if(!response.ok)throw new Error(data.error||'خطای ارتباط');return data;}
-function render(){const q=$('search').value.trim().toLowerCase(),filter=$('filter').value;$('list').replaceChildren();let count=0;for(const p of products){const stock=p.variants.reduce((a,v)=>a+v.stock,0);if(![p.productCode,p.title,p.brand,...p.variants.map(v=>v.sku)].join(' ').toLowerCase().includes(q))continue;if(filter==='sold'&&stock>0||filter==='inactive'&&p.isActive||filter==='available'&&(!p.isActive||stock<=0))continue;count++;const row=document.createElement('div');row.className='row';const text=document.createElement('span');text.textContent=(p.productCode?p.productCode+' · ':'')+p.title+' · '+(p.isActive?'فعال':'غیرفعال')+' · موجودی '+stock+' · '+p.variants.length+' سایز';const edit=document.createElement('button');edit.textContent='ویرایش';edit.onclick=()=>openEditor(p);row.append(text,edit);$('list').append(row);}if(!count)$('list').textContent='محصولی یافت نشد.';}
-async function refresh(){products=await api('/api/products/admin/list');render();}
-$('loginForm').onsubmit=async e=>{e.preventDefault();token=$('token').value;try{await refresh();$('token').value='';$('login').hidden=true;$('workspace').hidden=false;notice('');}catch(err){token='';notice(err.message);}};
-$('logout').onclick=()=>{if(MotifImages.guard()||!MotifSiteAdmin.close())return;token='';products=[];editing=null;$('list').replaceChildren();$('productFields').replaceChildren();$('variants').replaceChildren();$('workspace').hidden=true;$('login').hidden=false;$('editor').hidden=true;notice('');};
-$('siteButton').onclick=()=>{if(MotifImages.guard())return;MotifSiteAdmin.open(()=>token,products);};
-$('search').oninput=render;$('filter').onchange=render;$('newProduct').onclick=()=>openEditor();$('addVariant').onclick=()=>addVariant();$('cancel').onclick=()=>{if(MotifImages.guard())return;$('editor').hidden=true;editing=null;};$('reload').onclick=()=>refresh().catch(err=>notice(err.message));
-$('editor').onsubmit=async e=>{e.preventDefault();if(MotifImages.guard())return;syncInventory();const data=read($('productFields'),fields);if(!data.productCode)delete data.productCode;data.variants=[...$('variants').children].map(box=>({...read(box,variantFields),...(box.dataset.id?{id:box.dataset.id,expectedStock:Number(box.dataset.expectedStock)}:{})}));if(data.inventoryMode==='SINGLE')data.variants.forEach(v=>{if(!v.size)v.size='نامشخص';});if(!data.variants.length){notice('یک ردیف سایز و موجودی اضافه کنید.');return;}if(editing){data.updatedAt=editing.updatedAt;data.styles=editing.styles||[];data.variants.forEach(v=>{const old=editing.variants.find(x=>x.id===v.id);});}$('save').disabled=true;try{const saved=await api('/api/products'+(editing?'/'+editing.id:''),{method:editing?'PATCH':'POST',body:JSON.stringify(data)});products=[saved,...products.filter(p=>p.id!==saved.id)];render();openEditor(saved);notice('محصول ذخیره شد.');}catch(err){notice(err.message);}finally{$('save').disabled=false;}};
-</script></html>
-
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>پنل مدیریت | MOTIF</title>
+    <link rel="stylesheet" href="/fonts.css" />
+    <link rel="stylesheet" href="/admin.css" />
+  </head>
+  <body>
+    <section id="login" class="login">
+      <div class="wordmark" dir="ltr">MOTIF<span>STUDIO / ADMIN</span></div>
+      <h1>به فضای مدیریت خوش آمدید</h1>
+      <p>محصولات، جزئیات و انتخاب‌های تازهٔ موتیف.</p>
+      <form id="loginForm">
+        <label
+          >رمز مدیریت<input
+            id="token"
+            type="password"
+            required
+            autocomplete="current-password" /></label
+        ><button class="primary">
+          ورود به پنل <span aria-hidden="true">←</span>
+        </button>
+      </form>
+    </section>
+    <p id="message" role="status" aria-live="polite" hidden></p>
+    <div id="workspace" hidden>
+      <aside class="sidebar">
+        <a class="wordmark" href="/admin.html" dir="ltr"
+          >MOTIF<span>WORKSPACE</span></a
+        >
+        <p class="eyebrow">مدیریت فروشگاه</p>
+        <nav id="desktopNav" aria-label="ناوبری اصلی"></nav>
+        <div class="sidebar-end">
+          <a href="/" target="_blank" rel="noopener">مشاهده فروشگاه ↗</a>
+          <p>هر لباس، با جزئیات خودش.</p>
+        </div>
+      </aside>
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">MOTIF / مدیریت محصولات</p>
+            <h1 id="pageTitle">داشبورد</h1>
+          </div>
+          <button
+            id="reload"
+            class="icon-button"
+            aria-label="تازه‌سازی اطلاعات"
+          >
+            ↻
+          </button>
+        </header>
+        <section id="dashboard">
+          <div class="welcome">
+            <div>
+              <span class="eyebrow">فضای کار شما</span>
+              <h2>انتخاب‌های تازه را آماده کنیم.</h2>
+              <p>از اولین جزئیات تا آخرین بررسی؛ همه‌چیز یک‌جا.</p>
+            </div>
+            <button id="newProduct" class="primary">＋ ثبت محصول جدید</button>
+          </div>
+          <div id="stats" class="stats"></div>
+          <div id="quickActions" class="quick-actions"></div>
+          <div class="section-heading">
+            <h2>محصولات اخیر</h2>
+            <button id="allProducts">مشاهده همه ←</button>
+          </div>
+          <div id="recent" class="products"></div>
+        </section>
+        <section id="productListSection" hidden>
+          <div class="panel filters">
+            <label class="search-label"
+              >جست‌وجوی محصولات<input
+                id="search"
+                type="search"
+                placeholder="نام، کد MOTIF، برند یا SKU"
+            /></label>
+            <div class="filter-grid">
+              <label
+                >دسته‌بندی<select id="categoryFilter">
+                  <option value="">همه دسته‌ها</option>
+                </select></label
+              ><label
+                >گرید<select id="gradeFilter">
+                  <option value="">همه گریدها</option>
+                  <option>N</option>
+                  <option value="A_PLUS">A+</option>
+                  <option>A</option>
+                  <option>B</option>
+                  <option>C</option>
+                </select></label
+              ><label
+                >وضعیت<select id="filter">
+                  <option value="all">همه محصولات</option>
+                  <option value="published">منتشرشده</option>
+                  <option value="draft">پیش‌نویس</option>
+                  <option value="incomplete">ناقص</option>
+                  <option value="ready">آماده بررسی</option>
+                  <option value="available">موجود و فعال</option>
+                  <option value="sold">ناموجود</option>
+                  <option value="inactive">غیرفعال</option>
+                </select></label
+              ><label
+                >مرتب‌سازی<select id="sort">
+                  <option value="newest">جدیدترین</option>
+                  <option value="oldest">قدیمی‌ترین</option>
+                  <option value="price">قیمت بیشتر</option>
+                  <option value="stock">موجودی بیشتر</option>
+                </select></label
+              >
+            </div>
+          </div>
+          <p id="resultCount" class="muted"></p>
+          <div id="list" class="products"></div>
+          <div class="pagination">
+            <button id="prevPage">صفحه قبل</button><span id="pageNumber"></span
+            ><button id="nextPage">صفحه بعد</button>
+          </div>
+        </section>
+        <form id="editor" hidden novalidate>
+          <div class="section-heading">
+            <div>
+              <h2 id="editorTitle"></h2>
+              <p id="dirtyState" class="muted"></p>
+            </div>
+            <button type="button" id="cancel">بستن فرم</button>
+          </div>
+          <ol id="steps" class="steps" aria-label="مراحل ثبت"></ol>
+          <div id="productFields"></div>
+          <section id="review" class="panel" hidden></section>
+          <div class="editor-actions">
+            <button type="button" id="backStep">مرحله قبل</button
+            ><button type="button" id="nextStep" class="primary">
+              مرحله بعد ←</button
+            ><button type="button" id="save">ذخیره پیش‌نویس</button
+            ><button type="button" id="publish" class="primary">
+              بررسی و انتشار
+            </button>
+          </div>
+          <div id="saveSuccess" class="panel" hidden>
+            <p>محصول ذخیره شد.</p>
+            <button type="button" id="nextProduct" class="primary">
+              ＋ ثبت محصول بعدی
+            </button>
+          </div>
+        </form>
+        <section id="settings" class="panel" hidden>
+          <h2>تنظیمات فروشگاه</h2>
+          <p>
+            متن‌ها، رنگ‌ها، بنرها و محصولات منتخب صفحهٔ اصلی را مدیریت کنید.
+          </p>
+          <button id="siteButton" class="primary">مدیریت صفحهٔ اصلی</button>
+          <hr />
+          <p>رمز مدیریت فقط در حافظهٔ همین صفحه نگهداری می‌شود.</p>
+          <button id="logout">خروج از حساب مدیریت</button>
+        </section>
+        <section id="sitePanel" class="panel" hidden></section>
+      </main>
+      <nav id="mobileNav" class="mobile-nav" aria-label="ناوبری موبایل"></nav>
+    </div>
+    <dialog id="publishDialog">
+      <h2>انتشار این محصول؟</h2>
+      <p>با تأیید، این محصول در فروشگاه قابل نمایش می‌شود.</p>
+      <strong id="publishName"></strong>
+      <div class="dialog-actions">
+        <button id="confirmPublish" class="primary">تأیید انتشار</button
+        ><button id="cancelPublish">بازگشت به بررسی</button>
+      </div>
+    </dialog>
+    <script src="/catalog.js"></script>
+    <script src="/admin-readiness.js"></script>
+    <script src="/admin-images.js"></script>
+    <script src="/site-content.js?v=20261030-theme"></script>
+    <script src="/admin-site.js?v=20261030-theme"></script>
+    <script src="/admin-fields.js"></script>
+    <script src="/admin.js"></script>
+  </body>
+</html>
