@@ -34,6 +34,19 @@ model Product {
   modelName   String?
   productType String?
 
+  // Product-first attributes; legacy tags remain untouched.
+  mainFabric         String?
+  complementaryFabrics String[] @default([])
+  garmentDesign      String?
+  hasHood            Boolean?
+  seasons            String[] @default([])
+  uses               String[] @default([])
+  fabricTechnology   String?
+  technologyVerified Boolean @default(false)
+  technologyEvidence String?
+  fabricNote         String?
+  defectImages       String[] @default([])
+
   // لایه اول: نیاز مشتری
   customerNeeds String[]
 
@@ -79,6 +92,7 @@ model Variant {
   // اندازه‌های واقعی
   chestWidthCm Float?
   lengthCm     Float?
+  sleeveFromNeckCm Float?
 
   // اندازه‌های شلوار
   waistCm       Float?
@@ -94,6 +108,7 @@ model Variant {
   itemCondition String?
   itemDefect    String?
   itemImages    String[]
+  itemDefectImages String[] @default([])
 
   orderItems OrderItem[]
 

@@ -139,6 +139,7 @@ async function main() {
   // Single item creation needs no label size and cannot lose its inventory row.
   await page.locator('#newProduct').click();
   await page.locator('#productFields [data-key=title]').fill('Single unknown size');
+  await page.locator('#productFields [data-key=productType]').fill('کاپشن');
   await page.locator('#productFields [data-key=productCode]').fill('motif-test-004');
   await page.locator('#productFields [data-key=basePrice]').fill('350000');
   assert(await page.locator('#addVariant').isHidden());

@@ -4,6 +4,23 @@
   else root.MotifCatalog = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
+  const productTypes = ['کاپشن','شلوار','سویشرت'];
+  const fabrics = ['شمعی','کتان','دورس','نایلون'];
+  const seasons = ['بهار','تابستان','پاییز','زمستان'];
+  const uses = ['روزمره','ورزشی','مناسب کار','کوهنوردی'];
+  const qualityGrades = [
+    ['N','نو / آکبند','آکبند یا استفاده‌نشده'],
+    ['A_PLUS','در حد نو','ظاهر بسیار نزدیک به نو؛ بدون نشانه‌های محسوس استفاده یا آسیب قابل توجه'],
+    ['A','تمیز','وضعیت ظاهری خوب، با احتمال نشانه‌های بسیار جزئی استفاده'],
+    ['B','استفاده‌شده، قابل قبول','آثار قابل مشاهده استفاده، مانند تغییرات جزئی در ظاهر یا بافت'],
+    ['C','دارای ایراد','دارای ایراد مشخص، مانند لکه، ساییدگی یا آسیب پارچه']
+  ];
+  const gradeLetter = g => g === 'A_PLUS' ? 'A+' : g || '';
+  function priceNumber(value) {
+    const s=String(value??'').replace(/[۰-۹]/g,c=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/[٠-٩]/g,c=>'٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[,٬\s]/g,'');
+    return /^-?\d+$/.test(s) ? Number(s) : NaN;
+  }
+  const formatPriceInput = value => {const n=priceNumber(value);return Number.isSafeInteger(n)?n.toLocaleString('en-US'):String(value??'');};
   const needs = ['روزمره', 'ورزشی', 'پاییزه', 'مناسب سرما', 'مناسب کار'];
   function number(value) {
     const s = String(value ?? '').trim().replace(/[۰-۹]/g, c => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(c)))
@@ -35,7 +52,7 @@
   const normalize=s=>String(s||'').replace(/ي/g,'ی').replace(/ك/g,'ک').toLocaleLowerCase().trim();
   function filterProducts(products,params) {
     const f=queryFilter(params),q=normalize(params.get('q')),need=params.get('need'),type=params.get('type');
-    return products.filter(p=>p.isActive&&(!params.has('kind')||(f.kind==='pants'?p.productType==='شلوار':p.productType!=='شلوار'))&&(!need||(p.customerNeeds||[]).includes(need))&&(!type||p.productType===type)&&normalize([p.title,p.brand,p.modelName].join(' ')).includes(q)&&variants(p,f).length);
+    return products.filter(p=>p.isActive&&(!params.has('kind')||(f.kind==='pants'?p.productType==='شلوار':p.productType!=='شلوار'))&&(!need||((p.customerNeeds||[]).includes(need)||(p.uses||[]).includes(need)||(need==='پاییزه'&&(p.seasons||[]).includes('پاییز'))||(need==='مناسب سرما'&&(p.seasons||[]).includes('زمستان'))))&&(!type||p.productType===type)&&['season','use','fabric','design','hood'].every(key=>{const values=params.getAll(key);return !values.length||values.every(value=>key==='season'?(p.seasons||[]).includes(value):key==='use'?(p.uses||[]).includes(value):key==='fabric'?[p.mainFabric,...(p.complementaryFabrics||[])].includes(value):key==='hood'?String(p.hasHood)===value:p.garmentDesign===value);})&&normalize([p.title,p.brand,p.modelName].join(' ')).includes(q)&&variants(p,f).length);
   }
-  return { needs, range, within, variants, queryFilter, filterProducts, number };
+  return { productTypes, fabrics, seasons, uses, qualityGrades, gradeLetter, priceNumber, formatPriceInput, needs, range, within, variants, queryFilter, filterProducts, number };
 });

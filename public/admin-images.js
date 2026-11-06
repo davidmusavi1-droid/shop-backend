@@ -13,7 +13,7 @@ window.MotifImages = (() => {
     const box = document.createElement('div');
     box.className = 'image-editor';
     const heading = document.createElement('p');
-    heading.textContent = key === 'images' ? 'عکس‌های محصول' : 'عکس‌های مخصوص این سایز';
+    heading.textContent = /Defect|defect/.test(key) ? 'تصاویر اختصاصی ایراد — مستقل از عکس‌های اصلی' : key === 'images' ? 'عکس‌های محصول' : 'عکس‌های مخصوص این سایز';
     const hint = document.createElement('small');
     hint.textContent = 'عکس اول، عکس اصلی است. JPG، PNG یا WebP؛ فایل ورودی حداکثر ۱۰ مگابایت؛ نسخهٔ سایت با حفظ جزئیات تا سقف ۳ مگابایت آماده می‌شود. پس از آپلود، «ذخیره محصول» را بزنید.';
     const pickerLabel = document.createElement('label');
@@ -71,7 +71,7 @@ window.MotifImages = (() => {
         }
       } finally {
         pending--; picker.disabled = false; links.disabled = false; picker.value = ''; save.disabled = false; render();
-        status.textContent = `${success} عکس اضافه شد. برای ثبت نهایی، محصول را ذخیره کنید.` + (errors.length ? ' عکس‌های ناموفق را دوباره انتخاب کنید: ' + errors.join('؛ ') : '');
+        status.textContent = (success ? `${success} عکس اضافه شد. برای ثبت نهایی، محصول را ذخیره کنید.` : 'آپلود انجام نشد.') + (errors.length ? ' عکس‌های ناموفق را دوباره انتخاب کنید: ' + errors.join('؛ ') : '');
       }
     };
     box.append(heading, hint, pickerLabel, status, gallery, advanced); render(); return box;

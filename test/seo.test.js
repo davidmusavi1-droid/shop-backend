@@ -10,7 +10,7 @@ test('server-rendered product contains metadata, real measurements and escaped c
  assert(html.includes('name="description"'));
  assert(html.includes('برای هوای خنک'));
  assert(html.includes('۶۰ سانتی‌متر'));
- assert(!html.includes('۸۴ سانتی‌متر'));
+ assert(html.includes('دور کمر: ۸۴ سانتی‌متر'));
  assert(html.includes('۱۲۰ تومان'));
  assert(html.includes('<section id="catalog" hidden>'));
 });
