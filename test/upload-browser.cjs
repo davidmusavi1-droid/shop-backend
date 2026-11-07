@@ -19,7 +19,7 @@ const assert = require('node:assert/strict');
   });
   try {
     await require('./session-fixture.cjs').mockBrowserSession(page);
-await page.goto('http://motif.test/admin.html');
+    await page.goto('http://motif.test/admin.html');
     await page.locator('#token').fill('test'); await page.locator('#loginForm button').click();
     await page.locator('#newProduct').click();
     const stage=async n=>page.locator('#steps li').nth(n-1).getByRole('button').click();

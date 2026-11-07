@@ -165,7 +165,7 @@ const site = require("../public/site-content");
         .click();
     };
     await require('./session-fixture.cjs').mockBrowserSession(page);
-await page.goto("https://motif.test/admin.html");
+    await page.goto("https://motif.test/admin.html");
     await page.locator("#token").fill("test");
     await page.locator("#loginForm button").click();
     await page.locator("#dashboard").waitFor({ state: "visible" });

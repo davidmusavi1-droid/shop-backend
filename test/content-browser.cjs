@@ -26,7 +26,7 @@ const {defaults,validate,validateDraft}=require('../public/site-content');
   const name=(u.pathname.startsWith('/icons/')||u.pathname.startsWith('/fonts/'))?u.pathname.slice(1):path.basename(u.pathname),file=path.join(__dirname,'../public',name||'index.html');const exists=fs.existsSync(file)&&fs.statSync(file).isFile();const f=exists?file:path.join(__dirname,'../public/index.html');return r.fulfill({contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.woff2')?'font/woff2':f.endsWith('.svg')?'image/svg+xml':'text/html',body:fs.readFileSync(f)});
  });
  await require('./session-fixture.cjs').mockBrowserSession(page);
-await page.goto('http://motif.test');await page.locator('#featured .card').waitFor();
+ await page.goto('http://motif.test');await page.locator('#featured .card').waitFor();
  assert.equal(await page.locator('#hero .slide-controls button').count(),2);
  await page.locator('#hero .slide-controls button').nth(1).click();assert.equal(await page.locator('#hero .slide:visible a').getAttribute('href'),'/collection');
  assert.equal(await page.locator('#quickForm').isVisible(),false);assert.equal(await page.locator('.cart-icon svg').count(),1);assert.equal(await page.locator('.cart-icon').innerText(),'');await page.locator('#quickToggle').click();assert.equal(await page.locator('#quickToggle').getAttribute('aria-expanded'),'true');await page.fill('#quickWidth','۵۶');await page.fill('#quickLength','۷۰');await page.locator('#quickForm button').click();await page.locator('#products .card').waitFor();assert.match(page.url(),/width=56/);

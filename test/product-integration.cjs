@@ -99,7 +99,8 @@ async function main() {
   assert((await api('/api/products/admin/list')).data.some(x => x.id === p.id));
   // Browser uses actual API and database; no request mocking.
   browser = await chromium.launch({ headless: true, ...(process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : {}) });
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
   const errors = []; page.on('pageerror', err => errors.push(err.message));
   // A failing settings refresh must not erase the already published SSR banner.
   await page.route('**/api/site',r=>r.fulfill({status:503,json:{error:'Temporary settings failure'}}));
@@ -130,7 +131,7 @@ async function main() {
   page.on('request', request => {
     if (request.url().endsWith('/api/admin/session/activity')) touches++;
   });
-  const other = await page.context().newPage();
+  const other = await context.newPage();
   await other.goto(base + '/collection');
   await other.bringToFront();
   await page.bringToFront();
