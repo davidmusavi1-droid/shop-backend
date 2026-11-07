@@ -74,6 +74,8 @@ test('each category links to the same product URL, and the breadcrumb follows on
  const changed = view.renderProduct({...shared,productType:'کاپشن'});
  assert(changed.includes('rel="canonical" href="'+baseUrl+'"'));
  assert(changed.includes('<a href="'+jacket+'">کاپشن</a>'));
+ const ambiguous = view.renderProduct({...shared,productType:' ',mainCategories:[]});
+ assert(!ambiguous.includes('/collection?type='));
  const xml = view.sitemap([shared]);
  assert.equal(xml.match(/\/products\/p1</g).length,1);
  assert(xml.includes(windbreaker));assert(xml.includes(jacket));

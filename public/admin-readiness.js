@@ -12,7 +12,7 @@
       ["brand", "برند"],
     ])
       if (!String(p[key] || "").trim()) add(key, label);
-    const categories = p.mainCategories ?? (p.productType ? [p.productType] : []);
+    const categories = p.mainCategories ?? (p.productType?.trim() ? [p.productType] : []);
     if (!categories.length) add("mainCategories", "حداقل یک دسته اصلی");
     else if (!categories.includes(p.productType)) add("productType", "دسته اصلی اولویت‌دار");
     if (!(p.fabrics ?? [p.mainFabric, ...(p.complementaryFabrics || [])].filter(Boolean)).length)

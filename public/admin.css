@@ -363,7 +363,7 @@ fieldset[data-key] label {
   background: #f5f7f2;
   border-radius: 8px;
 }
-fieldset[data-key] input {
+fieldset[data-key] input[type="checkbox"] {
   min-height: 20px !important;
   width: 18px !important;
   height: 18px;
@@ -828,7 +828,11 @@ hr {
   gap: .5rem;
   margin-block-start: .75rem;
 }
-.choice-editor label {
+fieldset[data-key] .choice-editor label {
+  display: block;
   flex: 1 1 12rem;
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
 }

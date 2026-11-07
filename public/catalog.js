@@ -7,7 +7,7 @@
   const productTypes = ['کاپشن','بادگیر','شلوار','سویشرت'];
   const fabrics = ['کورتکس (اصطلاح رایج بازار)','شمعی','پلی‌استر','نایلون','کتان','پنبه','جین','فلیس','پلار','ترکیبی','سایر'];
   const fabricBases = [['SELLER','تشخیص و اعلام فروشنده'],['LABEL','اطلاعات لیبل یا مشخصات معتبر سازنده'],['UNKNOWN','نامشخص']];
-  const categoriesOf = p => p.mainCategories ?? (p.productType ? [p.productType] : []);
+  const categoriesOf = p => p.mainCategories ?? (p.productType?.trim() ? [p.productType] : []);
   const fabricsOf = p => p.fabrics ?? [...new Set([p.mainFabric,...(p.complementaryFabrics||[])].filter(Boolean))];
   const categoryPath = type => type ? '/collection?type='+encodeURIComponent(type) : '/collection';
   const categoryTitle = type => type ? type+' | MOTIF' : 'انتخاب‌های MOTIF | جست‌وجوی اندازه';
@@ -16,7 +16,7 @@
     return type && (productTypes.includes(type) || products.some(p => categoriesOf(p).includes(type))) ? type : '';
   };
   function breadcrumbs(p) {
-    return [['خانه','/'],...(p.productType ? [[p.productType,categoryPath(p.productType)]] : []),[p.title,'/products/'+encodeURIComponent(p.id)]];
+    return [['خانه','/'],...(categoriesOf(p).includes(p.productType) ? [[p.productType,categoryPath(p.productType)]] : []),[p.title,'/products/'+encodeURIComponent(p.id)]];
   }
   function breadcrumbData(p, origin) {
     return {

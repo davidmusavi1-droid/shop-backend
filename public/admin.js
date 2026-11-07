@@ -299,7 +299,7 @@ function openEditor(p = null, recover = null) {
   categories.onchange = () => syncPriority(priority.value);
   appendChoiceEditor(categories, "نام دسته جدید", async name => name);
   syncPriority(source.productType);
-  if (p && !source.productType) {
+  if (p && !MotifCatalog.categoriesOf(source).includes(source.productType)) {
     categories.append(el("p", "دستهٔ قبلی مشخص نیست. دسته‌های محصول و اولویت آن‌ها را بررسی کنید."));
   }
   let previous = priority.value;
