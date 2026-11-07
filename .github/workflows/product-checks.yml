@@ -40,6 +40,7 @@ jobs:
       - run: npx prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma
       - run: node --test test/*.test.js
+      - run: MOTIF_SESSION_TEST_DB=1 node --test test/admin-session.test.js
       - run: node scripts/verify-admin-release.cjs --skip-storage
       - run: node test/product-integration.cjs
       - run: node test/structure-integration.cjs

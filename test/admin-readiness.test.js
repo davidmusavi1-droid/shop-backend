@@ -2,6 +2,7 @@ const { test } = require("node:test"),
   assert = require("node:assert/strict"),
   fs = require("fs"),
   vm = require("vm");
+const loadProductDependency = require("node:module").createRequire(require.resolve("../src/routes/products"));
 const readiness = require("../public/admin-readiness");
 const complete = {
   title: "کاپشن",
@@ -107,7 +108,7 @@ test("server rejects explicit incomplete publication and incomplete draft activa
           ? readiness
           : n.includes("requireAdmin")
             ? () => {}
-            : prisma,
+            : n.includes("/prisma") ? prisma : loadProductDependency(n),
   });
   async function call(key, body) {
     let err;
@@ -169,7 +170,7 @@ test("server stores a deliberately incomplete draft without inventing title, col
         ? { Router: () => router }
         : n.includes("requireAdmin")
           ? () => {}
-          : { product: { create: async ({ data }) => (saved = data) } },
+          : n.includes("/prisma") ? { product: { create: async ({ data }) => (saved = data) } } : loadProductDependency(n),
   });
   let err;
   await routes["post /"](

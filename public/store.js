@@ -10,9 +10,9 @@ function saveCart(){try{localStorage.setItem('motif-cart',JSON.stringify(cart));
 const currentFilter=()=>MotifCatalog.queryFilter(query),matching=p=>MotifCatalog.variants(p,currentFilter());
 function picture(url,title){const box=el('div',null,'photo');if(!url){box.append(el('span','تصویر ثبت نشده'));return box;}const img=el('img');img.src=url;img.alt=title;img.loading='lazy';img.onerror=()=>box.replaceChildren(el('span','تصویر در دسترس نیست'));box.append(img);return box;}
 function navigate(url){history.pushState(null,'',url);route();window.scrollTo(0,0);}
-function setParam(key,value,remove=[]){remove.forEach(k=>query.delete(k));value?query.set(key,value):query.delete(key);history.replaceState(null,'','/collection'+(query.size?'?'+query:''));renderCatalog();}
+function setParam(key,value,remove=[]){remove.forEach(k=>query.delete(k));value?query.set(key,value):query.delete(key);history.replaceState(null,'','/collection'+(query.size?'?'+query:''));renderCatalog();metadata();}
 function options(id,values){const select=$(id);select.replaceChildren(select.options[0]);for(const v of [...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fa',{numeric:true}))){const o=el('option',v);o.value=v;select.append(o);}}
-function productCard(p,variants,featured=false){const prices=variants.map(v=>p.basePrice+v.priceDelta),v=variants[0];const a=el('a',null,'card');a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);a.append(picture(safeImages([...(p.images||[]),...variants.flatMap(v=>v.itemImages||[])])[0],p.title));if(p.brand)a.append(el('span',p.brand,'tag'));a.append(el('h3',p.title));const grade=v.itemGrade||p.qualityGrade;if(grade)a.append(el('span','گرید '+MotifCatalog.gradeLetter(grade),'tag'));if(!featured)a.append(el('p',(new Set(prices).size>1?'از ':'')+money(Math.min(...prices))),el('p','سایزهای منطبق و موجود: '+[...new Set(variants.map(v=>v.size))].join(' · '),'sizes'));return a;}
+function productCard(p,variants,featured=false){const prices=variants.map(v=>p.basePrice+v.priceDelta),v=variants[0];const a=el('a',null,'card');a.href='/products/'+encodeURIComponent(p.id)+(variants.length < available(p).length ? '#variant='+encodeURIComponent(v.id) : '');a.append(picture(safeImages([...(p.images||[]),...variants.flatMap(v=>v.itemImages||[])])[0],p.title));if(p.brand)a.append(el('span',p.brand,'tag'));a.append(el('h3',p.title));const grade=v.itemGrade||p.qualityGrade;if(grade)a.append(el('span','گرید '+MotifCatalog.gradeLetter(grade),'tag'));if(!featured)a.append(el('p',(new Set(prices).size>1?'از ':'')+money(Math.min(...prices))),el('p','سایزهای منطبق و موجود: '+[...new Set(variants.map(v=>v.size))].join(' · '),'sizes'));return a;}
 function socialLinks(root){root.replaceChildren();for(const s of content.socials.filter(s=>s.enabled)){const a=el('a');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';if(s.platform!=='other'){const img=el('img');img.src='/icons/'+s.platform+'.svg';img.alt='';img.width=20;img.height=20;a.append(img);}a.append(el('span',s.label));root.append(a);}}
 function renderContent(){
  document.documentElement.dataset.font=MotifSite.fontKey(content.font);
@@ -38,7 +38,7 @@ function renderHero(){
 }
 const descriptions={'روزمره':'برای رفت‌وآمد و استفادهٔ هر روز','ورزشی':'برای ورزش و فعالیت','پاییزه':'برای هوای خنک و سرمای ملایم','مناسب سرما':'برای زمانی که گرمای بیشتری لازم داری','مناسب کار':'برای استفاده در محیط کار؛ کاربرد و ویژگی‌های هر لباس را در مشخصات بخوان.'};
 function renderNeeds(){const selected=query.get('need')||'';$('needs').replaceChildren();for(const name of ['',...MotifCatalog.needs]){const b=el('button',name||'همه');b.type='button';b.setAttribute('aria-pressed',String(name===selected));b.onclick=()=>{setParam('need',name);renderNeeds();};$('needs').append(b);}$('needDescription').textContent=descriptions[selected]||'';}
-function renderTypes(){for(const [id,values]of [['fabric',products.flatMap(p=>[p.mainFabric,...(p.complementaryFabrics||[])])],['design',products.map(p=>p.garmentDesign)],['season',MotifCatalog.seasons],['use',MotifCatalog.uses]])options(id,values);options('productType',products.map(p=>p.productType));options('size',products.flatMap(p=>available(p).map(v=>v.size)));quickSizes();$('types').replaceChildren();const all=el('a','همهٔ کالاها');all.href='/collection';$('types').append(all);for(const type of [...new Set(products.map(p=>p.productType).filter(Boolean))]){const a=el('a',type);a.href='/collection?type='+encodeURIComponent(type);$('types').append(a);}}
+function renderTypes(){for(const [id,values]of [['fabric',products.flatMap(MotifCatalog.fabricsOf)],['design',products.map(p=>p.garmentDesign)],['season',MotifCatalog.seasons],['use',MotifCatalog.uses]])options(id,values);options('productType',[...MotifCatalog.productTypes,...products.flatMap(MotifCatalog.categoriesOf)]);options('size',products.flatMap(p=>available(p).map(v=>v.size)));quickSizes();$('types').replaceChildren();const all=el('a','همهٔ کالاها');all.href='/collection';$('types').append(all);for(const type of [...new Set(products.flatMap(MotifCatalog.categoriesOf))]){const a=el('a',type);a.href=MotifCatalog.categoryPath(type);$('types').append(a);}}
 function quickSizes(){const old=$('quickSize').value,pants=$('quickKind').value==='pants';options('quickSize',products.filter(p=>pants?p.productType==='شلوار':p.productType!=='شلوار').flatMap(p=>available(p).map(v=>v.size)));if([...$('quickSize').options].some(o=>o.value===old))$('quickSize').value=old;}
 const help=pants=>pants?'شلوار را با دکمهٔ بسته و بدون کشش روی سطح صاف پهن کن. فاصلهٔ مستقیم دو سر کمر را اندازه بگیر؛ این عدد دور کمر نیست. قد را از بالای کمر تا دمپا بگیر.':'یک لباس مناسب خودت را صاف پهن کن؛ فاصلهٔ زیر بغل تا زیر بغل و قد از سرشانه تا پایین را اندازه بگیر. این‌ها اندازهٔ لباس‌اند، نه دور بدن.';
 function measurementLabels(){const pants=$('measureKind').value==='pants';$('widthLabel').textContent=(pants?'عرض کمر روی سطح صاف':'عرض زیربغل تا زیربغل')+' (سانتی‌متر)';$('lengthLabel').textContent=(pants?'قد شلوار':'قد لباس')+' (سانتی‌متر)';$('measureHelp').textContent=help(pants);const quick=$('quickKind').value==='pants';$('quickWidthLabel').textContent=(quick?'عرض کمر روی سطح صاف':'عرض سینهٔ لباس')+' (سانتی‌متر)';$('quickLengthLabel').textContent=(quick?'قد شلوار':'قد لباس')+' (سانتی‌متر، اختیاری)';$('quickHelp').textContent=help(quick);$('quickExtra').hidden=!quick;}
@@ -53,7 +53,7 @@ function renderCatalog(){
  $('selectedMeasures').textContent=[query.get('width')?'عرض '+query.get('width')+' سانتی‌متر':'',query.get('length')?'قد '+query.get('length')+' سانتی‌متر':'',...['rise','thigh','hem'].map((k,i)=>query.get(k)?['فاق','عرض ران','عرض دمپا'][i]+' '+query.get(k)+' سانتی‌متر':'')].filter(Boolean).join(' · ')||'با اندازهٔ لباس مناسب خودت جست‌وجو کن.';
 }
 async function loadCatalog(){
- $('retry').hidden=true;try{const r=await fetch('/api/products',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(!Array.isArray(data))throw Error();products=data.filter(p=>p.isActive&&available(p).length);loaded=true;renderTypes();renderContent();syncControls();renderCatalog();if(location.pathname==='/cart')renderCart();}
+ $('retry').hidden=true;try{const r=await fetch('/api/products',{cache:'no-store'});if(!r.ok)throw Error();const data=await r.json();if(!Array.isArray(data))throw Error();products=data.filter(p=>p.isActive&&available(p).length);loaded=true;renderTypes();renderContent();syncControls();renderCatalog();if(location.pathname==='/collection')metadata();if(location.pathname==='/cart')renderCart();}
  catch{products=[];loaded=true;$('products').replaceChildren();$('catalogStatus').hidden=false;$('catalogStatus').textContent='دریافت محصولات ناموفق بود. دوباره تلاش کنید.';$('retry').hidden=false;$('featuredStatus').textContent='دریافت محصولات ناموفق بود؛ دوباره تلاش کن.';const b=el('button','تلاش دوباره','button');b.onclick=loadCatalog;$('featuredStatus').append(b);}
 }
 const grades=MotifCatalog.gradeLetter;
@@ -66,7 +66,7 @@ function renderDetail(p,preferredId){
  function select(v){selected=v;main.classList.remove('zoom');zoom.setAttribute('aria-pressed','false');status.hidden=true;const f=currentFilter(),active=!!f.size||[f.width.min,f.width.max,f.length.min,f.length.max].some(n=>n!==null);matchNote.textContent=active&&!matching(p).some(item=>item.id===v.id)?'این آیتم با فیلتر اندازهٔ انتخابی شما منطبق نیست.':'';buttons.forEach(([b,item])=>b.setAttribute('aria-pressed',String(item.id===v.id)));price.textContent=money(p.basePrice+v.priceDelta);facts.replaceChildren();fact(facts,'موجودی',fa(v.stock)+' عدد');fact(facts,'گرید',MotifCatalog.gradeLetter(v.itemGrade||p.qualityGrade)||'ثبت نشده');
  const quality=el('details',null,'quality-guide');quality.append(el('summary','برای آشنایی با گریدهای کیفیت، راهنما را باز کنید.'));for(const [g,title,text]of MotifCatalog.qualityGrades)quality.append(el('h4',MotifCatalog.gradeLetter(g)+' — '+title),el('p',text));facts.append(quality);
  const condition=el('section',null,'condition-details');condition.append(el('h3','جزئیات وضعیت محصول'));for(const text of [...new Set([p.condition,v.itemCondition,p.defect,v.itemDefect].filter(Boolean))])condition.append(el('p',text,'copy'));const defectGallery=el('div',null,'defect-gallery');for(const src of safeImages([...(p.defectImages||[]),...(v.itemDefectImages||[])])){const link=el('a');link.href=src;link.target='_blank';link.rel='noopener noreferrer';link.append(picture(src,'جزئیات ایراد '+p.title));defectGallery.append(link);}condition.append(defectGallery);facts.append(condition);
- for(const [label,value]of [['دسته',p.productType],['جنس اصلی',p.mainFabric],['جنس مکمل',(p.complementaryFabrics||[]).join('، ')],['مدل و طراحی',p.garmentDesign],['کلاه',p.hasHood==null?'نامشخص':p.hasHood?'دارد':'ندارد'],['فصل',(p.seasons||[]).join('، ')],['کاربرد',(p.uses||[]).join('، ')],['فناوری مستند',p.technologyVerified?p.fabricTechnology:null],['توضیح جنس',p.fabricNote]])fact(facts,label,value);
+ for(const [label,value]of [['دسته‌بندی اصلی',MotifCatalog.categoriesOf(p).join('، ')],['جنس پارچه',MotifCatalog.fabricsOf(p).join('، ')],['مدل و طراحی',p.garmentDesign],['کلاه',p.hasHood==null?'نامشخص':p.hasHood?'دارد':'ندارد'],['فصل',(p.seasons||[]).join('، ')],['کاربرد',(p.uses||[]).join('، ')],['فناوری مستند',p.technologyVerified?p.fabricTechnology:null],['توضیح جنس',p.fabricNote]])fact(facts,label,value);
  let measured=false;for(const [key,label]of measurements)if(typeof v[key]==='number'&&v[key]>0){fact(facts,label,fa(v[key])+' سانتی‌متر');measured=true;}if(!measured)fact(facts,'اندازه‌های واقعی','هنوز ثبت نشده');
  const images=safeImages([...(v.itemImages||[]),...(p.images||[])]);thumbs.replaceChildren();let imageIndex=0;
  function show(i){imageIndex=i;main.replaceChildren(picture(images[i],p.title));thumbs.querySelectorAll('button').forEach((b,j)=>b.setAttribute('aria-pressed',String(j===i)));}
@@ -85,13 +85,46 @@ async function renderCart(){const ticket=++requestId;$('cartItems').textContent=
  const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p',money((p.basePrice+v.priceDelta)*line.quantity)));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
  const remove=el('button','حذف');remove.onclick=()=>{cart=cart.filter(x=>x.variantId!==line.variantId);saveCart();renderCart();};row.append(remove);rows.push(row);}
  if(ticket!==requestId||location.pathname!=='/cart')return;$('cartItems').replaceChildren(...(rows.length?rows:[el('p','سبد انتخاب‌ها خالی است.')]));$('cartTotal').textContent='جمع اقلام قابل تأیید: '+money(total);}
-function metadata(p){const path=p?'/products/'+encodeURIComponent(p.id):location.pathname,title=p?p.title+' | MOTIF':location.pathname==='/collection'?'انتخاب‌های MOTIF | جست‌وجوی اندازه':'MOTIF | پوشاک برای هر روز';document.title=title;let canonical=document.querySelector('link[rel=canonical]');if(!canonical){canonical=el('link');canonical.rel='canonical';document.head.append(canonical);}canonical.href='https://motifdress.com'+path;}
+function metadata(p) {
+ const origin = 'https://motifdress.com';
+ const collection = location.pathname === '/collection';
+ const category = collection ? MotifCatalog.collectionCategory(products, query) : '';
+ const path = p ? '/products/'+encodeURIComponent(p.id) : collection ? MotifCatalog.categoryPath(category) : location.pathname;
+ const title = p ? p.title+' | MOTIF' : collection ? MotifCatalog.categoryTitle(category)
+   : ({'/cart':'سبد انتخاب‌ها | MOTIF','/contact':'ارتباط با MOTIF | MOTIF'})[path] || 'MOTIF | پوشاک برای هر روز';
+ document.title = title;
+ let canonical = document.querySelector('link[rel=canonical]');
+ if (!canonical) {
+   canonical = el('link');
+   canonical.rel = 'canonical';
+   document.head.append(canonical);
+ }
+ canonical.href = origin+path;
+ document.querySelector('meta[property="og:url"]')?.setAttribute('content', canonical.href);
+ document.querySelector('meta[property="og:title"]')?.setAttribute('content', title);
+ document.getElementById('productBreadcrumbData')?.remove();
+ if (!p) return;
+ const nav = $('productBreadcrumb');
+ nav.replaceChildren();
+ const trail = MotifCatalog.breadcrumbs(p);
+ trail.forEach(([name, href], i) => {
+   if (i) nav.append(' / ');
+   const item = el(i === trail.length - 1 ? 'span' : 'a', name);
+   if (item.tagName === 'A') item.href = href;
+   else item.setAttribute('aria-current', 'page');
+   nav.append(item);
+ });
+ const schema = el('script', JSON.stringify(MotifCatalog.breadcrumbData(p, origin)));
+ schema.type = 'application/ld+json';
+ schema.id = 'productBreadcrumbData';
+ document.head.append(schema);
+}
 async function route(){
  const ticket=++requestId,match=location.pathname.match(/^\/products\/([^/]+)\/?$/);if(location.pathname==='/collection')query=new URLSearchParams(location.search);
  $('app').hidden=false;for(const id of ['homepage','catalog','product','cart','contact'])$(id).hidden=true;if($('serverContent'))$('serverContent').hidden=true;
  if(!match){const id=location.pathname==='/collection'?'catalog':location.pathname==='/cart'?'cart':location.pathname==='/contact'?'contact':'homepage';$(id).hidden=false;if(id==='catalog'){syncControls();renderCatalog();}if(id==='cart')renderCart();metadata();return;}
  $('product').hidden=false;$('detail').hidden=true;$('detailRetry').hidden=true;$('productStatus').hidden=false;$('productStatus').textContent='در حال دریافت مشخصات…';document.querySelector('.back').href=returnUrl;
- try{const r=await fetch('/api/products/'+encodeURIComponent(decodeURIComponent(match[1])),{cache:'no-store'});if(ticket!==requestId)return;if(r.status===404){$('productStatus').textContent='این محصول دیگر موجود یا قابل نمایش نیست.';return;}if(!r.ok)throw Error();const p=await r.json();if(ticket!==requestId)return;if(!p.isActive||!available(p).length){$('productStatus').textContent='این محصول دیگر موجود یا قابل نمایش نیست.';return;}renderDetail(p,new URLSearchParams(location.search).get('variant'));$('detail').hidden=false;$('productStatus').hidden=true;metadata(p);}catch{if(ticket!==requestId)return;$('productStatus').textContent='دریافت مشخصات ناموفق بود. دوباره تلاش کنید.';$('detailRetry').hidden=false;}
+ try{const r=await fetch('/api/products/'+encodeURIComponent(decodeURIComponent(match[1])),{cache:'no-store'});if(ticket!==requestId)return;if(r.status===404){$('productStatus').textContent='این محصول دیگر موجود یا قابل نمایش نیست.';return;}if(!r.ok)throw Error();const p=await r.json();if(ticket!==requestId)return;if(!p.isActive||!available(p).length){$('productStatus').textContent='این محصول دیگر موجود یا قابل نمایش نیست.';return;}renderDetail(p,new URLSearchParams(location.search).get('variant')||new URLSearchParams(location.hash.slice(1)).get('variant'));$('detail').hidden=false;$('productStatus').hidden=true;metadata(p);}catch{if(ticket!==requestId)return;$('productStatus').textContent='دریافت مشخصات ناموفق بود. دوباره تلاش کنید.';$('detailRetry').hidden=false;}
 }
 function applyExact(w,l,kind,extras={}){const width=MotifCatalog.number(w),length=MotifCatalog.number(l);if(width===null||Number.isNaN(width)||Number.isNaN(length))return false;const q=new URLSearchParams(query);for(const k of ['rise','thigh','hem']){q.delete(k);if(kind==='pants'){const n=MotifCatalog.number(extras[k]);if(Number.isNaN(n))return false;if(n!==null)q.set(k,n);}}for(const k of ['wmin','wmax','lmin','lmax','width','length'])q.delete(k);q.set('kind',kind);q.set('width',width);if(length!==null)q.set('length',length);navigate('/collection?'+q);return true;}
 for(const [id,key]of [['search','q'],['size','size'],['productType','type'],['sort','sort'],...['fabric','design','season','use','hood'].map(k=>[k,k])])$(id).addEventListener(id==='search'?'input':'change',()=>setParam(key,$(id).value));
@@ -102,7 +135,7 @@ $('editMeasurements').onclick=()=>{$('exactForm').hidden=!$('exactForm').hidden;
 $('resultKind').onchange=()=>{$('resultExtra').hidden=$('resultKind').value!=='pants';for(const id of ['resultWidth','resultLength','resultRise','resultThigh','resultHem'])$(id).value='';};
 $('quickToggle').onclick=()=>{const open=$('quickForm').hidden;$('quickForm').hidden=!open;$('quickToggle').setAttribute('aria-expanded',String(open));if(open)$('quickKind').focus();};
 $('measureKind').onchange=()=>{for(const k of ['width','length','wmin','wmax','lmin','lmax','rise','thigh','hem'])query.delete(k);setParam('kind',$('measureKind').value);syncControls();};
-$('resetFilters').onclick=()=>{query=new URLSearchParams();history.replaceState(null,'','/collection');syncControls();renderCatalog();};$('retry').onclick=loadCatalog;$('detailRetry').onclick=route;
+$('resetFilters').onclick=()=>{query=new URLSearchParams();history.replaceState(null,'','/collection');syncControls();renderCatalog();metadata();};$('retry').onclick=loadCatalog;$('detailRetry').onclick=route;
 document.addEventListener('click',e=>{const a=e.target.closest('a');if(!a||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey||a.target||a.hasAttribute('download'))return;const u=new URL(a.href);if(u.origin===location.origin&&['/','/collection','/cart','/contact'].includes(u.pathname)||u.origin===location.origin&&u.pathname.startsWith('/products/')){e.preventDefault();if(u.pathname.startsWith('/products/')&&location.pathname==='/collection')returnUrl=location.pathname+location.search;document.querySelector('.type-menu').open=false;navigate(u.pathname+u.search+u.hash);}});
 window.addEventListener('popstate',route);
 function legacy(){const m=location.hash.match(/^#product\/(.+)$/);if(m)history.replaceState(null,'','/products/'+m[1]);if(location.hash==='#collection')history.replaceState(null,'','/collection');}window.addEventListener('hashchange',()=>{legacy();route();});legacy();

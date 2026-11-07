@@ -21,12 +21,15 @@ router.get('/products/:id',async(req,res)=>{
   try {
     const p=await prisma.product.findUnique({where:{id:req.params.id},include:{variants:true}});
     if(!p||!view.inStock(p))return res.status(404).type('html').send(view.errorPage('محصول موجود یا قابل نمایش نیست'));
-    if(req.path.endsWith('/'))return res.redirect(301,view.productPath(p.id));
+    if(req.path !== view.productPath(p.id)) {
+      const query = new URL(req.originalUrl, view.ORIGIN).search;
+      return res.redirect(301, view.productPath(p.id) + query);
+    }
     res.type('html').send(view.renderProduct(p,await content.published()));
   }catch(err){console.error('Product rendering failed');res.status(503).type('html').send(view.errorPage('دریافت محصول موقتاً ممکن نیست'));}
 });
 router.get('/collection',async(req,res)=>{
-  res.set('Cache-Control','no-store');try{const [products,settings]=await Promise.all([prisma.product.findMany(query),content.published()]);res.type('html').send(view.renderCollection(products,new URLSearchParams(req.query),settings));}
+  res.set('Cache-Control','no-store');try{const [products,settings]=await Promise.all([prisma.product.findMany(query),content.published()]);res.type('html').send(view.renderCollection(products,new URL(req.originalUrl, view.ORIGIN).searchParams,settings));}
   catch{res.status(503).type('html').send(view.errorPage('دریافت مجموعه موقتاً ممکن نیست'));}
 });
 for(const name of ['cart','contact'])router.get('/'+name,async(req,res)=>{res.set('Cache-Control','no-store');try{res.type('html').send(view.renderUtility(name,await content.published()));}catch{res.status(503).type('html').send(view.errorPage('صفحه موقتاً در دسترس نیست'));}});

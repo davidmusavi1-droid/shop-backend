@@ -9,11 +9,14 @@
     for (const [key, label] of [
       ["productCode", "کد یکتا"],
       ["title", "نام محصول"],
-      ["productType", "نوع محصول"],
       ["brand", "برند"],
-      ["mainFabric", "جنس اصلی"],
     ])
       if (!String(p[key] || "").trim()) add(key, label);
+    const categories = p.mainCategories ?? (p.productType?.trim() ? [p.productType] : []);
+    if (!categories.length) add("mainCategories", "حداقل یک دسته اصلی");
+    else if (!categories.includes(p.productType)) add("productType", "دسته اصلی اولویت‌دار");
+    if (!(p.fabrics ?? [p.mainFabric, ...(p.complementaryFabrics || [])].filter(Boolean)).length)
+      add("fabrics", "جنس پارچه");
     if (!p.qualityGrade) add("qualityGrade", "گرید کیفیت", 3);
     if (!Number.isInteger(p.basePrice) || p.basePrice <= 0)
       add("basePrice", "قیمت پایه بیشتر از صفر", 3);

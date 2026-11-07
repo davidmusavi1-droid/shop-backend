@@ -8,7 +8,7 @@ function load(name, prisma = {}) {
   const admin = () => {};
   const router = Object.fromEntries(['get', 'post', 'patch'].map(method => [method, (url, ...handlers) => { routes[method + ' ' + url] = handlers; }]));
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes', name + '.js'), 'utf8'), {
-    require: name => name === 'express' ? { Router: () => router } : name.includes('requireAdmin') ? admin : prisma,
+    require: name => name === 'express' ? { Router: () => router } : name.includes('requireAdmin') ? admin : name.includes('/prisma') ? prisma : require('node:module').createRequire(require.resolve('../src/routes/products'))(name),
     module: { exports: {} },
   });
   return { routes, admin };
@@ -71,16 +71,16 @@ test('blank measurements remain null and public listing filters stock', async ()
     create: async args => { created = args.data; return args.data; },
     findMany: async args => { query = args; return []; },
   } });
-  await call(routes['post /'], { title: 'test', basePrice: 100, variants: [{ sku: 'test', size: 'L', color: 'black', chestWidthCm: null, lengthCm: 65 }] });
+  await call(routes['post /'], { title: 'test', productType: 'کاپشن', basePrice: 100, variants: [{ sku: 'test', size: 'L', color: 'black', chestWidthCm: null, lengthCm: 65 }] });
   assert.equal(created.variants.create[0].chestWidthCm, null);
   assert.equal(created.variants.create[0].lengthCm, 65);
   await call(routes['get /']);
   assert.equal(query.where.variants.some.stock.gt, 0);
 });
-const productBody = { title: 'test', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'one', size: 'L', color: 'black', stock: 1 }] };
+const productBody = { title: 'test', productType: 'کاپشن', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'one', size: 'L', color: 'black', stock: 1 }] };
 test('all product management endpoints require admin', () => {
   const { routes, admin } = load('products');
-  for (const key of ['get /admin/list', 'post /', 'patch /:id']) assert.equal(routes[key][0], admin);
+  for (const key of ['get /admin/list', 'get /admin/fabrics', 'post /admin/fabrics', 'post /', 'patch /:id']) assert.equal(routes[key][0], admin);
 });
 test('invalid and duplicate variants never reach database', async () => {
   const { routes } = load('products');

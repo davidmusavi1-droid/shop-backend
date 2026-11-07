@@ -6,8 +6,9 @@ const $ = (id) => document.getElementById(id),
     if (cls) n.className = cls;
     return n;
   };
-let token = "",
-  products = [],
+let products = [],
+  suspended = false,
+  fabricChoices = MotifCatalog.fabrics,
   editing = null,
   step = 1,
   page = 1,
@@ -31,6 +32,7 @@ const groups = [
       "productCode",
       "title",
       "brand",
+      "mainCategories",
       "productType",
       "seasons",
       "uses",
@@ -41,8 +43,8 @@ const groups = [
   [
     "جنس و مدل",
     [
-      "mainFabric",
-      "complementaryFabrics",
+      "fabrics",
+      "fabricBasis",
       "modelName",
       "garmentDesign",
       "hasHood",
@@ -136,8 +138,8 @@ function snapshot() {
   }
   return data;
 }
-function cache() {
-  if (!recoveryKey || $("editor").hidden || busy) return;
+function cache(force = false) {
+  if (!recoveryKey || $("editor").hidden || (busy && !force)) return;
   try {
     sessionStorage.setItem(
       recoveryKey,
@@ -217,7 +219,15 @@ function openEditor(p = null, recover = null) {
     const grid = el("div", null, "grid");
     for (const key of keys) {
       const spec = fields.find((f) => f[0] === key);
-      grid.append(control(spec, source[key]));
+      if (key === "mainCategories") {
+        grid.append(control([...spec.slice(0, 3), categoryChoices()], MotifCatalog.categoriesOf(source)));
+      } else if (key === "fabrics") {
+        const box = control([...spec.slice(0, 3), fabricChoices], MotifCatalog.fabricsOf(source));
+        appendChoiceEditor(box, "نام جنس جدید", saveFabricOption);
+        grid.append(box);
+      } else {
+        grid.append(control(spec, key === "fabricBasis" ? source[key] || "UNKNOWN" : source[key]));
+      }
     }
     d.append(grid);
     if (name === "اندازه‌ها") {
@@ -279,7 +289,20 @@ function openEditor(p = null, recover = null) {
     syncInventory();
     mark();
   };
-  let previous = field("productType").value;
+  const priority = field("productType"), categories = field("mainCategories");
+  function syncPriority(value) {
+    const selected = [...categories.querySelectorAll("input:checked")].map(n => n.value);
+    priority.replaceChildren(new Option("انتخاب کنید", ""), ...selected.map(n => new Option(n, n)));
+    priority.value = selected.includes(value) ? value : "";
+    priority.required = !!selected.length || !!MotifCatalog.categoriesOf(p || {}).length;
+  }
+  categories.onchange = () => syncPriority(priority.value);
+  appendChoiceEditor(categories, "نام دسته جدید", async name => name);
+  syncPriority(source.productType);
+  if (p && !MotifCatalog.categoriesOf(source).includes(source.productType)) {
+    categories.append(el("p", "دستهٔ قبلی مشخص نیست. دسته‌های محصول و اولویت آن‌ها را بررسی کنید."));
+  }
+  let previous = priority.value;
   field("productType").onchange = () => {
     const value = field("productType").value;
     if (
@@ -293,7 +316,7 @@ function openEditor(p = null, recover = null) {
           "نوع لباس تغییر می‌کند. اندازه‌های قبلی حفظ می‌شوند؛ اندازه‌های دستهٔ جدید را جداگانه بررسی کنید.",
         )
       ) {
-        field("productType").value = previous;
+        priority.value = [...priority.options].some(o => o.value === previous) ? previous : "";
         return;
       }
     }
@@ -473,10 +496,11 @@ function review() {
     );
   const lines = [
     ["نام و کد", [p.title, p.productCode].filter(Boolean).join(" · ")],
-    ["دسته و برند", [p.productType, p.brand].filter(Boolean).join(" · ")],
+    ["دسته و برند", [...p.mainCategories, p.brand].filter(Boolean).join(" · ")],
+    ["دسته اولویت‌دار", p.productType],
     [
       "جنس و مدل",
-      [p.mainFabric, ...p.complementaryFabrics, p.garmentDesign, p.modelName]
+      [...p.fabrics, p.garmentDesign, p.modelName]
         .filter(Boolean)
         .join(" · "),
     ],
@@ -532,10 +556,10 @@ async function api(path, options = {}) {
   const controller = new AbortController(),
     timer = setTimeout(() => controller.abort(), 25000);
   try {
-    const response = await fetch(path, {
+    const response = await MotifAdminSession.request(path, {
       ...options,
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      headers: { "Content-Type": "application/json" },
     });
     let data;
     try {
@@ -581,7 +605,7 @@ function card(p) {
       "small",
       [p.brand, p.productCode || "بدون کد"].filter(Boolean).join(" · "),
     ),
-    el("small", p.productType || "دسته تعیین نشده"),
+    el("small", MotifCatalog.categoriesOf(p).join("، ") || "دسته نیازمند بررسی"),
   );
   row.append(
     name,
@@ -625,12 +649,7 @@ function render() {
   const cats = $("categoryFilter"),
     selected = cats.value;
   cats.replaceChildren(new Option("همه دسته‌ها", ""));
-  [
-    ...new Set([
-      ...MotifCatalog.productTypes,
-      ...products.map((p) => p.productType).filter(Boolean),
-    ]),
-  ].forEach((v) => cats.add(new Option(v, v)));
+  categoryChoices().forEach(v => cats.add(new Option(v, v)));
   cats.value = selected;
   $("stats").replaceChildren();
   const incomplete = products.filter(
@@ -671,7 +690,7 @@ function render() {
         .join(" ")
         .toLowerCase()
         .includes(q) &&
-      (!cats.value || p.productType === cats.value) &&
+      (!cats.value || MotifCatalog.categoriesOf(p).includes(cats.value)) &&
       (!$("gradeFilter").value || p.qualityGrade === $("gradeFilter").value) &&
       {
         all: true,
@@ -711,6 +730,48 @@ function filterList(filter) {
   page = 1;
   display("products");
   render();
+}
+function categoryChoices() {
+  return [...new Set([...MotifCatalog.productTypes, ...products.flatMap(MotifCatalog.categoriesOf)])];
+}
+async function saveFabricOption(label) {
+  const saved = await api("/api/products/admin/fabrics", { method: "POST", body: JSON.stringify({ label }) });
+  fabricChoices = [...new Set([...fabricChoices, saved])];
+  return saved;
+}
+function appendChoiceEditor(box, title, save) {
+  const row = el("div", null, "choice-editor");
+  const label = el("label", title);
+  const input = el("input");
+  input.maxLength = save === saveFabricOption ? 80 : 100;
+  label.append(input);
+  const add = button("افزودن به فهرست", async () => {
+    const value = input.value.trim();
+    if (!value || add.disabled) return;
+    add.disabled = true;
+    try {
+      const name = await save(value);
+      if (!box.isConnected) return;
+      const existing = [...box.querySelectorAll("input[type=checkbox]")].find(n => n.value === name);
+      if (existing) existing.checked = true;
+      else box.insertBefore(checkChoice(name, true), row);
+      input.value = "";
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+      notice("");
+    } catch (err) {
+      notice(err.message);
+    } finally {
+      add.disabled = false;
+    }
+  });
+  input.onkeydown = e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      add.click();
+    }
+  };
+  row.append(label, add);
+  box.append(row);
 }
 async function refresh() {
   const loaded = await api("/api/products/admin/list");
@@ -840,70 +901,102 @@ async function save(publish = false) {
     $("publish").disabled = false;
   }
 }
-$("loginForm").onsubmit = async (e) => {
-  e.preventDefault();
-  token = $("token").value;
-  $("loginForm").querySelector("button").disabled = true;
-  try {
-    await refresh();
-    if (crypto.subtle) {
-      const hash = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(token),
-      );
-      recoveryKey =
-        "motif-admin-recovery-" +
-        Array.from(new Uint8Array(hash))
-          .map((n) => n.toString(16).padStart(2, "0"))
-          .join("");
-    } else recoveryKey = "";
-    $("token").value = "";
-    $("login").hidden = true;
-    $("workspace").hidden = false;
-    display("dashboard");
-    notice("");
-    let recovery;
-    try {
-      recovery = JSON.parse(sessionStorage.getItem(recoveryKey));
-    } catch {}
-    if (recovery) {
-      const old = products.find((p) => p.id === recovery.id);
-      if (recovery.id && !old)
-        notice("محصول پیش‌نویس بازیابی پیدا نشد؛ فهرست را بررسی کنید.");
-      else if (old && old.updatedAt !== recovery.base)
-        notice(
-          "نسخه سرور تغییر کرده است؛ برای جلوگیری از بازنویسی، نسخه جاری را باز کنید.",
-        );
-      else if (confirm("فرم ذخیره‌نشدهٔ قبلی بازیابی شود؟"))
-        openEditor(old || null, recovery);
-    }
-  } catch (err) {
-    token = "";
-    notice(err.message);
-  } finally {
-    $("loginForm").querySelector("button").disabled = false;
+async function showWorkspace(session) {
+  const [, fabricLoadFailed] = await Promise.all([
+    refresh(),
+    api("/api/products/admin/fabrics").then(choices => {
+      if (Array.isArray(choices) && choices.every(label => typeof label === "string")) fabricChoices = choices;
+      return false;
+    }, () => true),
+  ]);
+  recoveryKey = session.recoveryKey;
+  $("login").hidden = true;
+  $("workspace").hidden = false;
+  notice(fabricLoadFailed ? "دریافت فهرست جنس‌های سفارشی ممکن نشد." : "");
+  if (suspended) {
+    suspended = false;
+    return;
   }
-};
-$("logout").onclick = () => {
-  if (!leave()) return;
+  display("dashboard");
+  let recovery;
   try {
-    sessionStorage.removeItem(recoveryKey);
+    recovery = JSON.parse(sessionStorage.getItem(recoveryKey));
   } catch {}
-  token = "";
-  recoveryKey = "";
-  products = [];
-  editing = null;
-  $("productFields").replaceChildren();
-  $("list").replaceChildren();
+  if (recovery) {
+    const old = products.find(p => p.id === recovery.id);
+    if (recovery.id && !old) notice("محصول پیش‌نویس بازیابی پیدا نشد؛ فهرست را بررسی کنید.");
+    else if (old && old.updatedAt !== recovery.base)
+      notice("نسخه سرور تغییر کرده است؛ برای جلوگیری از بازنویسی، نسخه جاری را باز کنید.");
+    else if (confirm("فرم ذخیره‌نشدهٔ قبلی بازیابی شود؟")) openEditor(old || null, recovery);
+  }
+}
+
+async function migrateRecovery(password, destination) {
+  try {
+    if (sessionStorage.getItem(destination) || !crypto.subtle) return;
+    if (!Object.keys(sessionStorage).some(key => /^motif-admin-recovery-[a-f0-9]{64}$/.test(key))) return;
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
+    const oldKey = "motif-admin-recovery-" + Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2, "0")).join("");
+    const data = sessionStorage.getItem(oldKey);
+    if (data) {
+      sessionStorage.setItem(destination, data);
+      sessionStorage.removeItem(oldKey);
+    }
+  } catch {}
+}
+
+MotifAdminSession.onEnd(message => {
+  if (dirty) cache(true);
+  suspended = !$("workspace").hidden || suspended;
+  $("publishDialog").close();
   $("workspace").hidden = true;
   $("login").hidden = false;
-  notice("");
+  notice(message);
+});
+const loginButton = $("loginForm").querySelector("button");
+$("loginForm").onsubmit = async (e) => {
+  e.preventDefault();
+  if (loginButton.disabled) return;
+  const password = $("token").value;
+  $("token").value = "";
+  loginButton.disabled = true;
+  try {
+    const session = await MotifAdminSession.login(password);
+    await migrateRecovery(password, session.recoveryKey);
+    await showWorkspace(session);
+  } catch (err) {
+    notice(err.message);
+  } finally {
+    loginButton.disabled = false;
+  }
+};
+$("logout").onclick = async () => {
+  if (!leave()) return;
+  $("logout").disabled = true;
+  try {
+    await MotifAdminSession.logout();
+    try { sessionStorage.removeItem(recoveryKey); } catch {}
+    recoveryKey = "";
+    suspended = false;
+    products = [];
+    fabricChoices = MotifCatalog.fabrics;
+    editing = null;
+    $("productFields").replaceChildren();
+    $("list").replaceChildren();
+    $("workspace").hidden = true;
+    $("login").hidden = false;
+    notice("");
+  } catch (err) {
+    notice(err.message);
+  } finally {
+    $("logout").disabled = false;
+  }
 };
 $("siteButton").onclick = () => {
   if (!leave()) return;
   display("settings");
   $("settings").hidden = true;
-  MotifSiteAdmin.open(() => token, products);
+  MotifSiteAdmin.open(products);
 };
 $("newProduct").onclick = () => openEditor();
 $("nextProduct").onclick = () => openEditor();
@@ -966,11 +1059,23 @@ window.addEventListener("beforeunload", (e) => {
     e.returnValue = "";
   }
 });
-window.addEventListener("offline", () =>
-  notice(
-    "اینترنت قطع است؛ اطلاعات فرم حفظ می‌شود. پس از اتصال دوباره تلاش کنید.",
-  ),
-);
-window.addEventListener("online", () =>
-  notice("اتصال برقرار شد؛ می‌توانید عملیات ناموفق را دوباره انجام دهید."),
-);
+window.addEventListener("offline", () => {
+  if (!$("workspace").hidden)
+    notice("اینترنت قطع است؛ اطلاعات فرم حفظ می‌شود. پس از اتصال دوباره تلاش کنید.");
+});
+window.addEventListener("online", () => {
+  if (!$("workspace").hidden)
+    notice("اتصال برقرار شد؛ می‌توانید عملیات ناموفق را دوباره انجام دهید.");
+});
+
+function cacheOnSuspend() {
+  if (dirty) cache(true);
+}
+window.addEventListener("pagehide", cacheOnSuspend);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) cacheOnSuspend();
+});
+loginButton.disabled = true;
+MotifAdminSession.restore().then(showWorkspace).catch(err => {
+  if (err.code !== "SESSION_REQUIRED") notice(err.message);
+}).finally(() => { loginButton.disabled = false; });

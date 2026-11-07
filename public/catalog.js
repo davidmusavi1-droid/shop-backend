@@ -4,8 +4,28 @@
   else root.MotifCatalog = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const productTypes = ['کاپشن','شلوار','سویشرت'];
-  const fabrics = ['شمعی','کتان','دورس','نایلون'];
+  const productTypes = ['کاپشن','بادگیر','شلوار','سویشرت'];
+  const fabrics = ['کورتکس (اصطلاح رایج بازار)','شمعی','پلی‌استر','نایلون','کتان','پنبه','جین','فلیس','پلار','ترکیبی','سایر'];
+  const fabricBases = [['SELLER','تشخیص و اعلام فروشنده'],['LABEL','اطلاعات لیبل یا مشخصات معتبر سازنده'],['UNKNOWN','نامشخص']];
+  const categoriesOf = p => p.mainCategories ?? (p.productType?.trim() ? [p.productType] : []);
+  const fabricsOf = p => p.fabrics ?? [...new Set([p.mainFabric,...(p.complementaryFabrics||[])].filter(Boolean))];
+  const categoryPath = type => type ? '/collection?type='+encodeURIComponent(type) : '/collection';
+  const categoryTitle = type => type ? type+' | MOTIF' : 'انتخاب‌های MOTIF | جست‌وجوی اندازه';
+  const collectionCategory = (products, params) => {
+    const type = params.get('type');
+    return type && (productTypes.includes(type) || products.some(p => categoriesOf(p).includes(type))) ? type : '';
+  };
+  function breadcrumbs(p) {
+    return [['خانه','/'],...(categoriesOf(p).includes(p.productType) ? [[p.productType,categoryPath(p.productType)]] : []),[p.title,'/products/'+encodeURIComponent(p.id)]];
+  }
+  function breadcrumbData(p, origin) {
+    return {
+      '@context':'https://schema.org', '@type':'BreadcrumbList',
+      itemListElement:breadcrumbs(p).map(([name, path], i) => ({
+        '@type':'ListItem', position:i+1, name, item:origin+path
+      }))
+    };
+  }
   const seasons = ['بهار','تابستان','پاییز','زمستان'];
   const uses = ['روزمره','ورزشی','مناسب کار','کوهنوردی'];
   const qualityGrades = [
@@ -52,7 +72,7 @@
   const normalize=s=>String(s||'').replace(/ي/g,'ی').replace(/ك/g,'ک').toLocaleLowerCase().trim();
   function filterProducts(products,params) {
     const f=queryFilter(params),q=normalize(params.get('q')),need=params.get('need'),type=params.get('type');
-    return products.filter(p=>p.isActive&&(!params.has('kind')||(f.kind==='pants'?p.productType==='شلوار':p.productType!=='شلوار'))&&(!need||((p.customerNeeds||[]).includes(need)||(p.uses||[]).includes(need)||(need==='پاییزه'&&(p.seasons||[]).includes('پاییز'))||(need==='مناسب سرما'&&(p.seasons||[]).includes('زمستان'))))&&(!type||p.productType===type)&&['season','use','fabric','design','hood'].every(key=>{const values=params.getAll(key);return !values.length||values.every(value=>key==='season'?(p.seasons||[]).includes(value):key==='use'?(p.uses||[]).includes(value):key==='fabric'?[p.mainFabric,...(p.complementaryFabrics||[])].includes(value):key==='hood'?String(p.hasHood)===value:p.garmentDesign===value);})&&normalize([p.title,p.brand,p.modelName].join(' ')).includes(q)&&variants(p,f).length);
+    return products.filter(p=>p.isActive&&(!params.has('kind')||(f.kind==='pants'?p.productType==='شلوار':p.productType!=='شلوار'))&&(!need||((p.customerNeeds||[]).includes(need)||(p.uses||[]).includes(need)||(need==='پاییزه'&&(p.seasons||[]).includes('پاییز'))||(need==='مناسب سرما'&&(p.seasons||[]).includes('زمستان'))))&&(!type||categoriesOf(p).includes(type))&&['season','use','fabric','design','hood'].every(key=>{const values=params.getAll(key);return !values.length||values.every(value=>key==='season'?(p.seasons||[]).includes(value):key==='use'?(p.uses||[]).includes(value):key==='fabric'?fabricsOf(p).includes(value):key==='hood'?String(p.hasHood)===value:p.garmentDesign===value);})&&normalize([p.title,p.brand,p.modelName].join(' ')).includes(q)&&variants(p,f).length);
   }
-  return { productTypes, fabrics, seasons, uses, qualityGrades, gradeLetter, priceNumber, formatPriceInput, needs, range, within, variants, queryFilter, filterProducts, number };
+  return { productTypes, fabrics, fabricBases, categoriesOf, fabricsOf, categoryPath, categoryTitle, collectionCategory, breadcrumbs, breadcrumbData, seasons, uses, qualityGrades, gradeLetter, priceNumber, formatPriceInput, needs, range, within, variants, queryFilter, filterProducts, number };
 });
