@@ -3,12 +3,16 @@ const site=require('../public/site-content');
 (async()=>{
  const browser=await chromium.launch({headless:true,...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}: {})});
  try{
- const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));let products=[],payload,attempt=0;
+ const page=await browser.newPage({viewport:{width:390,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));let products=[],payload,attempt=0;const choices=[...require('../public/catalog').fabrics];
  await page.route('https://img.test/**',r=>r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1EAAAAASUVORK5CYII=','base64')}));
  await page.route('http://motif.test/**',async route=>{
   const u=new URL(route.request().url());
   if(u.pathname==='/api/site')return route.fulfill({json:site.defaults});
   if(u.pathname==='/api/products/admin/list')return route.fulfill({json:products});
+  if(u.pathname==='/api/products/admin/fabrics'){
+   if(route.request().method()==='GET')return route.fulfill({json:choices});
+   const {label}=route.request().postDataJSON();choices.push(label);return route.fulfill({status:201,json:label});
+  }
   if(u.pathname==='/api/uploads/images'){attempt++;return route.fulfill(attempt===1?{status:502,json:{error:'مجوز نوشتن در فضای عکس لیارا کافی نیست.'}}:{status:201,json:{url:'https://img.test/defect-'+attempt+'.webp'}});}
   if(u.pathname.startsWith('/api/products')){
    if(route.request().method()!=='GET'){payload=route.request().postDataJSON();const p={...payload,id:'p'+products.length,updatedAt:new Date().toISOString(),variants:payload.variants.map((v,i)=>({...v,id:'v'+i}))};products=[p];return route.fulfill({json:p});}
@@ -20,10 +24,24 @@ const site=require('../public/site-content');
  await page.goto('http://motif.test/admin.html');await page.locator('#token').fill('test');await page.locator('#loginForm button').click();
  page.on('dialog',d=>d.accept());const stage=async(n)=>page.locator('#steps li').nth(n-1).getByRole('button').click();
  const pf=k=>page.locator('#productFields [data-key='+k+']'),vf=k=>page.locator('#editor [data-key='+k+']').first();
- for(const [i,type]of ['کاپشن','شلوار','سویشرت'].entries()){
-  await page.locator('#mobileNav').getByRole('button',{name:'ثبت محصول',exact:true}).click();await pf('productType').fill(type);await pf('title').fill(type+' تست');await pf('productCode').fill('MOTIF-TEST-'+i);await pf('brand').fill('MOTIF');await stage(2);await vf('color').fill('سبز');
+ for(const [i,type]of ['کاپشن','شلوار','بادگیر'].entries()){
+  await page.locator('#mobileNav').getByRole('button',{name:'ثبت محصول',exact:true}).click();await pf('mainCategories').locator(`input[value="${type}"]`).check();await pf('productType').selectOption(type);
+  if(i===0){
+   await pf('mainCategories').locator('input[value="بادگیر"]').check();
+   await pf('mainCategories').locator('input[value="کاپشن"]').uncheck();
+   assert.equal(await pf('productType').inputValue(),'');
+   await pf('productType').selectOption('بادگیر');
+   await pf('mainCategories').locator('input[value="کاپشن"]').check();
+   await pf('productType').selectOption(type);
+   await pf('fabrics').getByLabel('نام جنس جدید').fill('ویسکوز');
+   await pf('fabrics').getByRole('button',{name:'افزودن به فهرست'}).click();
+   await pf('fabrics').locator('input[value="ویسکوز"]:checked').waitFor();
+   await pf('fabrics').locator('input[value="کورتکس (اصطلاح رایج بازار)"]').check();
+   await pf('fabricBasis').selectOption('SELLER');
+  }else assert.equal(await pf('fabrics').locator('input[value="ویسکوز"]').count(),1);
+  await pf('title').fill(type+' تست');await pf('productCode').fill('MOTIF-TEST-'+i);await pf('brand').fill('MOTIF');await stage(2);await vf('color').fill('سبز');
   await stage(3);await pf('basePrice').fill('۲٬۳۵۰٬۰۰۰');await pf('basePrice').dispatchEvent('input');assert.equal(await pf('basePrice').inputValue(),'2,350,000');await vf('priceDelta').fill('-50,000');
-  await stage(1);await pf('mainFabric').fill('شمعی');await pf('complementaryFabrics').locator('input[value="نایلون"]').check();await pf('seasons').locator('input[value="پاییز"]').check();await pf('seasons').locator('input[value="زمستان"]').check();await pf('uses').locator('input[value="روزمره"]').check();await pf('uses').locator('input[value="مناسب کار"]').check();await pf('hasHood').selectOption('true');await pf('garmentDesign').fill('تمام‌زیپ');await stage(2);if(type!=='شلوار'){await vf('sleeveFromNeckCm').fill('73');await vf('chestWidthCm').fill('59');await vf('lengthCm').fill('69');}await stage(3);
+  await stage(1);await pf('fabrics').locator('input[value="شمعی"]').check();await pf('fabrics').locator('input[value="نایلون"]').check();await pf('seasons').locator('input[value="پاییز"]').check();await pf('seasons').locator('input[value="زمستان"]').check();await pf('uses').locator('input[value="روزمره"]').check();await pf('uses').locator('input[value="مناسب کار"]').check();await pf('hasHood').selectOption('true');await pf('garmentDesign').fill('تمام‌زیپ');await stage(2);if(type!=='شلوار'){await vf('sleeveFromNeckCm').fill('73');await vf('chestWidthCm').fill('59');await vf('lengthCm').fill('69');}await stage(3);
   for(const grade of ['N','A_PLUS','A','B','C']){await pf('qualityGrade').selectOption(grade);assert.equal(await pf('defectImages').evaluate(n=>!n.closest('.image-editor').hidden),['B','C'].includes(grade));}
   await pf('qualityGrade').selectOption('B');
   await stage(4);const mainBox=page.locator('#productFields .image-editor:has([data-key=images])'),defectBox=page.locator('#productFields .image-editor:has([data-key=defectImages])');
@@ -36,7 +54,7 @@ const site=require('../public/site-content');
    await defectBox.getByRole('button',{name:'حذف از محصول',exact:true}).first().click();assert.equal(await pf('images').inputValue(),'https://img.test/front.webp');
   }
   await page.locator('#save').click();await page.getByText('محصول ذخیره شد.',{exact:true}).first().waitFor();assert.equal(payload.productType,type);assert.equal(payload.basePrice,2350000);assert.equal(payload.variants[0].priceDelta,-50000);assert.equal(payload.variants[0].sleeveFromNeckCm,type==='شلوار'?null:73);assert.deepEqual(payload.seasons,['پاییز','زمستان']);assert.deepEqual(payload.uses,['روزمره','مناسب کار']);assert.equal(payload.qualityGrade,'B');assert.equal(payload.images[0],'https://img.test/front.webp');
-  if(i===0){assert.equal(payload.defectImages.length,1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/tmp/motif-structure-admin-mobile.png',fullPage:true});}
+  if(i===0){assert.deepEqual(payload.mainCategories,['کاپشن','بادگیر']);assert(payload.fabrics.includes('ویسکوز'));assert.equal(payload.fabricBasis,'SELLER');assert.equal(payload.defectImages.length,1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'/tmp/motif-structure-admin-mobile.png',fullPage:true});}
  }
  // Render the actual store scripts with API fixtures; defect media never enters primary gallery.
  products[0].isActive=true;products[0].defect='سوراخ کوچک';products[0].defectImages=['https://img.test/defect-final.webp'];

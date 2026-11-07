@@ -83,6 +83,8 @@ const site = require("../public/site-content");
         u = new URL(req.url());
       if (u.pathname === "/api/products/admin/list")
         return route.fulfill({ json: products });
+      if (u.pathname === "/api/products/admin/fabrics")
+        return route.fulfill({ json: require("../public/catalog").fabrics });
       if (u.pathname === "/api/site/admin")
         return route.fulfill({
           json: {
@@ -186,12 +188,12 @@ const site = require("../public/site-content");
     await page.setViewportSize({ width: 390, height: 844 });
     for (const [i, type] of ["کاپشن", "شلوار", "سویشرت"].entries()) {
       await nav("ثبت محصول");
-      await pf("productType").fill(type);
-      await pf("productType").dispatchEvent("change");
+      await pf("mainCategories").locator(`input[value="${type}"]`).check();
+      await pf("productType").selectOption(type);
       await pf("productCode").fill("MOTIF-TEST-" + i);
       await pf("title").fill(type + " تست");
       await pf("brand").fill("MOTIF");
-      await pf("mainFabric").fill("شمعی");
+      await pf("fabrics").locator('input[value="شمعی"]').check();
       await pf("seasons").locator('input[value="پاییز"]').check();
       await pf("uses").locator('input[value="روزمره"]').check();
       await stage(2);

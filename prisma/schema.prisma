@@ -32,9 +32,12 @@ model Product {
   // اطلاعات پایه محصول
   brand       String?
   modelName   String?
-  productType String?
+  productType String? // Priority category; also the legacy API field.
+  mainCategories String[] @default([])
 
   // Product-first attributes; legacy tags remain untouched.
+  fabrics            String[] @default([])
+  fabricBasis        FabricBasis @default(UNKNOWN)
   mainFabric         String?
   complementaryFabrics String[] @default([])
   garmentDesign      String?
@@ -75,6 +78,17 @@ model Product {
 
   variants   Variant[]
   orderItems OrderItem[]
+}
+
+enum FabricBasis {
+  SELLER
+  LABEL
+  UNKNOWN
+}
+
+model FabricOption {
+  key   String @id
+  label String
 }
 
 model Variant {

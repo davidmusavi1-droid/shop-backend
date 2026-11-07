@@ -8,6 +8,7 @@ const $ = (id) => document.getElementById(id),
   };
 let token = "",
   products = [],
+  fabricChoices = MotifCatalog.fabrics,
   editing = null,
   step = 1,
   page = 1,
@@ -31,6 +32,7 @@ const groups = [
       "productCode",
       "title",
       "brand",
+      "mainCategories",
       "productType",
       "seasons",
       "uses",
@@ -41,8 +43,8 @@ const groups = [
   [
     "جنس و مدل",
     [
-      "mainFabric",
-      "complementaryFabrics",
+      "fabrics",
+      "fabricBasis",
       "modelName",
       "garmentDesign",
       "hasHood",
@@ -217,7 +219,15 @@ function openEditor(p = null, recover = null) {
     const grid = el("div", null, "grid");
     for (const key of keys) {
       const spec = fields.find((f) => f[0] === key);
-      grid.append(control(spec, source[key]));
+      if (key === "mainCategories") {
+        grid.append(control([...spec.slice(0, 3), categoryChoices()], MotifCatalog.categoriesOf(source)));
+      } else if (key === "fabrics") {
+        const box = control([...spec.slice(0, 3), fabricChoices], MotifCatalog.fabricsOf(source));
+        appendChoiceEditor(box, "نام جنس جدید", saveFabricOption);
+        grid.append(box);
+      } else {
+        grid.append(control(spec, key === "fabricBasis" ? source[key] || "UNKNOWN" : source[key]));
+      }
     }
     d.append(grid);
     if (name === "اندازه‌ها") {
@@ -279,7 +289,20 @@ function openEditor(p = null, recover = null) {
     syncInventory();
     mark();
   };
-  let previous = field("productType").value;
+  const priority = field("productType"), categories = field("mainCategories");
+  function syncPriority(value) {
+    const selected = [...categories.querySelectorAll("input:checked")].map(n => n.value);
+    priority.replaceChildren(new Option("انتخاب کنید", ""), ...selected.map(n => new Option(n, n)));
+    priority.value = selected.includes(value) ? value : "";
+    priority.required = !!selected.length || !!MotifCatalog.categoriesOf(p || {}).length;
+  }
+  categories.onchange = () => syncPriority(priority.value);
+  appendChoiceEditor(categories, "نام دسته جدید", async name => name);
+  syncPriority(source.productType);
+  if (p && !source.productType) {
+    categories.append(el("p", "دستهٔ قبلی مشخص نیست. دسته‌های محصول و اولویت آن‌ها را بررسی کنید."));
+  }
+  let previous = priority.value;
   field("productType").onchange = () => {
     const value = field("productType").value;
     if (
@@ -293,7 +316,7 @@ function openEditor(p = null, recover = null) {
           "نوع لباس تغییر می‌کند. اندازه‌های قبلی حفظ می‌شوند؛ اندازه‌های دستهٔ جدید را جداگانه بررسی کنید.",
         )
       ) {
-        field("productType").value = previous;
+        priority.value = [...priority.options].some(o => o.value === previous) ? previous : "";
         return;
       }
     }
@@ -473,10 +496,11 @@ function review() {
     );
   const lines = [
     ["نام و کد", [p.title, p.productCode].filter(Boolean).join(" · ")],
-    ["دسته و برند", [p.productType, p.brand].filter(Boolean).join(" · ")],
+    ["دسته و برند", [...p.mainCategories, p.brand].filter(Boolean).join(" · ")],
+    ["دسته اولویت‌دار", p.productType],
     [
       "جنس و مدل",
-      [p.mainFabric, ...p.complementaryFabrics, p.garmentDesign, p.modelName]
+      [...p.fabrics, p.garmentDesign, p.modelName]
         .filter(Boolean)
         .join(" · "),
     ],
@@ -581,7 +605,7 @@ function card(p) {
       "small",
       [p.brand, p.productCode || "بدون کد"].filter(Boolean).join(" · "),
     ),
-    el("small", p.productType || "دسته تعیین نشده"),
+    el("small", MotifCatalog.categoriesOf(p).join("، ") || "دسته نیازمند بررسی"),
   );
   row.append(
     name,
@@ -625,12 +649,7 @@ function render() {
   const cats = $("categoryFilter"),
     selected = cats.value;
   cats.replaceChildren(new Option("همه دسته‌ها", ""));
-  [
-    ...new Set([
-      ...MotifCatalog.productTypes,
-      ...products.map((p) => p.productType).filter(Boolean),
-    ]),
-  ].forEach((v) => cats.add(new Option(v, v)));
+  categoryChoices().forEach(v => cats.add(new Option(v, v)));
   cats.value = selected;
   $("stats").replaceChildren();
   const incomplete = products.filter(
@@ -671,7 +690,7 @@ function render() {
         .join(" ")
         .toLowerCase()
         .includes(q) &&
-      (!cats.value || p.productType === cats.value) &&
+      (!cats.value || MotifCatalog.categoriesOf(p).includes(cats.value)) &&
       (!$("gradeFilter").value || p.qualityGrade === $("gradeFilter").value) &&
       {
         all: true,
@@ -711,6 +730,48 @@ function filterList(filter) {
   page = 1;
   display("products");
   render();
+}
+function categoryChoices() {
+  return [...new Set([...MotifCatalog.productTypes, ...products.flatMap(MotifCatalog.categoriesOf)])];
+}
+async function saveFabricOption(label) {
+  const saved = await api("/api/products/admin/fabrics", { method: "POST", body: JSON.stringify({ label }) });
+  fabricChoices = [...new Set([...fabricChoices, saved])];
+  return saved;
+}
+function appendChoiceEditor(box, title, save) {
+  const row = el("div", null, "choice-editor");
+  const label = el("label", title);
+  const input = el("input");
+  input.maxLength = save === saveFabricOption ? 80 : 100;
+  label.append(input);
+  const add = button("افزودن به فهرست", async () => {
+    const value = input.value.trim();
+    if (!value || add.disabled) return;
+    add.disabled = true;
+    try {
+      const name = await save(value);
+      if (!box.isConnected) return;
+      const existing = [...box.querySelectorAll("input[type=checkbox]")].find(n => n.value === name);
+      if (existing) existing.checked = true;
+      else box.insertBefore(checkChoice(name, true), row);
+      input.value = "";
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+      notice("");
+    } catch (err) {
+      notice(err.message);
+    } finally {
+      add.disabled = false;
+    }
+  });
+  input.onkeydown = e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      add.click();
+    }
+  };
+  row.append(label, add);
+  box.append(row);
 }
 async function refresh() {
   const loaded = await api("/api/products/admin/list");
@@ -846,6 +907,13 @@ $("loginForm").onsubmit = async (e) => {
   $("loginForm").querySelector("button").disabled = true;
   try {
     await refresh();
+    let fabricLoadFailed = false;
+    try {
+      const choices = await api("/api/products/admin/fabrics");
+      if (Array.isArray(choices) && choices.every(label => typeof label === "string")) fabricChoices = choices;
+    } catch {
+      fabricLoadFailed = true;
+    }
     if (crypto.subtle) {
       const hash = await crypto.subtle.digest(
         "SHA-256",
@@ -861,7 +929,7 @@ $("loginForm").onsubmit = async (e) => {
     $("login").hidden = true;
     $("workspace").hidden = false;
     display("dashboard");
-    notice("");
+    notice(fabricLoadFailed ? "دریافت فهرست جنس‌های سفارشی ممکن نشد. برای تلاش دوباره وارد پنل شوید." : "");
     let recovery;
     try {
       recovery = JSON.parse(sessionStorage.getItem(recoveryKey));
@@ -892,6 +960,7 @@ $("logout").onclick = () => {
   token = "";
   recoveryKey = "";
   products = [];
+  fabricChoices = MotifCatalog.fabrics;
   editing = null;
   $("productFields").replaceChildren();
   $("list").replaceChildren();

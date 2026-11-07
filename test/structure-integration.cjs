@@ -26,5 +26,39 @@ const edit=p=>({...p,variants:p.variants.map(v=>({...v,expectedStock:v.stock}))}
  r=await api('PATCH',{...edit(p),defectImages:[]},p.id);assert.equal(r.status,400);
  r=await api('PATCH',{...edit(p),defect:null,defectImages:[]},p.id);assert.equal(r.status,200);assert.deepEqual(r.body.images,data.images);assert.equal(r.body.variants[0].itemDefectImages.length,1);
  }
+ const headers={'Content-Type':'application/json','X-Admin-Token':token};
+ const optionsUrl=base+'/api/products/admin/fabrics';
+ assert.equal((await fetch(optionsUrl)).status,401);
+ async function add(label){return fetch(optionsUrl,{method:'POST',headers,body:JSON.stringify({label})});}
+ const added=await add('ویسکوز آزمایشی');
+ assert.equal(added.status,201);assert.equal(await added.json(),'ویسکوز آزمایشی');
+ assert.equal((await add('ويسكوز‌آزمایشی')).status,409);
+ assert((await (await fetch(optionsUrl,{headers})).json()).includes('ویسکوز آزمایشی'));
+ const {fabrics,categoryPath}=require('../public/catalog');
+ const input={
+  title:'Integration windbreaker',productCode:'STRUCTURE-WIND',basePrice:200,qualityGrade:'A',
+  productType:'بادگیر',mainCategories:['بادگیر','کاپشن'],fabrics:[fabrics[0],'ویسکوز آزمایشی'],
+  fabricBasis:'SELLER',customerNeeds:['روزمره'],variants:[{size:'M',color:'red',sku:'wind-1',stock:1}],
+ };
+ const created=await api('POST',input);
+ assert.equal(created.status,201,JSON.stringify(created.body));
+ let p=created.body;ids.push(p.id);
+ assert.deepEqual(p.fabrics,input.fabrics);assert.equal(p.fabricTechnology,null);
+ const canonical='/products/'+p.id;
+ for(const name of input.mainCategories){
+  const page=await (await fetch(base+categoryPath(name))).text();
+  assert(page.includes('href="'+canonical+'"'));
+ }
+ assert.equal((await api('PATCH',{...edit(p),mainCategories:['کاپشن']},p.id)).status,400);
+ const changed=await api('PATCH',{...edit(p),mainCategories:['کاپشن'],productType:'کاپشن',fabrics:['کتان']},p.id);
+ assert.equal(changed.status,200,JSON.stringify(changed.body));
+ assert.equal(changed.body.variants[0].id,p.variants[0].id);
+ assert.equal(changed.body.variants[0].stock,1);
+ assert.equal(changed.body.productCode,p.productCode);
+ const detail=await (await fetch(base+canonical)).text();
+ assert(detail.includes('href="https://motifdress.com'+canonical+'"'));
+ assert(detail.includes('href="'+categoryPath('کاپشن')+'">کاپشن</a>'));
+ assert(detail.includes('جنس پارچه: کتان'));
+ console.log('PASS: persisted fabric option, duplicate prevention, two categories, shared stock and canonical URL.');
  console.log('PASS: PostgreSQL attributes, three categories, five grades, independent photos, explicit publication validation, immutable old grades and variant IDs.');
-})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{server.kill('SIGTERM');await prisma.variant.deleteMany({where:{productId:{in:ids}}});await prisma.product.deleteMany({where:{id:{in:ids}}});await prisma.$disconnect();});
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{server.kill('SIGTERM');await prisma.variant.deleteMany({where:{productId:{in:ids}}});await prisma.product.deleteMany({where:{id:{in:ids}}});await prisma.fabricOption.deleteMany({where:{label:'ویسکوز آزمایشی'}});await prisma.$disconnect();});

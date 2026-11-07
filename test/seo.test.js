@@ -29,8 +29,8 @@ test('home and sitemap use stable product paths and exclude inactive or sold-out
  assert(!xml.includes('inactive'));assert(!xml.includes('/sold'));
  assert(!xml.includes('lastmod')); // Stock changes do not reliably update Product.updatedAt.
 });
-function loadRoutes(prisma){const routes={};const router={get:(path,fn)=>{routes[path]=fn;}};vm.runInNewContext(fs.readFileSync(require.resolve('../src/routes/storefront'),'utf8'),{module:{exports:{}},URLSearchParams,require:name=>name==='express'?{Router:()=>router}:name.includes('site-content')?{published:async()=>require('../public/site-content').defaults}:name.includes('prisma')?prisma:view,console:{error:()=>{}}});return routes;}
-async function call(fn,id='p1',path='/products/p1'){let status=200,body,redirect,headers={};const res={set(k,v){headers[k]=v;return this;},status(n){status=n;return this;},type(t){headers.type=t;return this;},send(b){body=b;return this;},redirect(n,url){status=n;redirect=url;return this;}};await fn({params:{id},path},res);return {status,body,redirect,headers};}
+function loadRoutes(prisma){const routes={};const router={get:(path,fn)=>{routes[path]=fn;}};vm.runInNewContext(fs.readFileSync(require.resolve('../src/routes/storefront'),'utf8'),{module:{exports:{}},URL,require:name=>name==='express'?{Router:()=>router}:name.includes('site-content')?{published:async()=>require('../public/site-content').defaults}:name.includes('prisma')?prisma:view,console:{error:()=>{}}});return routes;}
+async function call(fn,id='p1',path='/products/p1',originalUrl=path){let status=200,body,redirect,headers={};const res={set(k,v){headers[k]=v;return this;},status(n){status=n;return this;},type(t){headers.type=t;return this;},send(b){body=b;return this;},redirect(n,url){status=n;redirect=url;return this;}};await fn({params:{id},path,originalUrl},res);return {status,body,redirect,headers};}
 test('public product route uses actual 404 and temporary DB failure uses 503',async()=>{
  for(const p of [null,{...product,isActive:false},{...product,variants:[{stock:0}]}]){
   const r=await call(loadRoutes({product:{findUnique:async()=>p}})['/products/:id']);assert.equal(r.status,404);assert(r.body.includes('noindex'));
@@ -49,4 +49,39 @@ test('published settings seed round-trips safely without executable script injec
  const settings=structuredClone(require('../public/site-content').defaults);settings.text.aboutTitle='</script><script>alert(1)</script>';
  const html=view.renderHome([],settings),match=html.match(/<script type="application\/json" id="publishedSiteContent">([\s\S]*?)<\/script>/);
  assert(match);assert.equal(JSON.parse(match[1]).text.aboutTitle,settings.text.aboutTitle);assert(!match[1].includes('<'));
+});
+
+test('each category links to the same product URL, and the breadcrumb follows only the priority', async () => {
+ const catalog = require('../public/catalog');
+ const shared = {...product, productCode:'MOTIF-006', productType:'بادگیر',
+  mainCategories:['بادگیر','کاپشن'], fabrics:[catalog.fabrics[0],'نایلون']};
+ const [windbreaker,jacket] = shared.mainCategories.map(catalog.categoryPath);
+ const baseUrl = view.ORIGIN + '/products/p1';
+ for (const categoryPath of [windbreaker,jacket]) {
+  const collection = view.renderCollection([shared],new URL(categoryPath,view.ORIGIN).searchParams);
+  assert(collection.includes('rel="canonical" href="'+view.ORIGIN+categoryPath+'"'));
+  assert.equal(collection.match(/href="\/products\/p1"/g).length,1);
+ }
+ const html = view.renderProduct(shared);
+ assert(html.includes('جنس پارچه: '+catalog.fabrics[0]+'، نایلون'));
+ assert(!html.includes('GORE-TEX'));
+ const list = html.match(/id="productBreadcrumbData">([^<]+)<\/script>/)[1];
+ const schema = JSON.parse(list);
+ assert.deepEqual(schema.itemListElement.map(v=>[v.position,v.name,v.item]),[
+  [1,'خانه',view.ORIGIN+'/'],[2,'بادگیر',view.ORIGIN+windbreaker],[3,shared.title,baseUrl],
+ ]);
+ assert(html.includes('<a href="'+windbreaker+'">بادگیر</a>'));
+ const changed = view.renderProduct({...shared,productType:'کاپشن'});
+ assert(changed.includes('rel="canonical" href="'+baseUrl+'"'));
+ assert(changed.includes('<a href="'+jacket+'">کاپشن</a>'));
+ const xml = view.sitemap([shared]);
+ assert.equal(xml.match(/\/products\/p1</g).length,1);
+ assert(xml.includes(windbreaker));assert(xml.includes(jacket));
+
+ const handlers = loadRoutes({product:{findUnique:async()=>shared,findMany:async()=>[shared]}});
+ const redirect = await call(handlers['/products/:id'],'p1','/products/p1/','/products/p1/?variant=v1');
+ assert.equal(redirect.redirect,'/products/p1?variant=v1');
+ const filters = await call(handlers['/collection'],'p1','/collection',jacket+'&fabric=نایلون&fabric=پنبه');
+ assert.equal(filters.status,200);
+ assert(!filters.body.includes('href="/products/p1"'));
 });

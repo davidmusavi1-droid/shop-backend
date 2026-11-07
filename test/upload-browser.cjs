@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
   await page.route('http://motif.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/api/products/admin/list') return route.fulfill({ json: [] });
+    if (path === '/api/products/admin/fabrics') return route.fulfill({ json: require('../public/catalog').fabrics });
     if (path === '/api/uploads/images') {
       assert.equal(route.request().headers()['x-admin-token'], 'test'); attempts++;
       return route.fulfill(attempts === 2 ? { status: 502, json: { error: 'خطای آزمایشی' } } : { status: 201, json: { url: `https://images.test/${attempts}.webp` } });
@@ -32,7 +33,7 @@ const assert = require('node:assert/strict');
     assert.equal(await images.inputValue(), 'https://images.test/3.webp\nhttps://images.test/1.webp');
     await page.locator('#productFields .image-editor:has([data-key=itemImages]) input[type=file]').setInputFiles(file('size.jpg'));
     await page.waitForFunction(() => !document.querySelector('#save').disabled);
-    await stage(1);for(const [key,value]of [['productType','کاپشن'],['productCode','MOTIF-UPLOAD-TEST'],['title','کاپشن']])await page.locator(`[data-key=${key}]`).fill(value);await stage(2);for(const [key,value]of [['size','L'],['color','سبز'],['sku','photo-test']])await page.locator(`[data-key=${key}]`).fill(value);
+    await stage(1);await page.locator('[data-key=mainCategories] input[value="کاپشن"]').check();await page.locator('[data-key=productType]').selectOption('کاپشن');for(const [key,value]of [['productCode','MOTIF-UPLOAD-TEST'],['title','کاپشن']])await page.locator(`[data-key=${key}]`).fill(value);await stage(2);for(const [key,value]of [['size','L'],['color','سبز'],['sku','photo-test']])await page.locator(`[data-key=${key}]`).fill(value);
     await page.locator('#save').click();
     await page.waitForFunction(() => document.querySelector('#message').textContent.includes('capturing'));
     assert.deepEqual(saved.images, ['https://images.test/3.webp', 'https://images.test/1.webp']);

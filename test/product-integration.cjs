@@ -66,7 +66,7 @@ async function main() {
   assert.deepEqual((await api('/api/site','GET',null,false)).data.theme,unreadable.theme);
   assert((await (await fetch(base+'/')).text()).includes('--on-paper:#000000'));
   assert.equal((await api('/api/site','GET',null,false)).data.text.aboutTitle,draft.text.aboutTitle);
-  const created = await api('/api/products', 'POST', { title: 'Integration product', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'integration-L', size: 'L', color: 'black', stock: 1 }] });
+  const created = await api('/api/products', 'POST', { title: 'Integration product', productType:'کاپشن', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'integration-L', size: 'L', color: 'black', stock: 1 }] });
   assert.equal(created.status, 201, JSON.stringify(created.data));
   let p = created.data;
   const originalId = p.variants[0].id;
@@ -139,7 +139,8 @@ async function main() {
   // Single item creation needs no label size and cannot lose its inventory row.
   await page.locator('#mobileNav').getByRole('button',{name:'ثبت محصول',exact:true}).click();
   await page.locator('#productFields [data-key=title]').fill('Single unknown size');
-  await page.locator('#productFields [data-key=productType]').fill('کاپشن');
+  await page.locator('[data-key=mainCategories] input[value="کاپشن"]').check();
+  await page.locator('#productFields [data-key=productType]').selectOption('کاپشن');
   await page.locator('#productFields [data-key=productCode]').fill('motif-test-004');
   await page.locator('#steps li').nth(2).getByRole('button').click();await page.locator('#productFields [data-key=basePrice]').fill('350000');await page.locator('#steps li').nth(1).getByRole('button').click();
   assert(await page.locator('#addVariant').isHidden());
@@ -152,7 +153,7 @@ async function main() {
   const single=await prisma.product.findUnique({where:{productCode:'MOTIF-TEST-004'},include:{variants:true}});
   assert(single);assert.equal(single.variants.length,1);assert.equal(single.variants[0].size,'نامشخص');
   assert.equal(single.variants[0].stock,1);
-  const duplicate=await api('/api/products','POST',{title:'Duplicate',productCode:'motif-test-004',basePrice:1,inventoryMode:'SINGLE',variants:[{sku:'different-sku',size:null,color:'red',stock:1}]});
+  const duplicate=await api('/api/products','POST',{title:'Duplicate',productType:'کاپشن',productCode:'motif-test-004',basePrice:1,inventoryMode:'SINGLE',variants:[{sku:'different-sku',size:null,color:'red',stock:1}]});
   assert.equal(duplicate.status,409);assert.match(duplicate.data.error,/کد یکتای محصول/);
   await page.locator('#measureSection summary').click();await page.locator('#variants [data-key=lengthCm]').fill('69');
   await page.locator('#save').click();

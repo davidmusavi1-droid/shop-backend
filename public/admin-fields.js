@@ -1,16 +1,12 @@
 const fields = [
-  ["productType", "دسته اصلی", "suggest", MotifCatalog.productTypes],
+  ["mainCategories", "دسته‌بندی اصلی", "multi", MotifCatalog.productTypes],
+  ["productType", "دسته اصلی اولویت‌دار", "select", [["", "انتخاب کنید"]]],
   ["productCode", "کد یکتای محصول (مثلاً MOTIF-004)"],
   ["title", "نام محصول", "text"],
   ["brand", "برند"],
   ["modelName", "مدل"],
-  ["mainFabric", "جنس اصلی پارچه", "suggest", MotifCatalog.fabrics],
-  [
-    "complementaryFabrics",
-    "جنس مکمل (چندانتخابی)",
-    "multi",
-    MotifCatalog.fabrics,
-  ],
+  ["fabrics", "جنس پارچه", "multi", MotifCatalog.fabrics],
+  ["fabricBasis", "مبنای اعلام جنس", "select", MotifCatalog.fabricBases],
   [
     "garmentDesign",
     "مدل و طراحی لباس",
@@ -121,22 +117,7 @@ function control(spec, value) {
     for (const n of [
       ...new Set([...(options || MotifCatalog.needs), ...(value || [])]),
     ]) {
-      const l = document.createElement("label"),
-        c = document.createElement("input");
-      c.type = "checkbox";
-      c.value = n;
-      c.checked = (value || []).includes(n);
-      c.style.cssText = "display:inline-block;width:auto;margin:0 8px";
-      l.append(
-        c,
-        document.createTextNode(
-          n +
-            ((options || MotifCatalog.needs).includes(n)
-              ? ""
-              : " (برچسب قبلی؛ بازبینی شود)"),
-        ),
-      );
-      box.append(l);
+      box.append(checkChoice(n, (value || []).includes(n)));
     }
     return box;
   }
@@ -204,6 +185,16 @@ function control(spec, value) {
   label.append(input);
   return label;
 }
+function checkChoice(value, checked = false) {
+  const label = document.createElement("label");
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.value = value;
+  checkbox.checked = checked;
+  checkbox.style.cssText = "display:inline-block;width:auto;margin:0 8px";
+  label.append(checkbox, document.createTextNode(value));
+  return label;
+}
 function variantNode(container, key) {
   return (
     container._controls?.[key] ||
@@ -219,7 +210,8 @@ function read(container, specs) {
       ].map((n) => n.value);
       continue;
     }
-    const v = variantNode(container, key).value.trim();
+    const raw = variantNode(container, key).value;
+    const v = key === "productType" ? raw : raw.trim();
     data[key] =
       type === "money"
         ? MotifCatalog.priceNumber(v)

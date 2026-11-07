@@ -1,6 +1,8 @@
 const express = require('express');
 const prisma = require('../lib/prisma');
 const requireAdmin = require('../middleware/requireAdmin');
+const catalog = require('../../public/catalog');
+const fabricOptions = require('../lib/fabric-options');
 const router = express.Router();
 
 // Administrative reads include inactive and sold-out products.
@@ -11,13 +13,38 @@ router.get('/admin/list', requireAdmin, async (req, res, next) => {
 });
 
 const invalid = message => Object.assign(new Error(message), { statusCode: 400 });
+router.get('/admin/fabrics', requireAdmin, async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store').json(await fabricOptions.options(prisma));
+  } catch (err) { next(err); }
+});
+
+router.post('/admin/fabrics', requireAdmin, async (req, res, next) => {
+  const label = fabricOptions.labelFor(req.body?.label);
+  const key = fabricOptions.keyFor(label);
+  if (!key || label.length > 80 || fabricOptions.isClaim(label)) {
+    return next(invalid('نام جنس باید حداکثر ۸۰ نویسه باشد. ادعای فنی را در بخش فناوری مستند ثبت کنید.'));
+  }
+  if (fabricOptions.builtIn.has(key)) {
+    return res.status(409).json({ error: 'این جنس قبلاً در فهرست ثبت شده است' });
+  }
+  try {
+    const option = await prisma.fabricOption.create({ data: { key, label } });
+    res.status(201).json(option.label);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'این جنس قبلاً در فهرست ثبت شده است' });
+    next(err);
+  }
+});
+
 const conflict = () => Object.assign(new Error('محصول یا موجودی تغییر کرده؛ دوباره بارگذاری کنید'), { statusCode: 409 });
 const measures = ['chestWidthCm', 'lengthCm', 'sleeveFromNeckCm', 'waistCm', 'waistWidthCm', 'riseCm', 'totalLengthCm', 'thighWidthCm', 'hemWidthCm'];
 const texts = ['description', 'brand', 'modelName', 'productType', 'condition', 'defect', 'identityOrigin', 'identityHistory', 'identityPurpose', 'identityUseCases', 'identityDesign', 'identityTechnical', 'identitySources', 'mainFabric', 'garmentDesign', 'fabricTechnology', 'technologyEvidence', 'fabricNote'];
 const grades = ['N', 'A_PLUS', 'A', 'B', 'C'];
 function normalize(body, current = null) {
   if (!body || !Array.isArray(body.variants)) throw invalid('فهرست سایزها نامعتبر است');
-  const suppliedCode = body?.productCode;
+  const input = body;
+  const suppliedCode = body.productCode;
   // Merge omitted fields so older clients cannot erase grades, photos or metadata.
   if (current) body = { ...current, ...body, variants: body.variants?.map(v => ({ ...current.variants.find(old => old.id === v.id), ...v })) };
   if (!body || typeof body.title !== 'string' || (!body.title.trim() && body.isActive !== false)) throw invalid('نام محصول الزامی است');
@@ -53,7 +80,49 @@ function normalize(body, current = null) {
   if (body.technologyVerified != null && typeof body.technologyVerified !== 'boolean') throw invalid('تأیید فناوری نامعتبر است');
   data.technologyVerified = body.technologyVerified ?? false;
   if (data.fabricTechnology && (!data.technologyVerified || !data.technologyEvidence?.trim())) throw invalid('ثبت فناوری واقعی پارچه نیازمند تأیید مدیر و مستندات است؛ توضیح غیرقطعی را در یادداشت جنس وارد کنید');
-  if ([data.mainFabric, ...data.complementaryFabrics].some(s => /gore[ -]?tex|گور?[تط]کس|کوهنوردی/i.test(s || ''))) throw invalid('گورتکس را در فناوری مستند یا یادداشت جنس و کوهنوردی را در کاربرد ثبت کنید');
+  const legacyFabrics = catalog.fabricsOf({ mainFabric: data.mainFabric, complementaryFabrics: data.complementaryFabrics });
+  const previousLegacy = catalog.fabricsOf({ mainFabric: current?.mainFabric, complementaryFabrics: current?.complementaryFabrics });
+  if (legacyFabrics.some(label => !previousLegacy.includes(label) && fabricOptions.isClaim(label))) {
+    throw invalid('فناوری واقعی پارچه را در بخش فناوری مستند ثبت کنید');
+  }
+  const previousFabrics = current ? catalog.fabricsOf(current) : [];
+  if (Object.hasOwn(input, 'fabrics')) {
+    if (!Array.isArray(input.fabrics) || input.fabrics.length > 50) throw invalid('فهرست جنس پارچه نامعتبر است');
+    data.fabrics = [...new Set(array(input.fabrics))];
+    if (data.fabrics.some(label => !fabricOptions.keyFor(label) || (label.length > 80 && !previousFabrics.includes(label)))) {
+      throw invalid('نام جنس پارچه نامعتبر است');
+    }
+  } else if (current) {
+    data.fabrics = [
+      ...previousFabrics.filter(label => !previousLegacy.includes(label) || legacyFabrics.includes(label)),
+      ...legacyFabrics.filter(label => !previousLegacy.includes(label)),
+    ];
+    data.fabrics = [...new Set(data.fabrics)];
+  } else data.fabrics = legacyFabrics;
+
+  data.fabricBasis = body.fabricBasis === undefined ? 'UNKNOWN' : body.fabricBasis;
+  if (!catalog.fabricBases.some(([key]) => key === data.fabricBasis)) throw invalid('مبنای اعلام جنس نامعتبر است');
+
+  const previousCategories = current ? catalog.categoriesOf(current) : [];
+  if (Object.hasOwn(input, 'mainCategories')) {
+    if (!Array.isArray(input.mainCategories) || input.mainCategories.length > 50) throw invalid('فهرست دسته‌های اصلی نامعتبر است');
+    data.mainCategories = [...new Set(array(input.mainCategories).map(label => previousCategories.includes(label) ? label : label.trim()))];
+    if (data.mainCategories.some(label => !label || (label.length > 100 && !previousCategories.includes(label)))) {
+      throw invalid('نام دسته اصلی نامعتبر است');
+    }
+    if (!Object.hasOwn(input, 'productType') || (data.mainCategories.length
+      ? !data.mainCategories.includes(data.productType)
+      : !!data.productType || (data.isActive && !current?.isActive) || previousCategories.length > 0)) {
+      throw invalid('یک دسته از میان دسته‌های انتخاب‌شده را به‌عنوان دسته اصلی اولویت‌دار تعیین کنید');
+    }
+  } else {
+    // An old editor can still change the priority without discarding extra memberships.
+    data.productType = data.productType?.trim() ? data.productType : current?.productType || null;
+    data.mainCategories = [...new Set([...previousCategories, ...(data.productType?.trim() ? [data.productType] : [])])];
+  }
+  if (data.isActive && !current?.isActive && !data.mainCategories.length) {
+    throw invalid('برای انتشار، دسته اصلی اولویت‌دار را تعیین کنید');
+  }
   data.qualityGrade = body.qualityGrade || null;
   if (data.qualityGrade && !grades.includes(data.qualityGrade)) throw invalid('گرید نامعتبر است');
   if (!Array.isArray(body.variants) || !body.variants.length || body.variants.length > 100) throw invalid('حداقل یک ردیف سایز و موجودی لازم است؛ برای کالای تک‌آیتمی هم یک ردیف ثبت کنید');
@@ -95,6 +164,26 @@ function normalize(body, current = null) {
   if (current && suppliedCode == null) delete data.productCode;
   return { data, variants };
 }
+async function resolveFabrics(db, data, previous, input) {
+  if (!Object.hasOwn(input, 'fabrics')) return;
+  const old = previous ? catalog.fabricsOf(previous) : [];
+  const selected = new Map(fabricOptions.builtIn);
+  const keys = data.fabrics.filter(label => !old.includes(label)).map(fabricOptions.keyFor);
+  const customKeys = [...new Set(keys.filter(key => !selected.has(key)))];
+  if (customKeys.length) {
+    const custom = await db.fabricOption.findMany({ where: { key: { in: customKeys } } });
+    for (const { key, label } of custom) selected.set(key, label);
+  }
+  const fabrics = new Map();
+  for (const inputLabel of data.fabrics) {
+    const key = fabricOptions.keyFor(inputLabel);
+    const label = old.includes(inputLabel) ? inputLabel : selected.get(key);
+    if (!label) throw invalid('جنس پارچه باید از فهرست انتخاب شود');
+    if (!fabrics.has(key)) fabrics.set(key, label);
+  }
+  data.fabrics = [...fabrics.values()];
+}
+
 function productError(err, next) {
   if (err.code === 'P2002') return next(Object.assign(new Error(err.meta?.target?.includes('productCode') ? 'کد یکتای محصول قبلاً ثبت شده است' : 'SKU یا سایز و رنگ تکراری است'), { statusCode: 409 }));
   if (err.code === 'P2034') return next(conflict());
@@ -107,6 +196,7 @@ router.patch('/:id', requireAdmin, async (req, res, next) => {
       if (!current) throw Object.assign(new Error('محصول پیدا نشد'), { statusCode: 404 });
       if (req.body.updatedAt !== current.updatedAt.toISOString()) throw conflict();
       const { data, variants } = normalize(req.body, current);
+      await resolveFabrics(tx, data, current, req.body);
       const ids = req.body.variants.filter(v => v.id).map(v => v.id);
       if (new Set(ids).size !== ids.length || ids.some(id => !current.variants.some(v => v.id === id)) || current.variants.some(v => !ids.includes(v.id))) throw invalid('حذف یا جایگزینی سایز موجود مجاز نیست؛ موجودی آن را صفر کنید');
       const changed = await tx.product.updateMany({ where: { id: current.id, updatedAt: current.updatedAt }, data });
@@ -161,6 +251,7 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const { data, variants } = normalize(req.body);
+    await resolveFabrics(prisma, data, null, req.body);
     res.status(201).json(await prisma.product.create({ data: { ...data, variants: { create: variants } }, include: { variants: true } }));
   } catch (err) { productError(err, next); }
 });
