@@ -19,13 +19,14 @@ const {defaults,validate,validateDraft}=require('../public/site-content');
   if(u.pathname==='/api/products/jacket')return r.fulfill({json:p});
   if(u.pathname==='/api/site')return r.fulfill({json:state.published});
   if(u.pathname.startsWith('/api/site/admin')){
-   assert.equal(r.request().headers()['x-admin-token'],'test');
+   if(r.request().method()==='POST') assert.equal(r.request().headers()['x-admin-csrf'],'test-csrf');
    if(r.request().method()==='POST'){const body=r.request().postDataJSON();assert.equal(body.version,state.version);state.version++;if(u.pathname.endsWith('/draft'))state.draft=validateDraft(body.content);else if(u.pathname.endsWith('/publish')){state.history.unshift({id:'old',at:new Date().toISOString(),content:state.published});state.published=validate(state.draft);}}
    return r.fulfill({json:state});
   }
   const name=(u.pathname.startsWith('/icons/')||u.pathname.startsWith('/fonts/'))?u.pathname.slice(1):path.basename(u.pathname),file=path.join(__dirname,'../public',name||'index.html');const exists=fs.existsSync(file)&&fs.statSync(file).isFile();const f=exists?file:path.join(__dirname,'../public/index.html');return r.fulfill({contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.woff2')?'font/woff2':f.endsWith('.svg')?'image/svg+xml':'text/html',body:fs.readFileSync(f)});
  });
- await page.goto('http://motif.test');await page.locator('#featured .card').waitFor();
+ await require('./session-fixture.cjs').mockBrowserSession(page);
+await page.goto('http://motif.test');await page.locator('#featured .card').waitFor();
  assert.equal(await page.locator('#hero .slide-controls button').count(),2);
  await page.locator('#hero .slide-controls button').nth(1).click();assert.equal(await page.locator('#hero .slide:visible a').getAttribute('href'),'/collection');
  assert.equal(await page.locator('#quickForm').isVisible(),false);assert.equal(await page.locator('.cart-icon svg').count(),1);assert.equal(await page.locator('.cart-icon').innerText(),'');await page.locator('#quickToggle').click();assert.equal(await page.locator('#quickToggle').getAttribute('aria-expanded'),'true');await page.fill('#quickWidth','۵۶');await page.fill('#quickLength','۷۰');await page.locator('#quickForm button').click();await page.locator('#products .card').waitFor();assert.match(page.url(),/width=56/);

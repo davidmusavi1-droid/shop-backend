@@ -1,11 +1,14 @@
 const assert=require('node:assert/strict'),{spawn}=require('node:child_process'),{setTimeout:delay}=require('node:timers/promises'),{PrismaClient}=require('@prisma/client');
 const u=new URL(process.env.DATABASE_URL);assert(['127.0.0.1','localhost'].includes(u.hostname)&&u.pathname==='/motif_test','Disposable database only');
 const prisma=new PrismaClient(),token=process.env.ADMIN_TOKEN;assert(token);const base='http://127.0.0.1:4188',ids=[];
-const server=spawn(process.execPath,['src/server.js'],{env:{...process.env,PORT:'4188'},stdio:'inherit'});
-async function api(method,body,id=''){const r=await fetch(base+'/api/products'+(id?'/'+id:''),{method,headers:{'Content-Type':'application/json','X-Admin-Token':token},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
+const {loginAdmin}=require('../scripts/admin-http-client.cjs');
+let adminHeaders;
+const server=spawn(process.execPath,['src/server.js'],{env:{...process.env,PORT:'4188',ADMIN_ORIGIN:base},stdio:'inherit'});
+async function api(method,body,id=''){const r=await fetch(base+'/api/products'+(id?'/'+id:''),{method,headers:{'Content-Type':'application/json',...adminHeaders},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
 const edit=p=>({...p,variants:p.variants.map(v=>({...v,expectedStock:v.stock}))});
 (async()=>{
  for(let i=0;i<40;i++){try{if((await fetch(base+'/health')).ok)break;}catch{}if(i===39)throw Error('Startup failure');await delay(250);}
+ adminHeaders=await loginAdmin(base,token);
  for(const [i,productType]of ['کاپشن','شلوار','سویشرت'].entries()){
  const data={title:productType,brand:'MOTIF',productType,productCode:'STRUCTURE-'+i,basePrice:2350000,inventoryMode:'MULTI',qualityGrade:'A_PLUS',images:['https://img.example/front.webp'],mainFabric:'شمعی',complementaryFabrics:['نایلون','کتان'],seasons:['پاییز','زمستان'],uses:['روزمره','مناسب کار'],hasHood:true,garmentDesign:'تمام‌زیپ',variants:[{size:'M',color:'green',sku:'structure-'+i,stock:1,priceDelta:-50000,chestWidthCm:59,lengthCm:69,sleeveFromNeckCm:73,waistCm:84,riseCm:28,totalLengthCm:100,thighWidthCm:30,hemWidthCm:20,itemGrade:'N',itemImages:['https://img.example/item.webp']}]};
  let r=await api('POST',data);assert.equal(r.status,201,JSON.stringify(r.body));let p=r.body;ids.push(p.id);const variantId=p.variants[0].id;
@@ -26,7 +29,7 @@ const edit=p=>({...p,variants:p.variants.map(v=>({...v,expectedStock:v.stock}))}
  r=await api('PATCH',{...edit(p),defectImages:[]},p.id);assert.equal(r.status,400);
  r=await api('PATCH',{...edit(p),defect:null,defectImages:[]},p.id);assert.equal(r.status,200);assert.deepEqual(r.body.images,data.images);assert.equal(r.body.variants[0].itemDefectImages.length,1);
  }
- const headers={'Content-Type':'application/json','X-Admin-Token':token};
+ const headers={'Content-Type':'application/json',...adminHeaders};
  const optionsUrl=base+'/api/products/admin/fabrics';
  assert.equal((await fetch(optionsUrl)).status,401);
  async function add(label){return fetch(optionsUrl,{method:'POST',headers,body:JSON.stringify({label})});}

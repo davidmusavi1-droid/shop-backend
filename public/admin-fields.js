@@ -105,7 +105,7 @@ function control(spec, value) {
   if (
     ["images", "itemImages", "defectImages", "itemDefectImages"].includes(key)
   )
-    return MotifImages.control(key, title, value, () => token);
+    return MotifImages.control(key, title, value);
   const label = document.createElement("label");
   label.append(document.createTextNode(title));
   if (type === "needs" || type === "multi") {

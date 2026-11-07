@@ -10,10 +10,12 @@ const prisma = new PrismaClient();
 const base = 'http://127.0.0.1:' + (process.env.PORT || '4187');
 const token = process.env.ADMIN_TOKEN;
 assert(token);
-const server = spawn(process.execPath, ['src/server.js'], { env: process.env, stdio: 'inherit' });
+const { loginAdmin } = require('../scripts/admin-http-client.cjs');
+let adminHeaders;
+const server = spawn(process.execPath, ['src/server.js'], { env: {...process.env, ADMIN_ORIGIN: base}, stdio: 'inherit' });
 let browser;
 async function api(path, method = 'GET', body, auth = true) {
-  const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', ...(auth ? { 'X-Admin-Token': token } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
+  const response = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', ...(auth ? adminHeaders : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });
   return { status: response.status, data: await response.json() };
 }
 const edit = p => ({ ...p, variants: p.variants.map(v => ({ ...v, expectedStock: v.stock })) });
@@ -24,6 +26,7 @@ async function main() {
     await delay(500);
   }
   assert.equal((await api('/api/products/admin/list', 'GET', null, false)).status, 401);
+  adminHeaders = await loginAdmin(base, token);
   assert.equal((await api('/health','GET',null,false)).data.contentReady,true);
   assert.equal((await api('/api/site/admin', 'GET', null, false)).status, 401);
   let site=(await api('/api/site/admin')).data;
@@ -118,7 +121,24 @@ async function main() {
   await page.locator('#token').fill(token);
   await page.locator('#loginForm button').click();
   await page.locator('#workspace').waitFor();
-  await page.locator('#mobileNav').getByRole('button',{name:'محصولات',exact:true}).click();await page.locator('#filter').selectOption('sold');
+  const cookie = (await page.context().cookies()).find(c => c.name === 'motif-admin-dev');
+  assert(cookie?.httpOnly && cookie.sameSite === 'Strict');
+  assert(!(await page.evaluate(() => document.cookie)).includes(cookie.name));
+  await page.reload();
+  await page.locator('#workspace').waitFor();
+  let touches = 0;
+  page.on('request', request => {
+    if (request.url().endsWith('/api/admin/session/activity')) touches++;
+  });
+  const other = await page.context().newPage();
+  await other.goto(base + '/collection');
+  await other.bringToFront();
+  await page.bringToFront();
+  await page.locator('#dashboard').waitFor();
+  await other.close();
+  assert.equal(touches, 0, 'Returning to the tab alone must not register activity');
+  const activity = page.waitForResponse(response => response.url().endsWith('/api/admin/session/activity'));
+  await page.locator('#mobileNav').getByRole('button',{name:'محصولات',exact:true}).click();assert.equal((await activity).status(), 200);await page.locator('#filter').selectOption('sold');
   await page.getByRole('button', { name: 'ویرایش', exact: true }).click();
   await page.locator('#productFields [data-key=title]').fill('Edited in browser');
   await page.locator('#measureSection summary').click();await page.locator('#addVariant').click();
@@ -160,7 +180,30 @@ async function main() {
   await page.waitForFunction(()=>document.querySelector('#save').disabled===false);
   const savedSingle=await prisma.product.findUnique({where:{id:single.id},include:{variants:true}});
   assert.equal(savedSingle.productCode,'MOTIF-TEST-004');assert.equal(savedSingle.variants[0].lengthCm,69);
-  await page.locator('#mobileNav').getByRole('button',{name:'تنظیمات',exact:true}).click();await page.locator('#logout').click(); assert(await page.locator('#workspace').isHidden());
+  await page.locator('#mobileNav').getByRole('button',{name:'تنظیمات',exact:true}).click();await page.locator('#logout').click(); await page.locator('#workspace').waitFor({state:'hidden'});
+  const replay = await fetch(base + '/api/admin/session', { headers: { Cookie: cookie.name + '=' + cookie.value } });
+  assert.equal(replay.status, 401);
+  assert.equal((await page.context().cookies()).some(c => c.name === cookie.name), false);
+
+  // Desktop expiry uses an actual browser cookie and an isolated PostgreSQL session.
+  await page.setViewportSize({width:1280,height:900});
+  await page.locator('#token').fill(token);
+  await page.locator('#loginForm button').click();
+  await page.locator('#dashboard').waitFor();
+  await page.locator('#newProduct').click();
+  await page.locator('#productFields [data-key=title]').fill('Unsaved session draft');
+  const desktopCookie = (await page.context().cookies()).find(c => c.name === cookie.name);
+  const hash = require('node:crypto').createHmac('sha256',token).update('session:'+desktopCookie.value).digest('base64url');
+  await prisma.adminSession.update({where:{tokenHash:hash},data:{expiresAt:new Date(Date.now()-1000)}});
+  // Exercise the same callback used when a browser resumes the visible tab.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.locator('#message').filter({hasText:'نشست مدیریت شما به پایان رسیده است. لطفاً دوباره وارد شوید.'}).waitFor();
+  await page.locator('#workspace').waitFor({state:'hidden'});
+  await page.locator('#token').fill(token);
+  await page.locator('#loginForm button').click();
+  await page.locator('#editor').waitFor();
+  assert.equal(await page.locator('#productFields [data-key=title]').inputValue(),'Unsaved session draft');
+
   // Two concurrent edits cannot both save a stale snapshot.
   p = (await api('/api/products/admin/list')).data.find(x => x.id === p.id);
   const results = await Promise.all(['A', 'B'].map(title => api('/api/products/' + p.id, 'PATCH', { ...edit(p), title })));

@@ -6,14 +6,14 @@ const { prepareImage } = require('../lib/product-image');
 const requireAdmin = require('../middleware/requireAdmin');
 
 // Dependencies can be replaced in HTTP tests; production always uses the real provider.
-function createRouter({ provider, decode = sharp, env = process.env } = {}) {
+function createRouter({ provider, decode = sharp, env = process.env, authorize = requireAdmin } = {}) {
   provider = provider || createStorage(env);
   const router = express.Router();
   const parse = multer({ storage: multer.memoryStorage(), limits: {
     fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1
   }}).single('image');
   let busy = false;
-  router.post('/images', requireAdmin, (req, res) => {
+  router.post('/images', authorize, (req, res) => {
     res.set('Cache-Control', 'no-store');
     if (!provider.configured) {
       return res.status(503).json({ error: 'اتصال فضای عکس لیارا تنظیم نشده است؛ تنظیمات ذخیره‌سازی را بررسی کنید.' });

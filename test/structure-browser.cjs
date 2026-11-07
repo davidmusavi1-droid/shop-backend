@@ -21,7 +21,8 @@ const site=require('../public/site-content');
   const file=u.pathname.endsWith('.js')||u.pathname.endsWith('.css')?u.pathname.slice(1):u.pathname==='/admin.html'?'admin.html':'index.html';
   return route.fulfill({contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(path.join(__dirname,'../public',file))});
  });
- await page.goto('http://motif.test/admin.html');await page.locator('#token').fill('test');await page.locator('#loginForm button').click();
+ await require('./session-fixture.cjs').mockBrowserSession(page);
+await page.goto('http://motif.test/admin.html');await page.locator('#token').fill('test');await page.locator('#loginForm button').click();
  page.on('dialog',d=>d.accept());const stage=async(n)=>page.locator('#steps li').nth(n-1).getByRole('button').click();
  const pf=k=>page.locator('#productFields [data-key='+k+']'),vf=k=>page.locator('#editor [data-key='+k+']').first();
  for(const [i,type]of ['کاپشن','شلوار','بادگیر'].entries()){

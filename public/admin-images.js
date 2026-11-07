@@ -12,7 +12,7 @@ window.MotifImages = (() => {
       e.returnValue = "";
     }
   });
-  function control(key, title, value, getToken) {
+  function control(key, title, value) {
     const defect = /Defect|defect/.test(key),
       box = document.createElement("div");
     box.className = "image-editor";
@@ -186,9 +186,8 @@ window.MotifImages = (() => {
               throw Error("فرمت فایل پشتیبانی نمی‌شود");
             const form = new FormData();
             form.append("image", file);
-            const response = await fetch("/api/uploads/images", {
+            const response = await MotifAdminSession.request("/api/uploads/images", {
               method: "POST",
-              headers: { "X-Admin-Token": getToken() },
               body: form,
               signal: controller.signal,
             });

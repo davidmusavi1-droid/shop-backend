@@ -199,3 +199,11 @@ model SiteContent {
   updatedAt DateTime @updatedAt
 }
 
+
+model AdminSession {
+  tokenHash         String   @id
+  expiresAt         DateTime
+  absoluteExpiresAt DateTime
+
+  @@index([expiresAt])
+}

@@ -7,6 +7,8 @@ const path = require("node:path");
 const { PrismaClient } = require("@prisma/client");
 const express = require("express");
 const sharp = require("sharp");
+const { loginAdmin } = require("./admin-http-client.cjs");
+const { settings } = require("../src/lib/admin-session");
 const root = path.resolve(__dirname, "..");
 const original = process.env.DATABASE_URL;
 if (!original || !process.env.ADMIN_TOKEN)
@@ -58,6 +60,7 @@ let stage = "snapshot",
   assert.equal(selected[0].name, schema);
   const app = express();
   app.use(express.json());
+  app.use("/api/admin/session", require("../src/routes/admin-session")(require("../src/middleware/requireAdmin").sessions));
   app.use("/api/products", require("../src/routes/products"));
   app.use("/api/uploads", require("../src/routes/uploads"));
   app.use((err, req, res, next) =>
@@ -67,12 +70,13 @@ let stage = "snapshot",
     const s = app.listen(0, "127.0.0.1", () => resolve(s));
   });
   const base = "http://127.0.0.1:" + server.address().port;
+  let adminHeaders;
   async function api(method, url, body, auth = true) {
     const r = await fetch(base + url, {
       method,
       headers: {
         "Content-Type": "application/json",
-        ...(auth ? { "X-Admin-Token": process.env.ADMIN_TOKEN } : {}),
+        ...(auth ? adminHeaders : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(30000),
@@ -84,6 +88,7 @@ let stage = "snapshot",
     (await api("GET", "/api/products/admin/list", null, false)).status,
     401,
   );
+  adminHeaders = await loginAdmin(base, process.env.ADMIN_TOKEN, settings(process.env).origins[0]);
   assert.equal((await api("GET", "/api/products/admin/list")).status, 200);
   let images = ["https://release-test.invalid/front.webp"];
   const uploadUrls = [];
@@ -105,7 +110,7 @@ let stage = "snapshot",
       );
       const r = await fetch(base + "/api/uploads/images", {
         method: "POST",
-        headers: { "X-Admin-Token": process.env.ADMIN_TOKEN },
+        headers: adminHeaders,
         body: form,
         signal: AbortSignal.timeout(90000),
       });
@@ -197,6 +202,10 @@ let stage = "snapshot",
   });
   assert.equal(result.status, 200);
   assert.equal((await api("GET", "/api/products")).data.length, 1);
+  stage = "session-revocation";
+  const logout = await fetch(base + "/api/admin/session/logout", { method: "POST", headers: adminHeaders });
+  assert.equal(logout.status, 204);
+  assert.equal((await api("GET", "/api/products/admin/list")).status, 401);
   stage = "production-preservation";
   const after = await snapshot();
   assert.equal(

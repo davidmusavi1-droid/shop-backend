@@ -6,8 +6,8 @@ const $ = (id) => document.getElementById(id),
     if (cls) n.className = cls;
     return n;
   };
-let token = "",
-  products = [],
+let products = [],
+  suspended = false,
   fabricChoices = MotifCatalog.fabrics,
   editing = null,
   step = 1,
@@ -138,8 +138,8 @@ function snapshot() {
   }
   return data;
 }
-function cache() {
-  if (!recoveryKey || $("editor").hidden || busy) return;
+function cache(force = false) {
+  if (!recoveryKey || $("editor").hidden || (busy && !force)) return;
   try {
     sessionStorage.setItem(
       recoveryKey,
@@ -556,10 +556,10 @@ async function api(path, options = {}) {
   const controller = new AbortController(),
     timer = setTimeout(() => controller.abort(), 25000);
   try {
-    const response = await fetch(path, {
+    const response = await MotifAdminSession.request(path, {
       ...options,
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      headers: { "Content-Type": "application/json" },
     });
     let data;
     try {
@@ -901,78 +901,101 @@ async function save(publish = false) {
     $("publish").disabled = false;
   }
 }
-$("loginForm").onsubmit = async (e) => {
-  e.preventDefault();
-  token = $("token").value;
-  $("loginForm").querySelector("button").disabled = true;
-  try {
-    await refresh();
-    let fabricLoadFailed = false;
-    try {
-      const choices = await api("/api/products/admin/fabrics");
+async function showWorkspace(session) {
+  const [, fabricLoadFailed] = await Promise.all([
+    refresh(),
+    api("/api/products/admin/fabrics").then(choices => {
       if (Array.isArray(choices) && choices.every(label => typeof label === "string")) fabricChoices = choices;
-    } catch {
-      fabricLoadFailed = true;
-    }
-    if (crypto.subtle) {
-      const hash = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(token),
-      );
-      recoveryKey =
-        "motif-admin-recovery-" +
-        Array.from(new Uint8Array(hash))
-          .map((n) => n.toString(16).padStart(2, "0"))
-          .join("");
-    } else recoveryKey = "";
-    $("token").value = "";
-    $("login").hidden = true;
-    $("workspace").hidden = false;
-    display("dashboard");
-    notice(fabricLoadFailed ? "دریافت فهرست جنس‌های سفارشی ممکن نشد. برای تلاش دوباره وارد پنل شوید." : "");
-    let recovery;
-    try {
-      recovery = JSON.parse(sessionStorage.getItem(recoveryKey));
-    } catch {}
-    if (recovery) {
-      const old = products.find((p) => p.id === recovery.id);
-      if (recovery.id && !old)
-        notice("محصول پیش‌نویس بازیابی پیدا نشد؛ فهرست را بررسی کنید.");
-      else if (old && old.updatedAt !== recovery.base)
-        notice(
-          "نسخه سرور تغییر کرده است؛ برای جلوگیری از بازنویسی، نسخه جاری را باز کنید.",
-        );
-      else if (confirm("فرم ذخیره‌نشدهٔ قبلی بازیابی شود؟"))
-        openEditor(old || null, recovery);
-    }
-  } catch (err) {
-    token = "";
-    notice(err.message);
-  } finally {
-    $("loginForm").querySelector("button").disabled = false;
+      return false;
+    }, () => true),
+  ]);
+  recoveryKey = session.recoveryKey;
+  $("login").hidden = true;
+  $("workspace").hidden = false;
+  notice(fabricLoadFailed ? "دریافت فهرست جنس‌های سفارشی ممکن نشد." : "");
+  if (suspended) {
+    suspended = false;
+    return;
   }
-};
-$("logout").onclick = () => {
-  if (!leave()) return;
+  display("dashboard");
+  let recovery;
   try {
-    sessionStorage.removeItem(recoveryKey);
+    recovery = JSON.parse(sessionStorage.getItem(recoveryKey));
   } catch {}
-  token = "";
-  recoveryKey = "";
-  products = [];
-  fabricChoices = MotifCatalog.fabrics;
-  editing = null;
-  $("productFields").replaceChildren();
-  $("list").replaceChildren();
+  if (recovery) {
+    const old = products.find(p => p.id === recovery.id);
+    if (recovery.id && !old) notice("محصول پیش‌نویس بازیابی پیدا نشد؛ فهرست را بررسی کنید.");
+    else if (old && old.updatedAt !== recovery.base)
+      notice("نسخه سرور تغییر کرده است؛ برای جلوگیری از بازنویسی، نسخه جاری را باز کنید.");
+    else if (confirm("فرم ذخیره‌نشدهٔ قبلی بازیابی شود؟")) openEditor(old || null, recovery);
+  }
+}
+
+async function migrateRecovery(password, destination) {
+  try {
+    if (sessionStorage.getItem(destination) || !crypto.subtle) return;
+    if (!Object.keys(sessionStorage).some(key => /^motif-admin-recovery-[a-f0-9]{64}$/.test(key))) return;
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(password));
+    const oldKey = "motif-admin-recovery-" + Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2, "0")).join("");
+    const data = sessionStorage.getItem(oldKey);
+    if (data) {
+      sessionStorage.setItem(destination, data);
+      sessionStorage.removeItem(oldKey);
+    }
+  } catch {}
+}
+
+MotifAdminSession.onEnd(message => {
+  if (dirty) cache(true);
+  suspended = !$("workspace").hidden || suspended;
+  $("publishDialog").close();
   $("workspace").hidden = true;
   $("login").hidden = false;
-  notice("");
+  notice(message);
+});
+const loginButton = $("loginForm").querySelector("button");
+$("loginForm").onsubmit = async (e) => {
+  e.preventDefault();
+  if (loginButton.disabled) return;
+  const password = $("token").value;
+  $("token").value = "";
+  loginButton.disabled = true;
+  try {
+    const session = await MotifAdminSession.login(password);
+    await migrateRecovery(password, session.recoveryKey);
+    await showWorkspace(session);
+  } catch (err) {
+    notice(err.message);
+  } finally {
+    loginButton.disabled = false;
+  }
+};
+$("logout").onclick = async () => {
+  if (!leave()) return;
+  $("logout").disabled = true;
+  try {
+    await MotifAdminSession.logout();
+    try { sessionStorage.removeItem(recoveryKey); } catch {}
+    recoveryKey = "";
+    products = [];
+    fabricChoices = MotifCatalog.fabrics;
+    editing = null;
+    $("productFields").replaceChildren();
+    $("list").replaceChildren();
+    $("workspace").hidden = true;
+    $("login").hidden = false;
+    notice("");
+  } catch (err) {
+    notice(err.message);
+  } finally {
+    $("logout").disabled = false;
+  }
 };
 $("siteButton").onclick = () => {
   if (!leave()) return;
   display("settings");
   $("settings").hidden = true;
-  MotifSiteAdmin.open(() => token, products);
+  MotifSiteAdmin.open(products);
 };
 $("newProduct").onclick = () => openEditor();
 $("nextProduct").onclick = () => openEditor();
@@ -1035,11 +1058,23 @@ window.addEventListener("beforeunload", (e) => {
     e.returnValue = "";
   }
 });
-window.addEventListener("offline", () =>
-  notice(
-    "اینترنت قطع است؛ اطلاعات فرم حفظ می‌شود. پس از اتصال دوباره تلاش کنید.",
-  ),
-);
-window.addEventListener("online", () =>
-  notice("اتصال برقرار شد؛ می‌توانید عملیات ناموفق را دوباره انجام دهید."),
-);
+window.addEventListener("offline", () => {
+  if (!$("workspace").hidden)
+    notice("اینترنت قطع است؛ اطلاعات فرم حفظ می‌شود. پس از اتصال دوباره تلاش کنید.");
+});
+window.addEventListener("online", () => {
+  if (!$("workspace").hidden)
+    notice("اتصال برقرار شد؛ می‌توانید عملیات ناموفق را دوباره انجام دهید.");
+});
+
+function cacheOnSuspend() {
+  if (dirty) cache(true);
+}
+window.addEventListener("pagehide", cacheOnSuspend);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) cacheOnSuspend();
+});
+loginButton.disabled = true;
+MotifAdminSession.restore().then(showWorkspace).catch(err => {
+  if (err.code !== "SESSION_REQUIRED") notice(err.message);
+}).finally(() => { loginButton.disabled = false; });

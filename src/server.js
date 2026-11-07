@@ -17,8 +17,14 @@ app.get('/health', async (req, res) => {
   catch { res.status(503).json({ok:false,contentReady:false}); }
 });
 app.use(require('./routes/storefront'));
-app.use(express.static('public'));
+app.use(express.static('public', { setHeaders(res, path) {
+  if (path.endsWith('/admin.html')) {
+    res.set('Cache-Control', 'no-store');
+    res.set('Content-Security-Policy', "frame-ancestors 'none'");
+  }
+} }));
 app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
+app.use('/api/admin/session', require('./routes/admin-session')(require('./middleware/requireAdmin').sessions));
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/site', require('./routes/site-content'));
 app.use('/api/products', productsRouter);
@@ -28,13 +34,20 @@ app.use('/api/payment', paymentRouter);
 app.use((req, res) => res.status(404).type('html').send(require('./lib/storefront').errorPage('صفحه پیدا نشد')));
 
 app.use((err, req, res, next) => {
+  if (req.path.startsWith('/api/admin/session')) {
+    console.error('Admin session request failed', err.code || err.type || 'UNKNOWN');
+    const status = err.statusCode || 500;
+    return res.status(status).json({ error: status >= 500 ? 'بررسی نشست موقتاً ممکن نیست.' : 'درخواست نشست نامعتبر است.' });
+  }
   console.error(err);
   res.status(err.statusCode || 500).json({ error: err.message || 'خطای سرور' });
 });
 
 const PORT = process.env.PORT || 4000;
 // Startup is the final guard even when platform pre-deploy hooks are skipped.
-productSchema.prepare(prisma).then(()=>contentSchema.prepare(prisma)).then(()=>{
+productSchema.prepare(prisma).then(()=>contentSchema.prepare(prisma)).then(async()=>{
+  require('./lib/admin-session').settings(process.env);
+  await prisma.adminSession.findFirst({ select: { tokenHash: true } });
   console.log('Content schema readiness verified');
   app.listen(PORT, () => console.log(`سرور روی پورت ${PORT} اجرا شد`));
 }).catch(err=>{

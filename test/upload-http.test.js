@@ -2,29 +2,39 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const express = require('express');
 const sharp = require('sharp');
+const { createAdminSessions } = require('../src/lib/admin-session');
+const { loginAdmin } = require('../scripts/admin-http-client.cjs');
+const { memoryDb } = require('./session-fixture.cjs');
 const { createRouter } = require('../src/routes/uploads');
 const { prepareImage, MAX_IMAGE_BYTES } = require('../src/lib/product-image');
 
 test('HTTP upload enforces authentication, formats, limits, missing config and safe provider failures', async () => {
-  const previous = process.env.ADMIN_TOKEN; process.env.ADMIN_TOKEN = 'upload-test-only';
+  const env = { ADMIN_TOKEN: 'upload-test-only' };
+  const sessions = createAdminSessions({ prisma: memoryDb(), env });
+  const authenticate = sessions.authenticate({ extend: true });
+  const authorize = (req, res, next) => sessions.configured(req, res, () => authenticate(req, res, next));
   const received = []; let failure = false, hold = false, release;
   const provider = { configured: true, async upload(buffer) {
     if (hold) await new Promise(resolve => { release = resolve; });
     if (failure) throw Error('SECRET');
     received.push(buffer); return { url: 'https://images.example.test/photo.webp' };
   }};
-  const app = express(); app.use('/api/uploads', createRouter({ provider }));
-  app.use('/missing', createRouter({ env: {} }));
+  const app = express(); app.use(express.json());
+  app.use('/api/admin/session', require('../src/routes/admin-session')(sessions));
+  app.use('/api/uploads', createRouter({ provider, authorize }));
+  app.use('/missing', createRouter({ env: {}, authorize }));
   const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  async function upload(buffer, token = 'upload-test-only', path = '/api/uploads/images') {
+  env.ADMIN_ORIGIN = base;
+  const headers = await loginAdmin(base, env.ADMIN_TOKEN);
+  async function upload(buffer, auth = headers, path = '/api/uploads/images') {
     const form = new FormData(); if (buffer) form.append('image', new Blob([buffer]), 'photo.jpg');
-    return fetch(base + path, { method: 'POST', headers: { 'X-Admin-Token': token }, body: form });
+    return fetch(base + path, { method: 'POST', headers: auth, body: form });
   }
   try {
     const photo = await sharp({ create: { width: 4000, height: 100, channels: 3, background: 'red' } }).jpeg().withMetadata().toBuffer();
-    assert.equal((await upload(photo, 'wrong')).status, 403);
-    assert.equal((await upload(photo, 'upload-test-only', '/missing/images')).status, 503);
+    assert.equal((await upload(photo, { ...headers, 'X-Admin-CSRF': 'wrong' })).status, 403);
+    assert.equal((await upload(photo, headers, '/missing/images')).status, 503);
     assert.equal((await upload(null)).status, 400);
     assert.equal((await upload(Buffer.from('<svg></svg>'))).status, 400);
     assert.equal((await upload(Buffer.alloc(10 * 1024 * 1024 + 1))).status, 413);
@@ -44,7 +54,6 @@ test('HTTP upload enforces authentication, formats, limits, missing config and s
     hold = false; release(); assert.equal((await first).status, 201);
   } finally {
     if (release) release(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
-    if (previous === undefined) delete process.env.ADMIN_TOKEN; else process.env.ADMIN_TOKEN = previous;
   }
 });
 
