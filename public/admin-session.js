@@ -27,10 +27,17 @@ window.MotifAdminSession = (() => {
     if (!["GET", "HEAD"].includes(options.method || "GET") && csrf)
       headers.set("X-Admin-CSRF", csrf);
     const current = generation;
-    const response = await fetch(path, {
-      ...options, headers, cache: "no-store", credentials: "same-origin",
-      signal: options.signal || AbortSignal.timeout(25_000),
-    });
+    const controller = options.signal ? null : new AbortController();
+    const timer = controller && setTimeout(() => controller.abort(), 25_000);
+    let response;
+    try {
+      response = await fetch(path, {
+        ...options, headers, cache: "no-store", credentials: "same-origin",
+        signal: options.signal || controller.signal,
+      });
+    } finally {
+      if (controller) clearTimeout(timer);
+    }
     if (response.status === 401 && csrf && current === generation && path !== base + "/logout") {
       if (!loggingOut) end();
       throw Error(expired);
