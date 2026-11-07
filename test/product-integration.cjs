@@ -100,6 +100,9 @@ async function main() {
   // Browser uses actual API and database; no request mocking.
   browser = await chromium.launch({ headless: true, ...(process.env.CHROME_BIN ? { executablePath: process.env.CHROME_BIN } : {}) });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await context.addInitScript(() => {
+    Object.defineProperty(AbortSignal, 'timeout', { value: undefined, configurable: true });
+  });
   const page = await context.newPage();
   const errors = []; page.on('pageerror', err => errors.push(err.message));
   // A failing settings refresh must not erase the already published SSR banner.
@@ -115,6 +118,7 @@ async function main() {
   await page.unroute('**/api/site');
 
   await page.goto(base + '/admin.html');
+  assert.equal(await page.evaluate(() => typeof AbortSignal.timeout), 'undefined');
   await page.locator('#token').fill('wrong');
   await page.locator('#loginForm button').click();
   await page.locator('#message').filter({ hasText: 'نامعتبر' }).waitFor();
