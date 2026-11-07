@@ -4,7 +4,7 @@ window.MotifAdminSession = (() => {
   const expired = "نشست مدیریت شما به پایان رسیده است. لطفاً دوباره وارد شوید.";
   const interval = 30_000;
   let csrf, generation = 0, expiryTimer, activityTimer, statusRequest, touching = false;
-  let lastActivity = 0, pending = false, onEnd = () => {};
+  let lastActivity = 0, pending = false, loggingOut = false, onEnd = () => {};
 
   function reset() {
     csrf = null;
@@ -31,8 +31,8 @@ window.MotifAdminSession = (() => {
       ...options, headers, cache: "no-store", credentials: "same-origin",
       signal: options.signal || AbortSignal.timeout(25_000),
     });
-    if (response.status === 401 && csrf && current === generation) {
-      end();
+    if (response.status === 401 && csrf && current === generation && path !== base + "/logout") {
+      if (!loggingOut) end();
       throw Error(expired);
     }
     return response;
@@ -68,7 +68,7 @@ window.MotifAdminSession = (() => {
   }
 
   async function check() {
-    if (!csrf || document.hidden || statusRequest) return;
+    if (!csrf || loggingOut || document.hidden || statusRequest) return;
     const current = generation;
     statusRequest = (async () => {
       try {
@@ -88,7 +88,7 @@ window.MotifAdminSession = (() => {
 
   async function touch(hiding = false) {
     clearTimeout(activityTimer);
-    if (!csrf || !pending || touching || (document.hidden && !hiding)) return;
+    if (!csrf || loggingOut || !pending || touching || (document.hidden && !hiding)) return;
     const current = generation;
     pending = false;
     touching = true;
@@ -108,19 +108,27 @@ window.MotifAdminSession = (() => {
 
   function schedule() {
     clearTimeout(activityTimer);
-    if (csrf && pending && !touching && !document.hidden)
+    if (csrf && !loggingOut && pending && !touching && !document.hidden)
       activityTimer = setTimeout(touch, Math.max(0, interval - (Date.now() - lastActivity)));
   }
 
   async function logout() {
-    const response = await request(base + "/logout", { method: "POST" });
-    if (!response.ok) await readState(response);
-    reset();
+    loggingOut = true;
+    pending = false;
+    clearTimeout(activityTimer);
+    try {
+      const response = await request(base + "/logout", { method: "POST" });
+      if (!response.ok && response.status !== 401) await readState(response);
+      reset();
+    } finally {
+      loggingOut = false;
+      if (csrf) check();
+    }
   }
 
   for (const event of ["pointerdown", "keydown", "input", "wheel"])
     document.addEventListener(event, e => {
-      if (!csrf || !e.isTrusted || document.hidden) return;
+      if (!csrf || loggingOut || !e.isTrusted || document.hidden) return;
       pending = true;
       schedule();
     }, { passive: true });

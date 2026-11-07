@@ -977,6 +977,7 @@ $("logout").onclick = async () => {
     await MotifAdminSession.logout();
     try { sessionStorage.removeItem(recoveryKey); } catch {}
     recoveryKey = "";
+    suspended = false;
     products = [];
     fabricChoices = MotifCatalog.fabrics;
     editing = null;
