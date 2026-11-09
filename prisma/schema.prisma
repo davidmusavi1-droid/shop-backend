@@ -207,3 +207,60 @@ model AdminSession {
 
   @@index([expiresAt])
 }
+
+// Phase B tables are installed only by the guarded local test setup.
+model SmartDossier {
+  id              String   @id @default(uuid())
+  version         Int      @default(0)
+  phase           String   @default("draft")
+  proposedCode    String?
+  approvedVersion Int?
+  payload         Json
+  archivedAt      DateTime?
+  retiredReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  images          SmartImage[]
+  approvals       SmartApproval[]
+  reservation     SmartCode?
+}
+
+model SmartCode {
+  code       String       @id
+  dossierId  String?      @unique
+  dossier    SmartDossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+  reservedAt DateTime     @default(now())
+}
+
+model SmartImage {
+  id          String       @id
+  dossierId   String
+  dossier     SmartDossier @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  name        String
+  size        Int
+  digest      String
+  createdAt   DateTime     @default(now())
+
+  @@index([dossierId])
+}
+
+model SmartApproval {
+  dossierId String
+  version   Int
+  snapshot  Json
+  at        DateTime @default(now())
+  dossier   SmartDossier @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+
+  @@id([dossierId, version])
+}
+
+model SmartEvent {
+  id        String   @id @default(uuid())
+  dossierId String
+  action    String
+  version   Int
+  actor     String
+  at        DateTime @default(now())
+
+  @@index([dossierId, at])
+}

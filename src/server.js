@@ -1,3 +1,6 @@
+const smartTest = process.env.MOTIF_SMART_PANEL
+  ? require('./lib/smart-panel/test-environment').assertTestEnvironment()
+  : null;
 const express = require('express');
 const cors = require('cors');
 const prisma = require('./lib/prisma');
@@ -25,6 +28,12 @@ app.use(express.static('public', { setHeaders(res, path) {
 } }));
 app.use('/api', (req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
 app.use('/api/admin/session', require('./routes/admin-session')(require('./middleware/requireAdmin').sessions));
+if (smartTest) {
+  const requireAdmin = require('./middleware/requireAdmin');
+  const panel = require('./routes/smart-panel');
+  app.use('/api/admin/smart-panel', requireAdmin, panel.createRouter(prisma, smartTest));
+  app.use('/smart-panel', panel.assets());
+}
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/site', require('./routes/site-content'));
 app.use('/api/products', productsRouter);
@@ -39,18 +48,27 @@ app.use((err, req, res, next) => {
     const status = err.statusCode || 500;
     return res.status(status).json({ error: status >= 500 ? 'بررسی نشست موقتاً ممکن نیست.' : 'درخواست نشست نامعتبر است.' });
   }
+  if (req.path.startsWith('/api/admin/smart-panel')) {
+    const status = err.status >= 400 && err.status < 500 ? err.status : 500;
+    return res.status(status).json({ code: 'INVALID_REQUEST', error: 'درخواست پنل آزمایشی معتبر نیست.' });
+  }
   console.error(err);
   res.status(err.statusCode || 500).json({ error: err.message || 'خطای سرور' });
 });
 
 const PORT = process.env.PORT || 4000;
 // Startup is the final guard even when platform pre-deploy hooks are skipped.
-productSchema.prepare(prisma).then(()=>contentSchema.prepare(prisma)).then(async()=>{
+(async () => {
+  if (smartTest) await require('./lib/smart-panel/test-environment').verifyTestDatabase(prisma, smartTest);
+  await productSchema.prepare(prisma);
+  await contentSchema.prepare(prisma);
   require('./lib/admin-session').settings(process.env);
   await prisma.adminSession.findFirst({ select: { tokenHash: true } });
   console.log('Content schema readiness verified');
-  app.listen(PORT, () => console.log(`سرور روی پورت ${PORT} اجرا شد`));
-}).catch(err=>{
+  const listening = () => console.log(`سرور روی پورت ${PORT} اجرا شد`);
+  if (smartTest) app.listen(smartTest.port, '127.0.0.1', listening);
+  else app.listen(PORT, listening);
+})().catch(err=>{
   console.error('Content schema preparation failed',err.code||'UNKNOWN');
   process.exitCode=1;
   prisma.$disconnect();
