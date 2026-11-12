@@ -207,3 +207,81 @@ model AdminSession {
 
   @@index([expiresAt])
 }
+
+// Phase B tables are installed only by the guarded local test setup.
+model SmartDossier {
+  id              String   @id @default(uuid())
+  version         Int      @default(0)
+  phase           String   @default("draft")
+  proposedCode    String?
+  approvedVersion Int?
+  productId       String?  @unique
+  payload         Json
+  archivedAt      DateTime?
+  retiredReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  images          SmartImage[]
+  approvals       SmartApproval[]
+  reservation     SmartCode?
+}
+
+model SmartCode {
+  code       String       @id
+  dossierId  String?      @unique
+  dossier    SmartDossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+  reservedAt DateTime     @default(now())
+}
+
+model SmartImage {
+  id          String       @id
+  dossierId   String
+  dossier     SmartDossier @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  name        String
+  size        Int
+  digest      String
+  bytes       Bytes?
+  createdAt   DateTime     @default(now())
+
+  @@index([dossierId])
+}
+
+model SmartApproval {
+  dossierId String
+  version   Int
+  snapshot  Json
+  at        DateTime @default(now())
+  dossier   SmartDossier @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+
+  @@id([dossierId, version])
+}
+
+model SmartEvent {
+  id        String   @id @default(uuid())
+  dossierId String
+  action    String
+  version   Int
+  actor     String
+  at        DateTime @default(now())
+
+  @@index([dossierId, at])
+}
+
+// Durable execution reservation, including uncertain provider outcomes.
+model SmartAiRun {
+  id        String   @id
+  operation String
+  scope     String   @default("pilot")
+  dossierId String
+  version   Int
+  status    String
+  model     String
+  usage     Json?
+  result    Json?
+  rawResponse String?
+  errorCode String?
+  at        DateTime @default(now())
+
+  @@unique([operation, scope])
+  @@index([at])
+}

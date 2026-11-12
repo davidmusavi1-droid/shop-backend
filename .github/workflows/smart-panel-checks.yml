@@ -1,0 +1,52 @@
+name: MOTIF smart panel tests
+on:
+  push:
+    branches: [feat/motif-smart-panel]
+permissions:
+  contents: read
+jobs:
+  phase-b:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: motif_smart_test
+          POSTGRES_PASSWORD: local_phase_b_fixture_only
+          POSTGRES_DB: motif_smart_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U motif_smart_test -d motif_smart_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://motif_smart_test:local_phase_b_fixture_only@127.0.0.1:5432/motif_smart_test
+      MOTIF_SMART_PANEL: test
+      NODE_ENV: test
+      PORT: 4189
+      ADMIN_ORIGIN: http://127.0.0.1:4189
+      CHROME_BIN: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock --include=dev
+      - run: npm install --no-save --no-package-lock playwright@1.56.1
+      - run: npx prisma generate
+      - run: npm test
+      - name: Start isolated test server and run acceptance tests
+        shell: bash
+        run: |
+          export ADMIN_TOKEN="smart-test-$(openssl rand -hex 24)"
+          node scripts/smart-panel-test-setup.cjs
+          node src/server.js > /tmp/motif-smart-panel.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 30); do
+            if curl --silent --fail "$ADMIN_ORIGIN/health" > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --silent --fail "$ADMIN_ORIGIN/health" > /dev/null
+          node --test test/smart-panel-integration.cjs
+          node --test test/smart-panel-browser.cjs
