@@ -9,7 +9,7 @@
     <meta name="robots" content="noindex,nofollow" />
     <title>پنل مدیریت | MOTIF</title>
     <link rel="stylesheet" href="/fonts.css" />
-    <link rel="stylesheet" href="/admin.css" />
+    <link rel="stylesheet" href="/admin.css?v=20261111-c22" />
   </head>
   <body>
     <section id="login" class="login">
@@ -131,6 +131,10 @@
             <button type="button" id="cancel">بستن فرم</button>
           </div>
           <ol id="steps" class="steps" aria-label="مراحل ثبت"></ol>
+          <div class="editor-actions" id="c22Actions" hidden>
+            <button type="button" id="openC22">تحلیل و تحقیق محصول</button>
+            <button type="button" id="clearC22" hidden>حذف متن پیشنهادی از فرم</button>
+          </div>
           <div id="productFields"></div>
           <section id="review" class="panel" hidden></section>
           <div class="editor-actions">
@@ -172,6 +176,11 @@
         ><button id="cancelPublish">بازگشت به بررسی</button>
       </div>
     </dialog>
+    <dialog id="c22Dialog" aria-labelledby="c22Title">
+      <h2 id="c22Title">تحلیل و تحقیق محصول</h2>
+      <button type="button" id="closeC22">بازگشت به فرم محصول</button>
+      <iframe id="c22Frame" title="پنل تحلیل و تحقیق محصول"></iframe>
+    </dialog>
     <script src="/catalog.js"></script>
     <script src="/admin-readiness.js"></script>
     <script src="/admin-session.js?v=20261107-mobile-login"></script>
@@ -179,6 +188,6 @@
     <script src="/site-content.js?v=20261030-theme"></script>
     <script src="/admin-site.js?v=20261107-session"></script>
     <script src="/admin-fields.js?v=20261107-session"></script>
-    <script src="/admin.js?v=20261107-session"></script>
+    <script src="/admin.js?v=20261111-c22"></script>
   </body>
 </html>

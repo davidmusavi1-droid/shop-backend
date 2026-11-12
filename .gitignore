@@ -3,3 +3,5 @@ node_modules/
 .env.*
 !.env.example
 test-results/
+
+.smart-panel-test/

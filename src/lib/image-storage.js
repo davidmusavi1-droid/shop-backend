@@ -1,4 +1,4 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { randomUUID } = require('node:crypto');
 
 function httpsUrl(value) {
@@ -35,8 +35,28 @@ function createStorage(env = process.env, makeClient = options => new S3Client(o
   if (!config) return { configured: false };
   const client = makeClient({ endpoint: config.endpoint, region: config.region, credentials: config.credentials,
     forcePathStyle: true, maxAttempts: 2, requestChecksumCalculation: 'WHEN_REQUIRED' });
+  const keyFor = url => {
+    if (typeof url !== 'string' || !url.startsWith(config.publicUrl + '/')) return null;
+    const key = url.slice(config.publicUrl.length + 1);
+    return /^motif\/products\/[0-9a-f-]{36}\.webp$/.test(key) ? key : null;
+  };
   return {
     configured: true,
+    canRead: url => Boolean(keyFor(url)),
+    async read(url, maxBytes) {
+      const key = keyFor(url);
+      if (!key) throw new Error('Invalid product image');
+      const result = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }),
+        { abortSignal: AbortSignal.timeout(10000) });
+      const chunks = [];
+      let size = 0;
+      for await (const chunk of result.Body) {
+        size += chunk.length;
+        if (size > maxBytes) throw new Error('Product image exceeds the limit');
+        chunks.push(chunk);
+      }
+      return Buffer.concat(chunks, size);
+    },
     async upload(buffer) {
       const key = `motif/products/${randomUUID()}.webp`;
       await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: buffer,

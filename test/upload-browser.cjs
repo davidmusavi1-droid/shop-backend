@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
   let attempts = 0, saved;
   await page.route('http://motif.test/**', async route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/api/admin/smart-panel/store/status') return route.fulfill({ status: 404, json: {} });
     if (path === '/api/products/admin/list') return route.fulfill({ json: [] });
     if (path === '/api/products/admin/fabrics') return route.fulfill({ json: require('../public/catalog').fabrics });
     if (path === '/api/uploads/images') {

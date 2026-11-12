@@ -17,7 +17,9 @@ let products = [],
   recoveryKey = "",
   draftTimer,
   baseline = "",
-  pendingCreateCode = null;
+  pendingCreateCode = null,
+  c22Enabled = false,
+  c22Transfer = null;
 const stepNames = [
   "هویت و دسته‌بندی",
   "مشخصات و اندازه‌ها",
@@ -135,6 +137,7 @@ function snapshot() {
   if (editing) {
     data.updatedAt = editing.updatedAt;
     data.styles = editing.styles || [];
+    if (c22Transfer) data.c22Transfer = c22Transfer;
   }
   return data;
 }
@@ -204,6 +207,7 @@ function navigate(view) {
 function openEditor(p = null, recover = null) {
   if (!leave()) return false;
   editing = p;
+  c22Transfer = p ? recover?.data?.c22Transfer || null : null;
   pendingCreateCode = recover?.createCode || null;
   step = recover?.step || 1;
   $("productFields").replaceChildren();
@@ -276,6 +280,7 @@ function openEditor(p = null, recover = null) {
     }
     $("productFields").append(d);
   }
+  syncC22();
   for (const v of source.variants || [{ stock: 1, priceDelta: 0 }])
     addVariant(v);
   const field = (k) =>
@@ -901,6 +906,73 @@ async function save(publish = false) {
     $("publish").disabled = false;
   }
 }
+const c22Targets = ["identityHistory", "identityDesign", "identityUseCases"];
+const productInput = (key) => $("productFields").querySelector('[data-key="' + key + '"]');
+const comparableBrand = (value) => (value || "").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+function syncC22() {
+  $("c22Actions").hidden = !c22Transfer && !c22Enabled;
+  $("openC22").disabled = !editing || !c22Enabled;
+  $("openC22").textContent = editing ? "تحلیل و تحقیق محصول" : "برای تحلیل، ابتدا پیش‌نویس را ذخیره کنید";
+  $("clearC22").hidden = !c22Transfer;
+  for (const key of c22Targets) {
+    const input = productInput(key);
+    if (input) input.readOnly = c22Transfer?.keys.includes(key) ?? false;
+  }
+}
+
+$("openC22").onclick = async () => {
+  const product = editing;
+  if (!c22Enabled || !product || busy) return;
+  $("openC22").disabled = true;
+  try {
+    const dossier = await api("/api/admin/smart-panel/store/products/" + product.id + "/dossier", { method: "POST" });
+    if (editing !== product || $("workspace").hidden || $("editor").hidden) return;
+    $("c22Frame").src = "/smart-panel/?product=1#dossier=" + dossier.id;
+    $("c22Dialog").showModal();
+  } catch (err) {
+    notice(err.message);
+  } finally { syncC22(); }
+};
+$("closeC22").onclick = () => $("c22Dialog").close();
+$("c22Dialog").addEventListener("close", () => $("c22Frame").removeAttribute("src"));
+$("clearC22").onclick = () => {
+  for (const key of c22Transfer.keys) productInput(key).value = "";
+  c22Transfer = null;
+  syncC22();
+  mark();
+};
+
+window.addEventListener("message", async (event) => {
+  if (event.origin !== location.origin || event.source !== $("c22Frame").contentWindow ||
+      !$("c22Dialog").open || event.data?.type !== "motif-c22-transfer" ||
+      !/^[a-f0-9-]{36}$/.test(event.data.id) || !editing) return;
+  const product = editing;
+  try {
+    const transfer = await api("/api/admin/smart-panel/dossiers/" + event.data.id + "/store-transfer");
+    if (editing !== product || !$("c22Dialog").open) return;
+    if (transfer.productId !== product.id || transfer.updatedAt !== product.updatedAt ||
+        transfer.version !== event.data.version || comparableBrand(transfer.brand) !== comparableBrand(productInput("brand").value)) {
+      throw Error("نسخهٔ پرونده یا برند با فرم محصول یکسان نیست. اطلاعات را بررسی کنید.");
+    }
+    if (c22Transfer && (c22Transfer.id !== transfer.id || c22Transfer.version !== transfer.version)) {
+      throw Error("ابتدا پیشنهاد قبلی را از فرم حذف کنید.");
+    }
+    const keys = c22Targets.filter(key => transfer.sections[key] && !productInput(key).value.trim());
+    if (!keys.length) throw Error("فیلد خالی برای انتقال بخش تأییدشده وجود ندارد.");
+    for (const key of keys) productInput(key).value = transfer.sections[key];
+    c22Transfer = { id: transfer.id, version: transfer.version, keys: [...new Set([...(c22Transfer?.keys || []), ...keys])] };
+    syncC22();
+    mark();
+    $("c22Dialog").close();
+    productInput(keys[0]).closest("details").open = true;
+    productInput(keys[0]).focus();
+    notice("متن پیشنهادی در فرم قرار گرفت. برای ثبت آن، محصول را ذخیره کنید.");
+  } catch (err) {
+    $("c22Dialog").close();
+    notice(err.message);
+  }
+});
+
 async function showWorkspace(session) {
   const [, fabricLoadFailed] = await Promise.all([
     refresh(),
@@ -909,6 +981,8 @@ async function showWorkspace(session) {
       return false;
     }, () => true),
   ]);
+  c22Enabled = await api("/api/admin/smart-panel/store/status").then(result => result.enabled === true, () => false);
+  syncC22();
   recoveryKey = session.recoveryKey;
   $("login").hidden = true;
   $("workspace").hidden = false;
@@ -949,6 +1023,7 @@ MotifAdminSession.onEnd(message => {
   if (dirty) cache(true);
   suspended = !$("workspace").hidden || suspended;
   $("publishDialog").close();
+  $("c22Dialog").close();
   $("workspace").hidden = true;
   $("login").hidden = false;
   notice(message);
