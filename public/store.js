@@ -79,10 +79,20 @@ function renderDetail(p,preferredId){
  const identity=[['identityOrigin','خاستگاه'],['identityHistory','تاریخچه'],['identityPurpose','هدف طراحی'],['identityUseCases','کاربردها'],['identityDesign','جزئیات طراحی'],['identityTechnical','ویژگی‌های فنی'],['identitySources','منابع']].filter(([key])=>p[key]);
  if(identity.length){const details=el('details');details.append(el('summary','هویت و کاربرد محصول'));for(const [key,label]of identity)details.append(el('h3',label),el('p',p[key],'copy'));info.append(details);}
  const guide=el('details');guide.append(el('summary','چطور اندازه‌ها را مقایسه کنم؟'),el('p',help(currentFilter().kind==='pants')));info.append(guide);
- buy.type='button';buy.onclick=()=>{const line=cart.find(x=>x.variantId===selected.id),quantity=(line?.quantity||0)+1;status.hidden=false;if(quantity>selected.stock){status.textContent='بیش از موجودی این آیتم نمی‌توانی به سبد اضافه کنی.';return;}if(line)line.quantity=quantity;else cart.push({productId:p.id,variantId:selected.id,quantity});saveCart();status.textContent='به سبد انتخاب‌ها اضافه شد. پرداخت آنلاین هنوز فعال نشده است.';};const buyArea=el('div',null,'buy');buyArea.append(buy,status,el('p','افزودن به سبد، کالا را رزرو نمی‌کند.','hint'));info.append(buyArea);root.append(gallery,info);
+ buy.type='button';buy.onclick=()=>{const line=cart.find(x=>x.variantId===selected.id),quantity=(line?.quantity||0)+1;status.hidden=false;if(quantity>selected.stock){status.textContent='بیش از موجودی این آیتم نمی‌توانی به سبد اضافه کنی.';return;}if(line)line.quantity=quantity;else cart.push({productId:p.id,variantId:selected.id,quantity});saveCart();status.textContent='به سبد خرید اضافه شد.';};const buyArea=el('div',null,'buy');buyArea.append(buy,status,el('p','افزودن به سبد، کالا را رزرو نمی‌کند.','hint'));info.append(buyArea);root.append(gallery,info);
 }
-async function renderCart(){const ticket=++requestId;$('cartItems').textContent='در حال بررسی قیمت و موجودی…';let total=0;const rows=[];for(const line of cart){let p;try{const r=await fetch('/api/products/'+encodeURIComponent(line.productId),{cache:'no-store'});if(r.ok)p=await r.json();}catch{}
- const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p',money((p.basePrice+v.priceDelta)*line.quantity)));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
+async function renderCart(){const ticket=++requestId;$('cartItems').textContent='در حال بررسی قیمت و موجودی…';let total=0;const rows=[];
+ const cartLines=cart.slice();
+ const productsById=new Map();
+ await Promise.all([...new Set(cartLines.map(line=>line.productId))].map(async id=>{
+   try {
+     const response=await fetch('/api/products/'+encodeURIComponent(id),{cache:'no-store'});
+     if(response.ok) productsById.set(id,await response.json());
+   } catch {}
+ }));
+ if(ticket!==requestId||location.pathname!=='/cart')return;
+ for(const line of cartLines){const p=productsById.get(line.productId);
+ const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p','گرید '+(MotifCatalog.gradeLetter(v.itemGrade||p.qualityGrade)||'ثبت نشده')),el('p',money(p.basePrice+v.priceDelta)+(line.quantity>1?' برای هر عدد':'')));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
  const remove=el('button','حذف');remove.onclick=()=>{cart=cart.filter(x=>x.variantId!==line.variantId);saveCart();renderCart();};row.append(remove);rows.push(row);}
  if(ticket!==requestId||location.pathname!=='/cart')return;$('cartItems').replaceChildren(...(rows.length?rows:[el('p','سبد انتخاب‌ها خالی است.')]));$('cartTotal').textContent='جمع اقلام قابل تأیید: '+money(total);}
 function metadata(p) {
