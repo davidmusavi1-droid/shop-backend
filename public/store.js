@@ -239,3 +239,52 @@ $('cardReceipt').addEventListener('submit', async event => {
     $('cardReceiptStatus').textContent = error.message || 'ارسال رسید ممکن نیست.';
   } finally { button.disabled = !activeCardOrder; }
 });
+
+let trackingChallengeId;
+const trackingLabels = {
+  PENDING: 'در انتظار پرداخت', PAID: 'پرداخت‌شده', PROCESSING: 'در حال آماده‌سازی',
+  SHIPPED: 'ارسال‌شده', DELIVERED: 'تحویل‌شده', CANCELED: 'لغوشده',
+};
+const trackingDigits = value => value.trim().replace(/[۰-۹٠-٩]/g, digit =>
+  String(digit.charCodeAt(0) - (digit >= '۰' ? 0x6f0 : 0x660)));
+
+function submitTracking(id, path, payload, display) {
+  $(id).addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/checkout/tracking/' + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload(form.elements)),
+      });
+      if (response.status === 404) throw Error('پیگیری پیامکی هنوز فعال نشده است.');
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error);
+      display(data, form);
+    } catch (error) { $('trackingResult').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+}
+
+submitTracking('trackingChallenge', 'challenge', fields => ({
+  orderNumber: fields.orderNumber.value.trim(), phone: trackingDigits(fields.phone.value),
+}), data => {
+  trackingChallengeId = data.challengeId;
+  $('trackingVerify').hidden = false;
+  $('trackingVerify').reset();
+  $('trackingResult').textContent = 'درخواست آزمایشی دریافت شد.';
+});
+
+submitTracking('trackingVerify', 'verify', fields => ({
+  challengeId: trackingChallengeId, code: trackingDigits(fields.code.value),
+}), (order, form) => {
+  $('trackingResult').textContent = [
+    trackingLabels[order.status], order.paid ? 'پرداخت تأیید شده' : 'پرداخت تأیید نشده',
+    money(order.totalPrice), order.shipmentTrackingCode && 'کد مرسوله ' + order.shipmentTrackingCode,
+  ].filter(Boolean).join(' · ');
+  form.hidden = true;
+  form.reset();
+  trackingChallengeId = undefined;
+});
