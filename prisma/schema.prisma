@@ -166,6 +166,7 @@ model Order {
   items   OrderItem[]
   payment Payment?
   checkout CheckoutReservation?
+  shipmentTrackingCode String?
 }
 
 model OrderItem {
@@ -188,6 +189,7 @@ model Payment {
   refId        String?
   amount       Int
   isSuccessful Boolean  @default(false)
+  cardTransfer CardTransfer?
   createdAt    DateTime @default(now())
 }
 
@@ -230,4 +232,20 @@ model CheckoutReservation {
 model ShippingSettings {
   id String @id
   fee Int
+}
+
+
+model CardTransfer {
+  paymentId String @id
+  payment Payment @relation(fields: [paymentId], references: [id])
+  receipt Bytes
+  reviewedAt DateTime?
+  rejected Boolean @default(false)
+}
+
+model CardTransferSettings {
+  id String @id
+  cardNumber String
+  accountHolder String
+  enabled Boolean @default(false)
 }
