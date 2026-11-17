@@ -190,6 +190,7 @@ model Payment {
   amount       Int
   isSuccessful Boolean  @default(false)
   cardTransfer CardTransfer?
+  zibalAttempt ZibalAttempt?
   createdAt    DateTime @default(now())
 }
 
@@ -262,4 +263,11 @@ model OrderTrackingChallenge {
 
   @@index([createdAt])
   @@index([phone, createdAt])
+}
+
+model ZibalAttempt {
+  paymentId String @id
+  payment Payment @relation(fields: [paymentId], references: [id])
+  trackId String? @unique
+  state String @default("STARTING")
 }
