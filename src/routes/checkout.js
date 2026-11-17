@@ -22,6 +22,7 @@ function handle(action) {
   };
 }
 
+router.use('/tracking', require('./order-tracking'));
 router.use('/card-transfer', require('./card-transfer'));
 
 router.get('/shipping', handle(async (req, res) => {
