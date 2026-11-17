@@ -193,6 +193,9 @@ $('guestCheckout').addEventListener('submit', async event => {
     })).filter(item => item.quantity > 0);
     saveCart();
     form.reset();
+    const cardOrder = { number: order.orderNumber, key: checkoutRequest.key, total: order.totalPrice, expiry: order.expiresAt };
+    try { sessionStorage.setItem('motif-card-order', JSON.stringify(cardOrder)); } catch {}
+    void showCardReceipt(cardOrder);
     checkoutRequest = undefined;
     $('checkoutMessage').textContent = 'شماره سفارش آزمایشی ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
     if (location.pathname === '/cart') await renderCart();
@@ -201,4 +204,38 @@ $('guestCheckout').addEventListener('submit', async event => {
   } finally {
     button.disabled = false;
   }
+});
+
+let activeCardOrder;
+async function showCardReceipt(order) {
+  if (!order || Date.parse(order.expiry) <= Date.now()) return;
+  try {
+    const response = await fetch('/api/checkout/card-transfer/account', { cache: 'no-store' });
+    if (!response.ok) return;
+    const account = await response.json();
+    if (!account) return;
+    activeCardOrder = order;
+    $('cardDestination').textContent = account.cardNumber + ' · ' + account.accountHolder + ' · مبلغ ' + money(order.total);
+    $('cardReceipt').hidden = false;
+  } catch {}
+}
+try { void showCardReceipt(JSON.parse(sessionStorage.getItem('motif-card-order'))); } catch {}
+$('cardReceipt').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!activeCardOrder) return;
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    const url = '/api/checkout/card-transfer/orders/' + encodeURIComponent(activeCardOrder.number) + '/receipt';
+    const response = await fetch(url, { method: 'POST', headers: { 'Idempotency-Key': activeCardOrder.key }, body: new FormData(form) });
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error);
+    form.reset();
+    try { sessionStorage.removeItem('motif-card-order'); } catch {}
+    $('cardReceiptStatus').textContent = 'رسید ثبت شد و در انتظار بررسی مدیر است.';
+    activeCardOrder = undefined;
+  } catch (error) {
+    $('cardReceiptStatus').textContent = error.message || 'ارسال رسید ممکن نیست.';
+  } finally { button.disabled = !activeCardOrder; }
 });
