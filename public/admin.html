@@ -159,6 +159,19 @@
             <button type="submit">ذخیره تعرفه ارسال</button>
             <p id="shippingStatus" role="status"></p>
           </form>
+          <form id="cardSettings" hidden>
+            <label>شماره کارت مقصد<input name="cardNumber" inputmode="numeric" pattern="[0-9]{16}" required></label>
+            <label>نام صاحب کارت<input name="accountHolder" maxlength="120" required></label>
+            <label><input name="enabled" type="checkbox">فعال‌سازی کارت‌به‌کارت در محیط آزمایشی</label>
+            <button>ذخیره حساب مقصد</button>
+            <p id="cardSettingsStatus" role="status"></p>
+          </form>
+          <section id="checkoutOrders" hidden>
+            <h2>سفارش‌های مهمان</h2>
+            <p id="checkoutOrderStatus" role="status"></p>
+            <div id="checkoutOrderList"></div>
+            <button id="moreCheckoutOrders" type="button" hidden>سفارش‌های بیشتر</button>
+          </section>
           <button id="siteButton" class="primary">مدیریت صفحهٔ اصلی</button>
           <hr />
           <p>رمز مدیریت فقط در حافظهٔ همین صفحه نگهداری می‌شود.</p>
@@ -184,6 +197,6 @@
     <script src="/site-content.js?v=20261030-theme"></script>
     <script src="/admin-site.js?v=20261107-session"></script>
     <script src="/admin-fields.js?v=20261107-session"></script>
-    <script src="/admin.js?v=20261117-checkout-preview"></script>
+    <script src="/admin.js?v=20261117-card-transfer"></script>
   </body>
 </html>
