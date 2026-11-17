@@ -995,6 +995,7 @@ $("logout").onclick = async () => {
 $("siteButton").onclick = () => {
   if (!leave()) return;
   display("settings");
+  void loadShippingSettings();
   $("settings").hidden = true;
   MotifSiteAdmin.open(products);
 };
@@ -1079,3 +1080,31 @@ loginButton.disabled = true;
 MotifAdminSession.restore().then(showWorkspace).catch(err => {
   if (err.code !== "SESSION_REQUIRED") notice(err.message);
 }).finally(() => { loginButton.disabled = false; });
+
+async function loadShippingSettings() {
+  const form = $("shippingSettings");
+  form.hidden = true;
+  try {
+    const settings = await api("/api/checkout/shipping");
+    form.elements.fee.value = settings.shippingFee ?? "";
+    form.hidden = false;
+  } catch {}
+}
+
+$("shippingSettings").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector("button");
+  button.disabled = true;
+  try {
+    await api("/api/checkout/shipping", {
+      method: "PUT",
+      body: JSON.stringify({ shippingFee: form.elements.fee.valueAsNumber }),
+    });
+    $("shippingStatus").textContent = "تعرفه ذخیره شد.";
+  } catch (error) {
+    $("shippingStatus").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
