@@ -3,20 +3,23 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-function load(name, prisma = {}) {
+function load(name, prisma = {}, env = {}) {
   const routes = {};
   const admin = () => {};
   const router = Object.fromEntries(['get', 'post', 'patch'].map(method => [method, (url, ...handlers) => { routes[method + ' ' + url] = handlers; }]));
+  const middleware = [];
+  router.use = handler => middleware.push(handler);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes', name + '.js'), 'utf8'), {
     require: name => name === 'express' ? { Router: () => router } : name.includes('requireAdmin') ? admin : name.includes('/prisma') ? prisma : require('node:module').createRequire(require.resolve('../src/routes/products'))(name),
     module: { exports: {} },
+    process: { env },
   });
-  return { routes, admin };
+  return { routes, admin, middleware };
 }
 async function call(handlers, body, params = {}) {
   let code = 200, data, error;
   await handlers.at(-1)({ body, params, query: { Authority: 'fake', Status: 'OK' } }, {
-    status(n) { code = n; return this; }, json(d) { data = d; return this; },
+    set() {}, status(n) { code = n; return this; }, json(d) { data = d; return this; },
   }, e => { error = e; });
   return { code: error?.statusCode || code, data, error };
 }
@@ -53,17 +56,20 @@ test('cancellation returns reserved stock once, repeated cancellation is harmles
   const tx = { order: {
     findUnique: async () => current,
     updateMany: async ({ data }) => { current.status = data.status; return { count: 1 }; },
-  }, variant: { update: async ({ data }) => { restored += data.stock.increment; } } };
+  }, payment: { findUnique: async () => null }, variant: { update: async ({ data }) => { restored += data.stock.increment; } } };
   const { routes } = load('orders', { $transaction: fn => fn(tx) });
   for (let i = 0; i < 2; i++) assert.equal((await call(routes['patch /:id/status'], { status: 'CANCELED' }, { id: 'o1' })).code, 200);
   assert.equal(restored, 2);
   assert.equal((await call(routes['patch /:id/status'], { status: 'PAID' }, { id: 'o1' })).code, 400);
 });
 test('fake gateway requests and callbacks fail closed without database writes', async () => {
-  const { routes } = load('payment');
-  for (const key of ['post /request/:orderId', 'get /verify']) {
-    assert.equal((await call(routes[key], {}, { orderId: 'o1' })).code, 503);
-  }
+  const prisma = new Proxy({}, { get() { assert.fail('disabled gateway accessed Prisma'); } });
+  const { middleware } = load('payment', prisma, {
+    NODE_ENV: 'production', MOTIF_CHECKOUT_PREVIEW: 'true', MOTIF_ZIBAL_PROVIDER: 'mock',
+  });
+  const result = await call(middleware, {}, { orderId: 'o1' });
+  assert.equal(result.code, 503);
+  assert.equal(result.data.code, 'PAYMENT_NOT_CONFIGURED');
 });
 test('blank measurements remain null and public listing filters stock', async () => {
   let created, query;
