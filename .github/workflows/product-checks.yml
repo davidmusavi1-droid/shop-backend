@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     services:
       postgres:
@@ -48,4 +48,8 @@ jobs:
       - run: node scripts/verify-admin-release.cjs --skip-storage
       - run: node test/product-integration.cjs
       - run: node test/structure-integration.cjs
-      - run: bash test/migration-restore.sh
+      - run: |
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          pg_dump --version
+          pg_restore --version
+          bash test/migration-restore.sh
