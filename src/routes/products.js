@@ -1,3 +1,4 @@
+const { checkTransfer } = require('../lib/smart-panel/store');
 const express = require('express');
 const prisma = require('../lib/prisma');
 const requireAdmin = require('../middleware/requireAdmin');
@@ -185,6 +186,7 @@ async function resolveFabrics(db, data, previous, input) {
 }
 
 function productError(err, next) {
+  if (err.code === 'C22_TRANSFER_STALE') return next(Object.assign(err, { statusCode: 409 }));
   if (err.code === 'P2002') return next(Object.assign(new Error(err.meta?.target?.includes('productCode') ? 'کد یکتای محصول قبلاً ثبت شده است' : 'SKU یا سایز و رنگ تکراری است'), { statusCode: 409 }));
   if (err.code === 'P2034') return next(conflict());
   next(err);
@@ -196,6 +198,7 @@ router.patch('/:id', requireAdmin, async (req, res, next) => {
       if (!current) throw Object.assign(new Error('محصول پیدا نشد'), { statusCode: 404 });
       if (req.body.updatedAt !== current.updatedAt.toISOString()) throw conflict();
       const { data, variants } = normalize(req.body, current);
+      if (req.body.c22Transfer !== undefined) await checkTransfer(tx, current, data, req.body.c22Transfer);
       await resolveFabrics(tx, data, current, req.body);
       const ids = req.body.variants.filter(v => v.id).map(v => v.id);
       if (new Set(ids).size !== ids.length || ids.some(id => !current.variants.some(v => v.id === id)) || current.variants.some(v => !ids.includes(v.id))) throw invalid('حذف یا جایگزینی سایز موجود مجاز نیست؛ موجودی آن را صفر کنید');
@@ -250,6 +253,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', requireAdmin, async (req, res, next) => {
   try {
+    if (req.body?.c22Transfer !== undefined) throw invalid('ابتدا پیش‌نویس محصول را ذخیره کنید.');
     const { data, variants } = normalize(req.body);
     await resolveFabrics(prisma, data, null, req.body);
     res.status(201).json(await prisma.product.create({ data: { ...data, variants: { create: variants } }, include: { variants: true } }));
