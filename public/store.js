@@ -196,6 +196,7 @@ $('guestCheckout').addEventListener('submit', async event => {
     const cardOrder = { number: order.orderNumber, key: checkoutRequest.key, total: order.totalPrice, expiry: order.expiresAt };
     try { sessionStorage.setItem('motif-card-order', JSON.stringify(cardOrder)); } catch {}
     void showCardReceipt(cardOrder);
+    void showOnlinePayment(cardOrder);
     checkoutRequest = undefined;
     $('checkoutMessage').textContent = 'شماره سفارش آزمایشی ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
     if (location.pathname === '/cart') await renderCart();
@@ -288,3 +289,30 @@ submitTracking('trackingVerify', 'verify', fields => ({
   form.reset();
   trackingChallengeId = undefined;
 });
+
+async function showOnlinePayment(order) {
+  if (!order || Date.parse(order.expiry) <= Date.now()) return;
+  try {
+    const response = await fetch('/api/payment/availability', { cache: 'no-store' });
+    if (!response.ok || !(await response.json()).mock) return;
+    const button = $('onlinePayment');
+    button.hidden = false;
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/payment/request/' + encodeURIComponent(order.number), {
+          method: 'POST', headers: { 'Idempotency-Key': order.key },
+        });
+        const result = await response.json();
+        if (!response.ok) throw Error(result.error || 'پرداخت آغاز نشد.');
+        if (result.status === 'OPEN' && /^\/api\/payment\/verify\?trackId=\d+$/.test(result.url)) {
+          location.assign(result.url);
+          return;
+        }
+        $('onlinePaymentStatus').textContent = 'نتیجه درخواست پرداخت نیاز به بررسی دارد.';
+      } catch (error) { $('onlinePaymentStatus').textContent = error.message; }
+      finally { button.disabled = false; }
+    };
+  } catch {}
+}
+try { void showOnlinePayment(JSON.parse(sessionStorage.getItem('motif-card-order'))); } catch {}
