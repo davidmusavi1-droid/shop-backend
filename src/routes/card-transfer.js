@@ -7,7 +7,7 @@ const { fail } = require('../lib/checkout');
 
 const router = express.Router();
 const accountId = 'default';
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024, files: 1, parts: 1 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024, files: 1, fields: 0, parts: 2 } });
 
 function handle(action) {
   return async (req, res, next) => {
