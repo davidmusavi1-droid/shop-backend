@@ -249,3 +249,17 @@ model CardTransferSettings {
   accountHolder String
   enabled Boolean @default(false)
 }
+
+model OrderTrackingChallenge {
+  id String @id
+  orderId String
+  phone String
+  tokenHash String
+  expiresAt DateTime
+  consumedAt DateTime?
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([phone, createdAt])
+}
