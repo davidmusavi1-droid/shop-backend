@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto');
 const MAX_AMOUNT = 2147483647;
 const RESERVATION_MS = 30 * 60 * 1000;
 const SHIPPING_ID = 'default';
+const latePayment = new Error('Payment started before reservation cleanup');
 const fail = (statusCode, message) => Object.assign(new Error(message), { statusCode });
 const digits = value => value.replace(/[۰-۹٠-٩]/g, digit =>
   String(digit.charCodeAt(0) - (digit >= '۰' ? 0x6f0 : 0x660)));
@@ -138,11 +139,13 @@ async function releaseExpired(prisma, now = new Date()) {
         data: { status: 'CANCELED' },
       });
       if (changed.count !== 1) return;
+      // A receipt transaction may have committed while this UPDATE waited for the order lock.
+      if (await tx.payment.findUnique({ where: { orderId } })) throw latePayment;
       const items = await tx.orderItem.findMany({ where: { orderId }, orderBy: { variantId: 'asc' } });
       for (const item of items) {
         await tx.variant.update({ where: { id: item.variantId }, data: { stock: { increment: item.quantity } } });
       }
-    });
+    }).catch(error => { if (error !== latePayment) throw error; });
   }
 }
 
