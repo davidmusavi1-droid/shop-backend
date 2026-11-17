@@ -234,3 +234,69 @@ test('invalid citations, timeout and global quota stop further attempts', async 
   assert.equal((await send()).status, 429);
   assert.equal(calls.length, 4);
 });
+
+test('linked dossier draft and final approval stay separate from product publication', async () => {
+  const initialCalls = calls.length;
+  const draft = await ok('/api/products', 'POST', {
+    title: 'آزمون تأیید پرونده', brand: 'MOTIF', productCode: 'MOTIF-981',
+    productType: 'کاپشن', mainFabric: 'کتان', qualityGrade: 'N',
+    basePrice: 125000, isActive: false, images: [photoUrl],
+    variants: [{ sku: 'c22-approval-981', size: 'L', color: 'black', stock: 1,
+      chestWidthCm: 58, lengthCm: 67, sleeveFromNeckCm: 77 }],
+  });
+  const link = base + '/store/products/' + draft.id + '/dossier';
+  const linked = await ok(link, 'POST');
+  const path = '/off/dossiers/' + linked.id;
+  const edited = await ok(path, 'PATCH', { version: linked.version, fields: { styleNumber: '558798' } });
+  assert.equal((await ok(link, 'POST')).styleNumber, '558798');
+  assert.equal(edited.phase, 'draft');
+  assert.equal((await request(path + '/approve', 'POST', { version: linked.version })).status, 409);
+
+  const { chromium } = require('playwright-core');
+  browser ??= await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/chromium',
+    headless: true, args: ['--no-sandbox'] });
+  const context = await browser.newContext({ viewport: { width: 320, height: 850 } });
+  await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
+  try {
+    const page = await context.newPage();
+    await page.goto(origin + '/admin.html');
+    await page.locator('#token').fill(process.env.ADMIN_TOKEN);
+    await page.locator('#loginForm button').click();
+    await page.locator('#recent > *').filter({ hasText: draft.title }).getByRole('button', { name: 'ویرایش', exact: true }).click();
+    await page.locator('#openC22').click();
+    const frame = page.frameLocator('#c22Frame');
+    await frame.locator('#section-review summary').click();
+    await frame.getByRole('button', { name: 'تأیید نهایی پرونده', exact: true }).click();
+    await frame.getByRole('button', { name: 'تأیید نهایی', exact: true }).click();
+    await frame.locator('#editor-status').getByText('تأییدشده', { exact: true }).waitFor();
+    assert.equal(await frame.locator('html').evaluate(node => node.scrollWidth), await frame.locator('html').evaluate(node => node.clientWidth));
+  } finally {
+    await context.close();
+  }
+
+  const approved = await ok(path);
+  assert.equal(approved.approvedVersion, approved.version);
+  assert.equal(approved.reserved, '');
+  const approval = await db.smartApproval.findFirstOrThrow({ where: { dossierId: linked.id } });
+  assert.equal(approval.snapshot.code, draft.productCode);
+  assert.equal(approval.snapshot.fields.styleNumber, '558798');
+  assert.deepEqual(await db.product.findUnique({ where: { id: draft.id }, include: { variants: true } }),
+    { ...draft, createdAt: new Date(draft.createdAt), updatedAt: new Date(draft.updatedAt) });
+  assert.equal((await request('/api/products/' + draft.id, 'GET', undefined, false)).status, 404);
+  assert.equal((await request(path + '/ai/c2/research', 'POST', { version: approved.version })).status, 503);
+
+  const revised = await ok(path, 'PATCH', { version: approved.version, fields: { styleNumber: '559000' } });
+  assert.equal(revised.phase, 'draft');
+  assert.equal(revised.approvedVersion, null);
+  const confirmed = await ok(path + '/approve', 'POST', { version: revised.version });
+  assert.equal(confirmed.phase, 'approved');
+  assert.equal((await request('/api/products/' + draft.id, 'GET', undefined, false)).status, 404);
+  const published = await ok('/api/products/' + draft.id, 'PATCH', {
+    updatedAt: draft.updatedAt, isActive: true, publicationIntent: true,
+    variants: draft.variants.map(variant => ({ id: variant.id, expectedStock: variant.stock })),
+  });
+  assert.equal(published.isActive, true);
+  assert.equal(published.variants[0].stock, 1);
+  assert.equal((await request('/api/products/' + draft.id, 'GET', undefined, false)).status, 200);
+  assert.equal(calls.length, initialCalls);
+});

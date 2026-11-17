@@ -35,7 +35,7 @@ dialog{border:1px solid var(--line);border-radius:16px;max-width:min(475px,calc(
 
 .store-embedded .layout { display: block; }
 .store-embedded .workspace { margin: 0; }
-.store-embedded :is(.sidebar, .mobile-nav, .top, [data-act="archive"], [data-act="nav"], [data-act="mark-review"], [data-act="approve"]) {
+.store-embedded :is(.sidebar, .mobile-nav, .top, [data-act="archive"], [data-act="nav"], [data-act="mark-review"]) {
   display: none;
 }
 .store-embedded #main { padding-block-end: 1rem; min-inline-size: 0; }

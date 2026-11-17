@@ -261,7 +261,7 @@ function changeDossier(p, path, method, body, success) {
   return withAction(async () => {
     const updated = await requestPanel(dossierPath(p) + path, method, { ...body, version: p.version });
     useServer(p, updated);
-    if (path === '/approve') await refreshRegistry().catch(() => {});
+    if (path === '/approve' && !p.store) await refreshRegistry().catch(() => {});
     if (current() === p) refreshEditor();
     if (success) toast(success);
   }, p);

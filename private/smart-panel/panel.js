@@ -437,6 +437,14 @@ function softChecks(p) {
 }
 const warnings = rows => '<ul class="warning-list">'+rows.map(({label,section})=>'<li>'+esc(label)+' '+btn("اصلاح","jump","link compact","",'data-key="'+section+'"')+'</li>').join("")+'</ul>';
 function review(p) {
+  if (p.store) {
+    return '<div class="stack">'+notice("تأیید، نسخهٔ پرونده را ثبت می‌کند. انتشار محصول از فرم مدیریت انجام می‌شود.")+
+      '<dl class="review-box"><dt>نام پرونده</dt><dd>'+esc(p.name || "—")+'</dd>'+
+      '<dt>برند</dt><dd><bdi>'+esc(p.brand || "—")+'</bdi></dd>'+
+      '<dt>شماره استایل</dt><dd><bdi>'+esc(p.styleNumber || "—")+'</bdi></dd></dl>'+
+      '<div class="row">'+badge(p.phase)+btn("بازبینی تحقیق","jump","link compact","left",'data-key="research"')+'</div>'+
+      (p.phase!=="approved"?btn("تأیید نهایی پرونده","approve","primary","check","",!p.name.trim()):"")+'</div>';
+  }
   const hard=productChecks(p), soft=softChecks(p);
   const values=keys=>'<ul>'+keys.map(k=>'<li>'+labels[k]+' · <strong><bdi>'+esc(valueString(p,k))+'</bdi></strong> '+sourceBtn(p,k)+'</li>').join("")+'</ul>';
   return '<div class="stack"><div class="row">'+productCell(p)+' '+codeStatus(p)+'</div>'+
@@ -780,6 +788,11 @@ document.addEventListener("click",e=>{
   }
   if(act==="mark-review"){changeDossier(p,"/review","POST",{},"پرونده آمادهٔ بررسی است.");return;}
   if(act==="approve"){
+    if(p.store){
+      dialog("تأیید نهایی پرونده","<p>نسخهٔ فعلی پرونده ثبت می‌شود. وضعیت انتشار محصول تغییر نمی‌کند.</p>",
+        ()=>changeDossier(p,"/approve","POST",{},"پرونده تأیید شد."),"تأیید نهایی","انصراف");
+      return;
+    }
     if(productChecks(p).length){syncReview(p);toast("موارد ضروری را در بازبینی تکمیل کنید.");return;}
     dialog("تأیید نهایی پرونده",'<p>با تأیید، کد <bdi>'+esc(normalizedCode(p.code))+'</bdi> برای همین پرونده رزرو و نسخهٔ پرونده تثبیت می‌شود.</p>',
       ()=>changeDossier(p,"/approve","POST",{},"پرونده تأیید شد."),"تأیید نهایی","انصراف");

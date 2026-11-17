@@ -96,7 +96,8 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     if (!changes) return row;
     const { data, after } = changes;
     const changed = await tx.smartDossier.updateMany({
-      where: { id: row.id, version, archivedAt: null }, data: { ...data, version: { increment: 1 } },
+      where: { id: row.id, version, archivedAt: null },
+      data: { ...(store && row.phase === 'approved' ? resetReview : {}), ...data, version: { increment: 1 } },
     });
     if (changed.count !== 1) throw V.conflict();
     if (after) await after(tx);
@@ -217,6 +218,24 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
   router.post('/dossiers/:id/approve', wrap(async (req, res) => {
     const row = await mutate(req, req.body?.version, 'approved', currentRow => {
       if (currentRow.phase === 'approved') return null;
+      if (store) {
+        if (!currentRow.productId || !currentRow.payload.name?.trim()) {
+          throw V.invalid('برای تأیید، نام پرونده و اتصال به محصول لازم است.');
+        }
+        const version = currentRow.version + 1;
+        return {
+          data: { phase: 'approved', approvedVersion: version },
+          after: async tx => {
+            const product = await tx.product.findUnique({
+              where: { id: currentRow.productId }, select: { productCode: true },
+            });
+            if (!product) throw notFound();
+            await tx.smartApproval.create({
+              data: { dossierId: currentRow.id, version, snapshot: { code: product.productCode, fields: currentRow.payload } },
+            });
+          },
+        };
+      }
       const code = currentRow.proposedCode;
       const issues = V.approvalIssues(currentRow.payload, code);
       if (issues.length) throw Object.assign(V.fail(422, 'INCOMPLETE', 'موارد ضروری بازبینی کامل نشده‌اند.'), { issues });
