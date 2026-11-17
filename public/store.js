@@ -81,7 +81,7 @@ function renderDetail(p,preferredId){
  const guide=el('details');guide.append(el('summary','چطور اندازه‌ها را مقایسه کنم؟'),el('p',help(currentFilter().kind==='pants')));info.append(guide);
  buy.type='button';buy.onclick=()=>{const line=cart.find(x=>x.variantId===selected.id),quantity=(line?.quantity||0)+1;status.hidden=false;if(quantity>selected.stock){status.textContent='بیش از موجودی این آیتم نمی‌توانی به سبد اضافه کنی.';return;}if(line)line.quantity=quantity;else cart.push({productId:p.id,variantId:selected.id,quantity});saveCart();status.textContent='به سبد خرید اضافه شد.';};const buyArea=el('div',null,'buy');buyArea.append(buy,status,el('p','افزودن به سبد، کالا را رزرو نمی‌کند.','hint'));info.append(buyArea);root.append(gallery,info);
 }
-async function renderCart(){const ticket=++requestId;$('cartItems').textContent='در حال بررسی قیمت و موجودی…';let total=0;const rows=[];
+async function renderCart(){const ticket=++requestId;$('cartItems').textContent='در حال بررسی قیمت و موجودی…';$('guestCheckout').hidden=true;let total=0;let confirmed=0;const rows=[];
  const cartLines=cart.slice();
  const productsById=new Map();
  await Promise.all([...new Set(cartLines.map(line=>line.productId))].map(async id=>{
@@ -92,9 +92,11 @@ async function renderCart(){const ticket=++requestId;$('cartItems').textContent=
  }));
  if(ticket!==requestId||location.pathname!=='/cart')return;
  for(const line of cartLines){const p=productsById.get(line.productId);
- const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p','گرید '+(MotifCatalog.gradeLetter(v.itemGrade||p.qualityGrade)||'ثبت نشده')),el('p',money(p.basePrice+v.priceDelta)+(line.quantity>1?' برای هر عدد':'')));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
+ const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p','گرید '+(MotifCatalog.gradeLetter(v.itemGrade||p.qualityGrade)||'ثبت نشده')),el('p',money(p.basePrice+v.priceDelta)+(line.quantity>1?' برای هر عدد':'')));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;confirmed++;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
  const remove=el('button','حذف');remove.onclick=()=>{cart=cart.filter(x=>x.variantId!==line.variantId);saveCart();renderCart();};row.append(remove);rows.push(row);}
- if(ticket!==requestId||location.pathname!=='/cart')return;$('cartItems').replaceChildren(...(rows.length?rows:[el('p','سبد انتخاب‌ها خالی است.')]));$('cartTotal').textContent='جمع اقلام قابل تأیید: '+money(total);}
+ if(ticket!==requestId||location.pathname!=='/cart')return;$('cartItems').replaceChildren(...(rows.length?rows:[el('p','سبد انتخاب‌ها خالی است.')]));$('cartTotal').textContent='جمع اقلام قابل تأیید: '+money(total);
+ if(confirmed>0&&confirmed===cartLines.length) await showCheckout(ticket,total);
+}
 function metadata(p) {
  const origin = 'https://motifdress.com';
  const collection = location.pathname === '/collection';
@@ -153,3 +155,50 @@ window.addEventListener('message',e=>{if(window.parent===window||e.source!==wind
 if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))window.parent.postMessage({type:'motif-preview-ready'},location.origin);
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
+
+async function showCheckout(ticket, total) {
+  try {
+    const response = await fetch('/api/checkout/shipping', { cache: 'no-store' });
+    if (!response.ok) return;
+    const { shippingFee } = await response.json();
+    if (ticket !== requestId || location.pathname !== '/cart') return;
+    if (!Number.isInteger(shippingFee)) {
+      $('checkoutMessage').textContent = 'تعرفه ارسال هنوز تنظیم نشده است.';
+      return;
+    }
+    $('checkoutShipping').textContent = 'ارسال ' + money(shippingFee) + ' · مبلغ نهایی ' + money(total + shippingFee);
+    $('guestCheckout').hidden = false;
+  } catch {}
+}
+
+let checkoutRequest;
+$('guestCheckout').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  if (button.disabled) return;
+  const items = cart.map(({ variantId, quantity }) => ({ variantId, quantity }));
+  const body = JSON.stringify({ items, customer: Object.fromEntries(new FormData(form)) });
+  if (checkoutRequest?.body !== body) checkoutRequest = { body, key: crypto.randomUUID() };
+  button.disabled = true;
+  try {
+    const response = await fetch('/api/checkout/orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': checkoutRequest.key }, body,
+    });
+    const order = await response.json();
+    if (!response.ok) throw new Error(order.error || 'ثبت سفارش ممکن نیست.');
+    const ordered = new Map(items.map(item => [item.variantId, item.quantity]));
+    cart = cart.map(item => ({
+      ...item, quantity: item.quantity - (ordered.get(item.variantId) || 0),
+    })).filter(item => item.quantity > 0);
+    saveCart();
+    form.reset();
+    checkoutRequest = undefined;
+    $('checkoutMessage').textContent = 'شماره سفارش آزمایشی ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
+    if (location.pathname === '/cart') await renderCart();
+  } catch (error) {
+    $('checkoutMessage').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
