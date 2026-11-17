@@ -154,6 +154,11 @@
           <p>
             متن‌ها، رنگ‌ها، بنرها و محصولات منتخب صفحهٔ اصلی را مدیریت کنید.
           </p>
+          <form id="shippingSettings" hidden>
+            <label>تعرفه ثابت ارسال (تومان)<input name="fee" type="number" min="0" max="2147483647" step="1" required></label>
+            <button type="submit">ذخیره تعرفه ارسال</button>
+            <p id="shippingStatus" role="status"></p>
+          </form>
           <button id="siteButton" class="primary">مدیریت صفحهٔ اصلی</button>
           <hr />
           <p>رمز مدیریت فقط در حافظهٔ همین صفحه نگهداری می‌شود.</p>
@@ -179,6 +184,6 @@
     <script src="/site-content.js?v=20261030-theme"></script>
     <script src="/admin-site.js?v=20261107-session"></script>
     <script src="/admin-fields.js?v=20261107-session"></script>
-    <script src="/admin.js?v=20261107-session"></script>
+    <script src="/admin.js?v=20261117-checkout-preview"></script>
   </body>
 </html>
