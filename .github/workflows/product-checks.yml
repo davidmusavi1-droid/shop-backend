@@ -53,3 +53,137 @@ jobs:
           pg_dump --version
           pg_restore --version
           bash test/migration-restore.sh
+      - name: One-off mock Zibal checkout verification
+        env:
+          NODE_ENV: test
+          MOTIF_CHECKOUT_PREVIEW: 'true'
+          MOTIF_ZIBAL_PROVIDER: mock
+        run: |
+          node <<'MOTIF_E2E'
+          const assert = require('node:assert/strict');
+          const { randomUUID } = require('node:crypto');
+          assert.equal(process.env.DATABASE_URL, 'postgresql://motif_test:local_test_only@127.0.0.1:5432/motif_test');
+          assert.equal(process.env.GITHUB_ACTIONS, 'true');
+          assert.equal(process.env.NODE_ENV, 'test');
+          assert.equal(process.env.MOTIF_ZIBAL_PROVIDER, 'mock');
+          const express = require('express');
+          const prisma = require('./src/lib/prisma');
+          const zibal = require('./src/lib/zibal');
+          const original = zibal.createZibalGateway;
+          const requested = [];
+          const verified = [];
+          let unknown;
+          zibal.createZibalGateway = options => original({
+            ...options,
+            transport(url, payload) {
+              if (url.endsWith('/request')) requested.push(payload.amount);
+              else {
+                verified.push(payload.trackId);
+                if (String(payload.trackId) === unknown) return { result: 201 };
+              }
+              return options.transport(url, payload);
+            },
+          });
+          const app = express();
+          app.use(express.json());
+          app.use('/api/checkout', require('./src/routes/checkout'));
+          app.use('/api/payment', require('./src/routes/payment'));
+          zibal.createZibalGateway = original;
+          
+          async function run() {
+            const server = await new Promise(resolve => {
+              const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
+            });
+            const base = 'http://127.0.0.1:' + server.address().port;
+            const post = (path, key, data) => fetch(base + path, {
+              method: 'POST', headers: { 'content-type': 'application/json', 'Idempotency-Key': key },
+              body: JSON.stringify(data),
+            });
+            try {
+              await prisma.shippingSettings.upsert({
+                where: { id: 'default' }, update: { fee: 25000 }, create: { id: 'default', fee: 25000 },
+              });
+              async function fixture() {
+                const product = await prisma.product.create({ data: {
+                  title: 'E2E mock checkout', basePrice: 200000, inventoryMode: 'SINGLE',
+                  images: [], customerNeeds: [], styles: [], variants: { create: {
+                    size: 'M', color: 'black', sku: randomUUID(), stock: 1, priceDelta: 5000, itemImages: [],
+                  } },
+                }, include: { variants: true } });
+                return product.variants[0].id;
+              }
+              const stock = async id => (await prisma.variant.findUniqueOrThrow({ where: { id } })).stock;
+              const checkout = (variantId, key, suffix) => post('/api/checkout/orders', key, {
+                customer: { fullName: 'Test Fixture', phone: '0912999000' + suffix, address: 'Fixture address',
+                  province: 'Tehran', city: 'Tehran', postalCode: '1234567890' },
+                items: [{ variantId, quantity: 1 }],
+              });
+              async function booking(id, key, digit) {
+                const response = await checkout(id, key, digit);
+                const body = await response.json();
+                assert.equal(response.status, 201, JSON.stringify(body));
+                return body;
+              }
+              async function start(orderNumber, key) {
+                const response = await post('/api/payment/request/' + orderNumber, key);
+                const body = await response.json();
+                assert.equal(response.status, 200, JSON.stringify(body));
+                assert.equal(body.status, 'OPEN');
+                assert.match(body.url, /^\/api\/payment\/verify\?trackId=\d+$/);
+                return body.url;
+              }
+              const id = await fixture();
+              const keys = [randomUUID(), randomUUID()];
+              const race = await Promise.all(keys.map((key, i) => checkout(id, key, i)));
+              assert.deepEqual(race.map(response => response.status).sort(), [201, 409]);
+              const winner = race.findIndex(response => response.status === 201);
+              const { orderNumber, totalPrice, shippingFee, expiresAt } = await race[winner].json();
+              assert.equal(totalPrice, 230000);
+              assert.equal(shippingFee, 25000);
+              assert.ok(Date.parse(expiresAt) - Date.now() > 29 * 60000);
+              assert.equal(await stock(id), 0);
+              assert.equal((await booking(id, keys[winner], winner)).orderNumber, orderNumber);
+              console.log('PASS checkout totals, 30-minute reservation, retry and single-unit race (201/409)');
+              const callback = await start(orderNumber, keys[winner]);
+              assert.equal(await start(orderNumber, keys[winner]), callback);
+              assert.deepEqual(requested, [2300000]);
+              async function visit(path) {
+                const response = await fetch(base + path);
+                assert.equal(response.status, 200);
+                return response.text();
+              }
+              await Promise.all([visit(callback), visit(callback)]);
+              assert.match(await visit(callback), /پرداخت آزمایشی تأیید شد/);
+              assert.equal(verified.length, 1);
+              const paid = await prisma.payment.findUniqueOrThrow({ where: { orderId: orderNumber },
+                include: { order: true, zibalAttempt: true } });
+              assert.equal(paid.isSuccessful, true);
+              assert.equal(paid.order.status, 'PAID');
+              assert.equal(paid.zibalAttempt.state, 'PAID');
+              assert.equal(await prisma.payment.count({ where: { orderId: orderNumber } }), 1);
+              assert.equal(await stock(id), 0);
+              console.log('PASS payment amount in rials, callback and exactly-once verification and persistence');
+              const held = await fixture(), heldKey = randomUUID();
+              const { orderNumber: heldOrder } = await booking(held, heldKey, 2);
+              const pendingCallback = await start(heldOrder, heldKey);
+              unknown = new URL(pendingCallback, base).searchParams.get('trackId');
+              assert.match(await visit(pendingCallback), /پرداخت آزمایشی تأیید نشده است/);
+              const free = await fixture(), freeKey = randomUUID();
+              const { orderNumber: freeOrder } = await booking(free, freeKey, 3);
+              await prisma.checkoutReservation.updateMany({ where: { orderId: { in: [heldOrder, freeOrder] } },
+                data: { expiresAt: new Date(0) } });
+              assert.equal((await checkout(held, randomUUID(), 4)).status, 409);
+              assert.equal(await stock(held), 0);
+              assert.equal(await stock(free), 1);
+              const pending = await prisma.payment.findUniqueOrThrow({ where: { orderId: heldOrder },
+                include: { order: true } });
+              assert.equal(pending.isSuccessful, false);
+              assert.equal(pending.order.status, 'PENDING');
+              console.log('PASS unknown mock response preserves expired reservation; unpaid control released');
+            } finally {
+              await new Promise(resolve => server.close(resolve));
+              await prisma.$disconnect();
+            }
+          }
+          run().catch(error => { console.error(error); process.exitCode = 1; });
+          MOTIF_E2E
