@@ -11,6 +11,13 @@
 <p id="rangeError" role="alert" hidden>بازه نامعتبر است؛ عدد مثبت وارد کن و مقدار «از» را بزرگ‌تر از «تا» نگذار.</p><div class="section-head"><span id="count"></span><label class="sort-label">مرتب‌سازی<select id="sort"><option value="fit">نزدیک‌ترین اندازه</option><option value="new">تازه‌ترین</option><option value="price">قیمت کمتر</option></select></label></div><div id="catalogStatus" class="state" role="status"></div><button id="retry" class="button" hidden>تلاش دوباره</button><div id="products" class="grid"></div><p class="hint">اندازه‌های ثبت‌شدهٔ هر آیتم معیارند؛ فرم و کشسانی لباس را هم بررسی کن.</p></div></section>
 <section id="product" hidden><nav id="productBreadcrumb" class="breadcrumb" aria-label="مسیر صفحه"></nav><a class="back" href="/collection">بازگشت به انتخاب‌ها</a><div id="productStatus" role="status" class="state"></div><button id="detailRetry" class="button" hidden>تلاش دوباره</button><div id="detail" class="detail" hidden></div></section>
 <section id="cart" class="section" hidden><h1>سبد انتخاب‌ها</h1><div id="cartItems"></div><p id="cartTotal"></p><p id="checkoutMessage" role="status" aria-live="polite"></p>
+<form id="cardReceipt" hidden>
+  <h2>کارت‌به‌کارت</h2>
+  <p id="cardDestination"></p>
+  <label>تصویر رسید<input name="receipt" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+  <button class="primary">ارسال خصوصی رسید</button>
+  <p id="cardReceiptStatus" role="status"></p>
+</form>
 <form id="guestCheckout" hidden>
   <h2>مشخصات گیرنده</h2>
   <div class="two-fields">
@@ -26,4 +33,4 @@
 </form><p class="notice">پرداخت آنلاین هنوز فعال نشده است. افزودن به این سبد، کالا را رزرو نمی‌کند.</p><a class="button" href="/collection">ادامهٔ انتخاب</a></section>
 <section id="contact" class="section" hidden><h1>ارتباط با MOTIF</h1><p>ما را دنبال کن یا از راه‌های ارتباطی زیر پیام بده.</p><div id="contactSocials" class="socials"></div><p id="contactEmpty" hidden>راه‌های ارتباطی به‌زودی اینجا ثبت می‌شوند.</p></section>
 </div><!--SERVER_CONTENT--></main><footer class="wrap"><a class="logo" href="/" dir="ltr">MOTIF<span>.</span></a><a href="/contact">تماس با ما</a><div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div></footer>
-<!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/store.js?v=20261117-checkout-preview"></script></body></html>
+<!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/store.js?v=20261117-card-transfer"></script></body></html>
