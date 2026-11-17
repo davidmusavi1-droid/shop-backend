@@ -165,6 +165,7 @@ model Order {
 
   items   OrderItem[]
   payment Payment?
+  checkout CheckoutReservation?
 }
 
 model OrderItem {
@@ -206,4 +207,27 @@ model AdminSession {
   absoluteExpiresAt DateTime
 
   @@index([expiresAt])
+}
+
+
+model CheckoutReservation {
+  orderId String @id
+  order Order @relation(fields: [orderId], references: [id])
+  requestKey String @unique
+  requestHash String
+  fullName String
+  phone String
+  address String
+  province String
+  city String
+  postalCode String
+  shippingFee Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model ShippingSettings {
+  id String @id
+  fee Int
 }
