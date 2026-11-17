@@ -996,6 +996,8 @@ $("siteButton").onclick = () => {
   if (!leave()) return;
   display("settings");
   void loadShippingSettings();
+  void loadCardSettings();
+  void loadCheckoutOrders();
   $("settings").hidden = true;
   MotifSiteAdmin.open(products);
 };
@@ -1108,3 +1110,107 @@ $("shippingSettings").addEventListener("submit", async event => {
     button.disabled = false;
   }
 });
+
+const transferBase = '/api/checkout/card-transfer';
+const checkoutStatuses = {
+  PENDING: 'در انتظار پرداخت', PAID: 'پرداخت‌شده', PROCESSING: 'در حال آماده‌سازی',
+  SHIPPED: 'ارسال‌شده', DELIVERED: 'تحویل‌شده', CANCELED: 'لغوشده',
+};
+async function loadCardSettings() {
+  const form = $('cardSettings');
+  form.hidden = true;
+  try {
+    const settings = await api(transferBase + '/settings');
+    form.elements.cardNumber.value = settings.cardNumber;
+    form.elements.accountHolder.value = settings.accountHolder;
+    form.elements.enabled.checked = settings.enabled;
+    form.hidden = false;
+  } catch {}
+}
+$('cardSettings').addEventListener('submit', async event => {
+  event.preventDefault();
+  const fields = event.currentTarget.elements;
+  try {
+    await api(transferBase + '/settings', { method: 'PUT', body: JSON.stringify({
+      cardNumber: fields.cardNumber.value.trim(), accountHolder: fields.accountHolder.value.trim(), enabled: fields.enabled.checked,
+    }) });
+    $('cardSettingsStatus').textContent = 'حساب مقصد ذخیره شد.';
+  } catch (error) { $('cardSettingsStatus').textContent = error.message; }
+});
+
+async function loadCheckoutOrders(after) {
+  try {
+    const data = await api(transferBase + '/orders' + (after ? '?after=' + encodeURIComponent(after) : ''));
+    $('checkoutOrders').hidden = false;
+    const list = $('checkoutOrderList');
+    if (!after) list.replaceChildren();
+    for (const order of data.orders) list.append(renderCheckoutOrder(order));
+    $('moreCheckoutOrders').hidden = !data.next;
+    $('moreCheckoutOrders').onclick = () => loadCheckoutOrders(data.next);
+  } catch (error) { $('checkoutOrderStatus').textContent = error.message; }
+}
+function renderCheckoutOrder(order) {
+  const element = document.createElement('article');
+  const receiver = order.checkout;
+  const url = transferBase + '/orders/' + encodeURIComponent(order.id);
+  const line = text => {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = text;
+    element.append(paragraph);
+  };
+  const action = (label, callback, refresh = true) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        await callback();
+        $('checkoutOrderStatus').textContent = '';
+        if (refresh) await loadCheckoutOrders();
+      } catch (error) {
+        $('checkoutOrderStatus').textContent = error.message;
+      } finally { button.disabled = false; }
+    };
+    element.append(button);
+  };
+  const update = (path, method, body) => api(path, { method, body: JSON.stringify(body) });
+  line(order.id + ' · ' + checkoutStatuses[order.status]);
+  line(receiver.fullName + ' · ' + receiver.phone + ' · ' + [receiver.province, receiver.city, receiver.address, receiver.postalCode].join('، '));
+  line('مبلغ سفارش ' + order.totalPrice.toLocaleString('fa-IR') + ' تومان');
+  const transfer = order.payment?.cardTransfer;
+  line(order.payment?.isSuccessful ? 'پرداخت تأیید شده' : transfer?.rejected ? 'رسید رد شده' : transfer ? 'رسید در انتظار بررسی' : 'رسید ثبت نشده');
+  if (transfer) {
+    action('دریافت رسید', async () => {
+      const response = await MotifAdminSession.request(url + '/receipt');
+      if (!response.ok) throw Error('دریافت رسید ممکن نیست.');
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'receipt.jpg';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+    }, false);
+    if (!transfer.reviewedAt) {
+      action('تأیید پرداخت', async () => {
+        if (!confirm('واریز و مبلغ را در حساب بانکی بررسی کرده‌اید؟')) return;
+        await update(url + '/review', 'POST', { approved: true });
+      });
+      action('رد رسید و لغو سفارش', async () => {
+        if (!confirm('رسید رد و موجودی سفارش آزاد شود؟')) return;
+        await update(url + '/review', 'POST', { approved: false });
+      });
+    }
+  }
+  const next = { PAID: 'PROCESSING', PROCESSING: 'SHIPPED', SHIPPED: 'DELIVERED' }[order.status];
+  if (next) action(checkoutStatuses[next], () => update('/api/orders/' + encodeURIComponent(order.id) + '/status', 'PATCH', { status: next }));
+  if (order.shipmentTrackingCode) line('کد مرسوله ' + order.shipmentTrackingCode);
+  if (order.status === 'SHIPPED') {
+    const code = document.createElement('input');
+    code.setAttribute('aria-label', 'کد رهگیری مرسوله');
+    code.value = order.shipmentTrackingCode || '';
+    element.append(code);
+    action('ذخیره کد مرسوله', () => update(url + '/shipment', 'PATCH', { shipmentTrackingCode: code.value }));
+  }
+  return element;
+}
