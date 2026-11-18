@@ -47,10 +47,6 @@ jobs:
       - run: MOTIF_SESSION_TEST_DB=1 node --test test/admin-session.test.js
       - run: node scripts/verify-admin-release.cjs --skip-storage
       - run: node test/product-integration.cjs
-      - run: node test/structure-integration.cjs
-      - run: |
-          export PATH="/usr/lib/postgresql/16/bin:$PATH"
-          pg_dump --version
-          pg_restore --version
-          bash test/migration-restore.sh
       - run: node test/zibal-reconciliation.cjs
+      - run: node test/structure-integration.cjs
+      - run: PATH=/usr/lib/postgresql/16/bin:$PATH bash test/migration-restore.sh

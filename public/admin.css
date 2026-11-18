@@ -836,3 +836,17 @@ fieldset[data-key] .choice-editor label {
   padding: 0;
   background: transparent;
 }
+
+#c22Dialog {
+  box-sizing: border-box;
+  inline-size: min(72rem, 100% - 1rem);
+  max-inline-size: none;
+  padding: .5rem;
+}
+#c22Frame {
+  display: block;
+  inline-size: 100%;
+  block-size: 75dvh;
+  border: 0;
+  margin-block-start: .5rem;
+}

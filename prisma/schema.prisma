@@ -129,6 +129,66 @@ model Variant {
   @@unique([productId, size, color])
 }
 
+model CheckoutReservation {
+  orderId String @id
+  order Order @relation(fields: [orderId], references: [id])
+  requestKey String @unique
+  requestHash String
+  fullName String
+  phone String
+  address String
+  province String
+  city String
+  postalCode String
+  shippingFee Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model ShippingSettings {
+  id String @id
+  fee Int
+}
+
+
+model CardTransfer {
+  paymentId String @id
+  payment Payment @relation(fields: [paymentId], references: [id])
+  receipt Bytes
+  reviewedAt DateTime?
+  rejected Boolean @default(false)
+}
+
+model CardTransferSettings {
+  id String @id
+  cardNumber String
+  accountHolder String
+  enabled Boolean @default(false)
+}
+
+model OrderTrackingChallenge {
+  id String @id
+  orderId String
+  phone String
+  tokenHash String
+  expiresAt DateTime
+  consumedAt DateTime?
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([phone, createdAt])
+}
+
+model ZibalAttempt {
+  paymentId String @id
+  payment Payment @relation(fields: [paymentId], references: [id])
+  trackId String? @unique
+  state String @default("STARTING")
+  trackIssuedAt DateTime?
+}
+
 model Customer {
   id        String   @id @default(uuid())
   fullName  String
@@ -212,63 +272,80 @@ model AdminSession {
   @@index([expiresAt])
 }
 
-
-model CheckoutReservation {
-  orderId String @id
-  order Order @relation(fields: [orderId], references: [id])
-  requestKey String @unique
-  requestHash String
-  fullName String
-  phone String
-  address String
-  province String
-  city String
-  postalCode String
-  shippingFee Int
-  expiresAt DateTime
-
-  @@index([expiresAt])
+// Phase B tables are installed only by the guarded local test setup.
+model SmartDossier {
+  id              String   @id @default(uuid())
+  version         Int      @default(0)
+  phase           String   @default("draft")
+  proposedCode    String?
+  approvedVersion Int?
+  productId       String?  @unique
+  payload         Json
+  archivedAt      DateTime?
+  retiredReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  images          SmartImage[]
+  approvals       SmartApproval[]
+  reservation     SmartCode?
 }
 
-model ShippingSettings {
-  id String @id
-  fee Int
+model SmartCode {
+  code       String       @id
+  dossierId  String?      @unique
+  dossier    SmartDossier? @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+  reservedAt DateTime     @default(now())
 }
 
+model SmartImage {
+  id          String       @id
+  dossierId   String
+  dossier     SmartDossier @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+  name        String
+  size        Int
+  digest      String
+  bytes       Bytes?
+  createdAt   DateTime     @default(now())
 
-model CardTransfer {
-  paymentId String @id
-  payment Payment @relation(fields: [paymentId], references: [id])
-  receipt Bytes
-  reviewedAt DateTime?
-  rejected Boolean @default(false)
+  @@index([dossierId])
 }
 
-model CardTransferSettings {
-  id String @id
-  cardNumber String
-  accountHolder String
-  enabled Boolean @default(false)
+model SmartApproval {
+  dossierId String
+  version   Int
+  snapshot  Json
+  at        DateTime @default(now())
+  dossier   SmartDossier @relation(fields: [dossierId], references: [id], onDelete: Restrict)
+
+  @@id([dossierId, version])
 }
 
-model OrderTrackingChallenge {
-  id String @id
-  orderId String
-  phone String
-  tokenHash String
-  expiresAt DateTime
-  consumedAt DateTime?
-  attempts Int @default(0)
-  createdAt DateTime @default(now())
+model SmartEvent {
+  id        String   @id @default(uuid())
+  dossierId String
+  action    String
+  version   Int
+  actor     String
+  at        DateTime @default(now())
 
-  @@index([createdAt])
-  @@index([phone, createdAt])
+  @@index([dossierId, at])
 }
 
-model ZibalAttempt {
-  paymentId String @id
-  payment Payment @relation(fields: [paymentId], references: [id])
-  trackId String? @unique
-  state String @default("STARTING")
-  trackIssuedAt DateTime?
+// Durable execution reservation, including uncertain provider outcomes.
+model SmartAiRun {
+  id        String   @id
+  operation String
+  scope     String   @default("pilot")
+  dossierId String
+  version   Int
+  status    String
+  model     String
+  usage     Json?
+  result    Json?
+  rawResponse String?
+  errorCode String?
+  at        DateTime @default(now())
+
+  @@unique([operation, scope])
+  @@index([at])
 }
