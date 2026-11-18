@@ -270,4 +270,5 @@ model ZibalAttempt {
   payment Payment @relation(fields: [paymentId], references: [id])
   trackId String? @unique
   state String @default("STARTING")
+  trackIssuedAt DateTime?
 }
