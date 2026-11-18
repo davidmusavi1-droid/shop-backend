@@ -75,6 +75,17 @@ test('one structured vision request carries only the three numbered JPEGs and pr
   assert.equal(result.usage.costToman, 260);
 });
 
+test('vision preserves the PNG media type alongside legacy JPEG', async () => {
+  const mixed = [images[0], { ...images[1], mime: 'image/png' }, images[2]];
+  const provider = liaraProvider(cfg, { fetcher: async (_url, options) => {
+    const inputs = JSON.parse(options.body).messages[1].content.slice(1);
+    assert.match(inputs[0].image_url.url, /^data:image\/jpeg;base64,/);
+    assert.equal(inputs[1].image_url.url, 'data:image/png;base64,' + images[1].bytes.toString('base64'));
+    return json(analysis);
+  } });
+  await provider.analyze(mixed);
+});
+
 test('a valid null garment type stays unknown without dropping the label findings', async () => {
   const provider = liaraProvider(cfg, { fetcher: async () => json({ ...analysis, type: null }) });
   const { result } = await provider.analyze(images);

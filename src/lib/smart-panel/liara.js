@@ -165,7 +165,7 @@ function liaraProvider(config, { fetcher = globalThis.fetch, timeoutMs = 20_000 
       'برای type، نمای کلی پوشاک را از روی فرم لباس، آستین‌ها، خط بازشو یا جیب‌های قابل مشاهده بررسی کن. اگر این شواهد از یک نوع کلی پوشاک پشتیبانی می‌کنند، نام کوتاه آن را پیشنهاد بده و در evidence ویژگی قابل مشاهده و در image شماره تصویر همان نما را ثبت کن. وجود نام نوع پوشاک روی لیبل لازم نیست. اگر نوع کلی هم از روی تصویر قابل تشخیص نیست، type را null بگذار.';
     const content = operation === 'analyze' ? [{ type: 'text', text: visionPrompt + (readLabels ?
       ' کلید labelObservations را هم اضافه کن. آرایه‌ای از تمام مشاهده‌های جداگانهٔ شمارهٔ استایل (styleNumber) یا کشور ساخت (country) با کلیدهای key, value, image, origin, evidence باشد. origin فقط sewn (لیبل دوخته‌شده)، hangtag (آویز) یا unknown است. برای متن متعارض هر دو مشاهده و تصویر مربوط را حفظ کن. تعلق تگ آویز به لباس را فرض نکن.' : '') },
-      ...images.map(image => ({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + image.bytes.toString('base64') } }))]
+      ...images.map(image => ({ type: 'image_url', image_url: { url: 'data:' + (image.mime === 'image/png' ? 'image/png' : 'image/jpeg') + ';base64,' + image.bytes.toString('base64') } }))]
       : researchQuestion(subject, config.separateStyle);
     const maxTokens = operation === 'analyze'
       ? (readLabels ? 1200 : 600)
