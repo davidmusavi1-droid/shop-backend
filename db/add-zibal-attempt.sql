@@ -4,4 +4,8 @@ CREATE TABLE IF NOT EXISTS "ZibalAttempt" (
   "trackId" TEXT UNIQUE,
   "state" TEXT NOT NULL DEFAULT 'STARTING' CHECK ("state" IN ('STARTING', 'OPEN', 'VERIFYING', 'REVIEW', 'PAID'))
 );
+ALTER TABLE "ZibalAttempt" ADD COLUMN IF NOT EXISTS "trackIssuedAt" TIMESTAMP(3);
+ALTER TABLE "ZibalAttempt" DROP CONSTRAINT IF EXISTS "ZibalAttempt_state_check";
+ALTER TABLE "ZibalAttempt" ADD CONSTRAINT "ZibalAttempt_state_check"
+  CHECK ("state" IN ('STARTING', 'OPEN', 'VERIFYING', 'REVIEW', 'PAID', 'EXPIRED'));
 COMMIT;
