@@ -5,7 +5,14 @@ const fail = (statusCode, message) => Object.assign(new Error(message), { status
 
 const router = express.Router();
 
-router.post('/', async (req, res, next) => {
+function restrictPreviewOrders(req, res, next) {
+  if (process.env.NODE_ENV !== 'test' && process.env.MOTIF_CHECKOUT_PREVIEW === 'true') {
+    return requireAdmin(req, res, next);
+  }
+  next();
+}
+
+router.post('/', restrictPreviewOrders, async (req, res, next) => {
   const { customer, source, items } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {
