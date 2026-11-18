@@ -53,3 +53,4 @@ jobs:
           pg_dump --version
           pg_restore --version
           bash test/migration-restore.sh
+      - run: node test/zibal-reconciliation.cjs
