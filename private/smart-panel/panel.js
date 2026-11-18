@@ -267,7 +267,7 @@ function imageGallery(p) {
   return '<div class="gallery">'+p.images.map((a,i)=>{
     const data='data-image="'+esc(a.id)+'"';
     return '<article class="image-card"><div class="image-preview">'+previewImage(p,a)+'</div><strong>'+esc(a.name)+'</strong><small>'+esc(a.demo?"تصویر آزمایشی · JPG":a.format||"نامشخص")+' · '+number(Math.round(a.size/1024))+' کیلوبایت</small><div>'+
-    (p.mainImage===a.id?metaBadge("تصویر اصلی","green"):"")+(a.valid?"":metaBadge("خارج از ضوابط JPG / ۳ مگابایت","red"))+'</div>'+
+    (p.mainImage===a.id?metaBadge("تصویر اصلی","green"):"")+(a.valid?"":metaBadge("خارج از ضوابط JPG یا PNG / ۳ مگابایت","red"))+'</div>'+
     '<div class="choices" role="group" aria-label="گروه‌های تصویر">'+Object.entries(groupNames).map(([key,t])=>'<label class="choice"><input type="checkbox" data-image-group="'+key+'" '+data+' '+(a.groups.includes(key)?"checked ":"")+(readOnly(p)?"disabled":"")+'>'+t+'</label>').join("")+'</div>'+
     (!readOnly(p)?'<div class="actions">'+btn("اصلی","main-image","compact","star",data,p.mainImage===a.id || !a.groups.includes("product") || !a.valid)+
     btn("","move-image","compact","up",data+' data-shift="-1" aria-label="جابه‌جایی به عقب"',i===0)+
@@ -276,7 +276,7 @@ function imageGallery(p) {
   }).join("")+'</div>';
 }
 function images(p) {
-  return '<div class="stack"><label class="drop">'+icon("upload")+'<strong>انتخاب عکس‌های محصول</strong><small>چند عکس JPG انتخاب کنید. سقف هر عکس ۳٬۰۰۰٬۰۰۰ بایت است.</small><span class="btn primary">انتخاب فایل</span><input id="files" type="file" accept="image/jpeg,.jpg,.jpeg" multiple aria-label="انتخاب فایل‌های تصویر"></label>'+
+  return '<div class="stack"><label class="drop">'+icon("upload")+'<strong>انتخاب عکس‌های محصول</strong><small>عکس‌های JPG یا PNG را انتخاب کنید. سقف هر عکس ۳٬۰۰۰٬۰۰۰ بایت است.</small><span class="btn primary">انتخاب فایل</span><input id="files" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple aria-label="انتخاب فایل‌های تصویر"></label>'+
     (p.store?btn("انتخاب از تصاویر ذخیره‌شده محصول","store-images","compact","image","",p.images.length>=4):"")+
     imageGallery(p)+notice(p.store?"حداکثر چهار تصویر برای تحلیل انتخاب کنید. گالری اصلی محصول در اینجا قابل تغییر نیست.":"هر عکس می‌تواند هم‌زمان عضو چند گروه باشد. فایل اصلی در فضای خصوصی محیط تست نگه‌داری می‌شود.")+'</div>';
 }
@@ -404,6 +404,7 @@ function research(p) {
     (p.styleNumber&&!p.styleConfirmed?'<small>برای تحقیق، شمارهٔ استایل را در بخش تحلیل لیبل تأیید کنید یا آن را خالی بگذارید.</small>':"")+
     '<div class="actions">'+btn(live?"اجرای تحقیق برند در لیارا":"اجرای تحقیق آزمایشی","run-research","primary","spark","",
       lock||!canResearch||p.researchMode==="off"||Boolean(current&&r.mode===p.researchMode))+'</div>'+
+    (p.store&&embedded?'<div class="actions">'+btn("پیشنهادهای مشخصات محصول","transfer-specs","compact")+'</div>':'')+
     '<p id="brand-research-progress" role="status" hidden></p>'+report+preview+
     '<h3>متن فروشگاهی پرونده</h3>'+p.content.map((c,i)=>'<article class="content-box stack"><div class="field-top"><label for="text-'+i+'"><strong>'+contentTitles[i]+'</strong></label>'+metaBadge(c.approved?"تأیید مدیر":"در انتظار تأیید",c.approved?"green":"amber")+'</div><textarea id="text-'+i+'" data-content="'+i+'" placeholder="متن این بخش…" '+(lock?"disabled":"")+'>'+esc(c.text)+'</textarea><div class="actions">'+btn(c.approved?"لغو تأیید این متن":"تأیید این متن","approve-text","compact","check",'data-index="'+i+'"',lock)+'</div></article>').join("")+'</div>';
 }
@@ -420,7 +421,7 @@ function productChecks(p) {
   check(int(p.price) && Number(numeric(p.price))>0 && Number(numeric(p.price))<=2147483647,"قیمت معتبر وارد کنید.","sales");
   check(int(p.stock) && Number(numeric(p.stock))<=2147483647,"موجودی معتبر وارد کنید.","sales");
   check(["N","A+","A","B","C"].includes(p.grade),"گرید را انتخاب کنید.","sales");
-  check(p.images.some(a=>a.id===p.mainImage && a.valid && a.groups.includes("product")),"یک تصویر اصلی JPG معتبر انتخاب کنید.","images");
+  check(p.images.some(a=>a.id===p.mainImage && a.valid && a.groups.includes("product")),"یک تصویر اصلی معتبر انتخاب کنید.","images");
   check(p.images.every(a=>a.valid && a.groups.length),"عکس‌های نامعتبر یا بدون گروه را بررسی کنید.","images");
   const defectRequired=p.grade==="C" || (p.grade==="B" && p.defect.trim());
   if(p.grade==="C") check(p.defect.trim(),"شرح ایراد گرید C را بنویسید.","sales");
@@ -591,7 +592,7 @@ function uploadImages(p, files) {
     for(const file of files){
       const query=new URLSearchParams({imageId:crypto.randomUUID(),name:file.name,version:String(p.version)});
       try {
-        const row=await requestPanel(dossierPath(p)+"/images?"+query,"POST",file,{"Content-Type":"image/jpeg"});
+        const row=await requestPanel(dossierPath(p)+"/images?"+query,"POST",file,{"Content-Type":/\.png$/i.test(file.name)?"image/png":"image/jpeg"});
         useServer(p,row);
       } catch(error){
         failures.push(file.name+" · "+(error.status?error.message:"ارتباط قطع شد؛ وضعیت گالری را بررسی و دوباره تلاش کنید."));
@@ -606,7 +607,7 @@ function uploadImages(p, files) {
     }
     if(current()===p) refreshEditor();
     if(failures.length) dialog("نتیجهٔ بارگذاری","<ul>"+failures.map(message=>"<li>"+esc(message)+"</li>").join("")+"</ul>");
-    else toast("عکس‌های JPG در فضای خصوصی سرور ذخیره شدند.");
+    else toast("عکس‌ها در فضای خصوصی سرور ذخیره شدند.");
   },p);
 }
 
@@ -647,11 +648,12 @@ document.addEventListener("click",e=>{
     const kind=sourceOf(p,key);
     const suggestion=p.analysis?.find(item=>item.key===key);
     const file=suggestion && p.images.find(item=>item.id===suggestion.imageId);
-    const mock=["label","image","web"].includes(kind);
+    const inferred=["label","image","web"].includes(kind);
+    const mock=inferred&&!p.store;
     const description=mock?"پیشنهاد از آداپتور آزمایشی آمده است.":"منشأ این فیلد مطابق اطلاعات ثبت‌شده در پرونده است.";
     dialog("منبع "+labels[key],'<div class="row">'+metaBadge(sources[kind])+(mock?metaBadge("منبع آزمایشی","amber"):"")+'</div><p>'+description+'</p>'+
       '<p>آخرین ذخیرهٔ سرور: '+date(p.updated)+'</p>'+
-      (mock && file?'<p>فایل مرتبط: <a href="'+esc(file.url)+'">'+esc(file.name)+'</a></p>':""));
+      (inferred && file?'<p>فایل مرتبط: <a href="'+esc(file.url)+'">'+esc(file.name)+'</a></p>':""));
     return;
   }
   if(act==="jump"){jump(key);return;}
@@ -691,7 +693,7 @@ document.addEventListener("click",e=>{
   if(act==="store-images"){
     withAction(async()=>{
       const {images,updatedAt}=await requestPanel(dossierPath(p)+"/store-images");
-      if(!images.length){toast("عکس قابل خواندن در فضای محصول پیدا نشد. فایل JPG را انتخاب کنید.");return;}
+      if(!images.length){toast("عکس قابل خواندن در فضای محصول پیدا نشد. فایل JPG یا PNG را انتخاب کنید.");return;}
       dialog("انتخاب عکس محصول",'<label for="c22-image">شماره عکس در گالری محصول</label><select id="c22-image">'+
         images.map(({index})=>'<option value="'+index+'">'+number(index+1)+'</option>').join("")+'</select>',
         ()=>{
@@ -741,6 +743,20 @@ document.addEventListener("click",e=>{
       },p),"تأیید نام روی لیبل و شروع تحقیق","انصراف");
     return;
   }
+  if(act==="transfer-specs"){
+    withAction(async()=>{
+      const transfer=await requestPanel(dossierPath(p)+"/store-transfer");
+      if(transfer.version!==p.version){toast("نسخه پرونده تغییر کرده است.");return;}
+      const specs=Object.entries(transfer.suggestions);
+      if(!specs.length){toast("پیشنهاد تأییدشده برای مشخصات خالی پیدا نشد.");return;}
+      const titles={brand:"برند",productType:"نوع محصول",fabric:"جنس طبق لیبل"};
+      dialog("پیشنهاد مشخصات محصول",specs.map(([field,value])=>
+        '<p><strong>'+esc(titles[field])+'</strong> '+esc(value)+'</p>').join(""),
+        ()=>window.parent.postMessage({type:"motif-c22-specs",id:p.id,version:p.version},location.origin),
+        "درج در فیلدهای خالی","انصراف");
+    },p);
+    return;
+  }
   if(act==="research-action"){
     const claim=b.dataset.claim;
     if(key==="apply-draft"&&p.store){
@@ -774,6 +790,10 @@ document.addEventListener("click",e=>{
   if(act==="accept-proposal"){
     const proposal=p.analysis?.find(a=>a.key===key);
     if(!proposal) return;
+    if(p.store && hasValue(p[key])) {
+      toast("این فیلد مقدار دارد. اگر نیاز به اصلاح دارد، آن را دستی ویرایش کنید.");
+      return;
+    }
     const apply=()=>changeDossier(p,"/ai/accept","POST",{key},"پیشنهاد با اقدام مدیر ثبت شد.");
     if(hasValue(p[key]) && !Array.isArray(p[key])) {
       dialog("جایگزینی با پیشنهاد آزمایشی",'<p>'+esc(labels[key])+' از «'+esc(p[key])+'» به «'+esc(proposal.value)+'» تغییر کند؟</p>',apply,"پذیرش و جایگزینی","انصراف");

@@ -641,6 +641,18 @@ function card(p) {
     }),
   );
   if (p.isActive) {
+    actions.append(button("خارج‌کردن از فروش", async () => {
+      if (!window.confirm("این محصول از ویترین فروشگاه برداشته شود؟")) return;
+      try {
+        await api("/api/products/" + encodeURIComponent(p.id) + "/unpublish", {
+          method: "PATCH", body: JSON.stringify({ updatedAt: p.updatedAt }),
+        });
+        await refresh();
+        notice("محصول از فروش خارج شد.");
+      } catch (error) {
+        notice(error.message);
+      }
+    }));
     const a = el("a", "مشاهده ↗");
     a.href = "/products/" + encodeURIComponent(p.id);
     a.target = "_blank";
@@ -895,6 +907,7 @@ async function save(publish = false) {
     render();
     $("saveSuccess").hidden = false;
     notice("محصول ذخیره شد.");
+    return saved;
   } catch (err) {
     notice(err.message);
     busy = false;
@@ -911,8 +924,8 @@ const productInput = (key) => $("productFields").querySelector('[data-key="' + k
 const comparableBrand = (value) => (value || "").normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 function syncC22() {
   $("c22Actions").hidden = !c22Transfer && !c22Enabled;
-  $("openC22").disabled = !editing || !c22Enabled;
-  $("openC22").textContent = editing ? "تحلیل و تحقیق محصول" : "برای تحلیل، ابتدا پیش‌نویس را ذخیره کنید";
+  $("openC22").disabled = !c22Enabled;
+  $("openC22").textContent = editing ? "تحلیل و تحقیق محصول" : "ذخیره پیش‌نویس و شروع تحلیل";
   $("clearC22").hidden = !c22Transfer;
   for (const key of c22Targets) {
     const input = productInput(key);
@@ -921,8 +934,9 @@ function syncC22() {
 }
 
 $("openC22").onclick = async () => {
-  const product = editing;
-  if (!c22Enabled || !product || busy) return;
+  if (!c22Enabled || busy) return;
+  const product = editing || await save();
+  if (!product || editing !== product || busy) return;
   $("openC22").disabled = true;
   try {
     const dossier = await api("/api/admin/smart-panel/store/products/" + product.id + "/dossier", { method: "POST" });
@@ -944,15 +958,49 @@ $("clearC22").onclick = () => {
 
 window.addEventListener("message", async (event) => {
   if (event.origin !== location.origin || event.source !== $("c22Frame").contentWindow ||
-      !$("c22Dialog").open || event.data?.type !== "motif-c22-transfer" ||
+      !$("c22Dialog").open || !["motif-c22-transfer", "motif-c22-specs"].includes(event.data?.type) ||
       !/^[a-f0-9-]{36}$/.test(event.data.id) || !editing) return;
   const product = editing;
   try {
     const transfer = await api("/api/admin/smart-panel/dossiers/" + event.data.id + "/store-transfer");
     if (editing !== product || !$("c22Dialog").open) return;
     if (transfer.productId !== product.id || transfer.updatedAt !== product.updatedAt ||
-        transfer.version !== event.data.version || comparableBrand(transfer.brand) !== comparableBrand(productInput("brand").value)) {
+        transfer.version !== event.data.version) {
       throw Error("نسخهٔ پرونده یا برند با فرم محصول یکسان نیست. اطلاعات را بررسی کنید.");
+    }
+    if (event.data.type === "motif-c22-specs") {
+      const suggestions = transfer.suggestions || {};
+      const brand = productInput("brand");
+      const type = productInput("productType");
+      const categories = productInput("mainCategories");
+      const category = [...categories.querySelectorAll('input[type="checkbox"]')].find(input =>
+        input.value === suggestions.productType && MotifCatalog.productTypes.includes(input.value));
+      const canSetBrand = suggestions.brand && !brand.value.trim();
+      const canSetType = category && !type.value && !categories.querySelector("input:checked");
+      const fabrics = productInput("fabrics");
+      const fabric = [...fabrics.querySelectorAll('input[type="checkbox"]')].find(input =>
+        input.value === suggestions.fabric && MotifCatalog.fabrics.includes(input.value));
+      const canSetFabric = fabric && !fabrics.querySelector("input:checked") &&
+        productInput("fabricBasis").value === "UNKNOWN" && !productInput("fabricNote").value.trim();
+      if (!canSetBrand && !canSetType && !canSetFabric) throw Error("فیلد خالی برای درج پیشنهاد وجود ندارد.");
+      if (canSetBrand) brand.value = suggestions.brand;
+      if (canSetFabric) {
+        fabric.checked = true;
+        productInput("fabricBasis").value = "LABEL";
+      }
+      if (canSetType) {
+        category.checked = true;
+        categories.dispatchEvent(new Event("change", { bubbles: true }));
+        type.value = category.value;
+        type.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      mark();
+      $("c22Dialog").close();
+      notice("پیشنهادها در فرم قرار گرفتند. برای ثبت آن‌ها، پیش‌نویس را ذخیره کنید.");
+      return;
+    }
+    if (comparableBrand(transfer.brand) !== comparableBrand(productInput("brand").value)) {
+      throw Error("برند پرونده با برند فرم محصول یکسان نیست.");
     }
     if (c22Transfer && (c22Transfer.id !== transfer.id || c22Transfer.version !== transfer.version)) {
       throw Error("ابتدا پیشنهاد قبلی را از فرم حذف کنید.");

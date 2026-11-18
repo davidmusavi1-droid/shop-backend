@@ -300,3 +300,31 @@ test('linked dossier draft and final approval stay separate from product publica
   assert.equal((await request('/api/products/' + draft.id, 'GET', undefined, false)).status, 200);
   assert.equal(calls.length, initialCalls);
 });
+
+test('PNG upload preserves the exact bytes and deactivation preserves product data', async () => {
+  const activeDossier = await ok(base + '/store/products/' + product.id + '/dossier', 'POST');
+  const png = await sharp({
+    create: { width: 3, height: 3, channels: 4, background: '#8030a0aa' },
+  }).png().toBuffer();
+  const imageId = randomUUID();
+  const path = base + '/dossiers/' + activeDossier.id + '/images';
+  const upload = (name, bytes) => fetch(origin + path + '?' + new URLSearchParams({
+    imageId, name, version: activeDossier.version,
+  }), {
+    method: 'POST', headers: { Origin: origin, Cookie: cookie, 'X-Admin-CSRF': csrf, 'Content-Type': 'image/png' },
+    body: bytes,
+  });
+  assert.equal((await upload('fake.png', jpeg)).status, 415);
+  assert.equal((await upload('original.png', png)).status, 201);
+  const image = await fetch(origin + path + '/' + imageId, { headers: { Cookie: cookie } });
+  assert.equal(image.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
+  const before = await db.product.findUniqueOrThrow({ where: { id: product.id }, include: { variants: true } });
+  const endpoint = '/api/products/' + product.id;
+  assert.equal((await request(endpoint + '/unpublish', 'PATCH', { updatedAt: before.updatedAt }, false)).status, 401);
+  assert.equal((await request(endpoint + '/unpublish', 'PATCH', { updatedAt: new Date(0) })).status, 409);
+  await ok(endpoint + '/unpublish', 'PATCH', { updatedAt: before.updatedAt });
+  assert.equal((await request(endpoint)).status, 404);
+  const after = await db.product.findUniqueOrThrow({ where: { id: product.id }, include: { variants: true } });
+  assert.deepEqual({ ...after, updatedAt: before.updatedAt }, { ...before, isActive: false });
+});

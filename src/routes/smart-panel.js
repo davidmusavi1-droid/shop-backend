@@ -8,7 +8,7 @@ const { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } = require('node:fs').constants;
 const { isDeepStrictEqual } = require('node:util');
 const sharp = require('sharp');
 const V = require('../lib/smart-panel/validation');
-const { approvedSections } = require('../lib/smart-panel/store');
+const { approvedSections, reviewedFabric } = require('../lib/smart-panel/store');
 const { providerFor } = require('../lib/smart-panel/providers');
 const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
   displayResearch, researchAction, changeDraft } = require('../lib/smart-panel/brand-research');
@@ -16,6 +16,7 @@ const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
 const base = '/api/admin/smart-panel';
 const limit = 3_000_000;
 const include = { images: { select: { id: true, name: true, size: true, digest: true } }, reservation: true };
+const { productTypes } = require('../../public/catalog');
 const suggestionFields = ['brand', 'labelSize', 'fabric', 'type', 'name'];
 const pilotDigests = [
   '7f0713a68fd6cd89cdee22195247ea2eada8eccbb60e549eb334f4c8237d6a84',
@@ -23,6 +24,9 @@ const pilotDigests = [
   '1a92ea43b7c1676e906497cc527a764bade9f73329628b4570549b92091eae67',
 ];
 const notFound = () => V.fail(404, 'NOT_FOUND', 'پرونده یا فایل پیدا نشد.');
+
+const imageTypes = { jpeg: 'image/jpeg', png: 'image/png' };
+const imageFormat = name => /\.png$/i.test(name) ? 'png' : 'jpeg';
 
 function serializeDossier(row) {
   const { gallery, ...fields } = row.payload;
@@ -38,7 +42,7 @@ function serializeDossier(row) {
     publication: 'none', sale: 'نامشخص',
     images: gallery.map(item => {
       const { id, name, size } = images.get(item.id);
-      return { id, name, size, groups: item.groups, valid: true, format: 'JPG', url: base + '/dossiers/' + row.id + '/images/' + id };
+      return { id, name, size, groups: item.groups, valid: true, format: imageFormat(name) === 'png' ? 'PNG' : 'JPG', url: base + '/dossiers/' + row.id + '/images/' + id };
     }),
   };
 }
@@ -131,11 +135,21 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     const row = await current(db, req.params.id);
     if (!row.productId) throw notFound();
     const product = await db.product.findUnique({ where: { id: row.productId },
-      select: { updatedAt: true, identityHistory: true, identityDesign: true, identityUseCases: true } });
+      select: { updatedAt: true, brand: true, productType: true, mainCategories: true, fabrics: true, mainFabric: true, complementaryFabrics: true, fabricBasis: true, fabricNote: true, identityHistory: true, identityDesign: true, identityUseCases: true } });
     if (!product) throw notFound();
     const sections = Object.fromEntries(Object.entries(approvedSections(row.payload)).filter(([key]) => !product[key]?.trim()));
+    const { brand, type, sources, analysis, gallery } = row.payload;
+    const accepted = (key, value, kind) => sources[key] === kind &&
+      analysis?.some(item => item.key === key && item.value.trim() === value?.trim() &&
+        gallery.some(image => image.id === item.imageId));
+    const suggestions = {};
+    if (!product.brand?.trim() && brand?.trim() && accepted('brand', brand, 'label')) suggestions.brand = brand;
+    if (!product.productType && !product.mainCategories.length && productTypes.includes(type) &&
+        accepted('type', type, 'image')) suggestions.productType = type;
+    const fabric = reviewedFabric(product, row.payload);
+    if (fabric) suggestions.fabric = fabric;
     res.json({ id: row.id, version: row.version, productId: row.productId, updatedAt: product.updatedAt,
-      brand: row.payload.brand, sections });
+      brand, sections, suggestions });
   }));
 
   router.get('/dossiers/:id/store-images', wrap(async (req, res) => {
@@ -311,12 +325,12 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
 
   router.post('/dossiers/:id/images',
     (req, res, next) => {
-      if (!req.is('image/jpeg')) return next(V.fail(415, 'INVALID_IMAGE', 'فایل نهایی باید JPG باشد.'));
+      if (!req.is(Object.values(imageTypes))) return next(V.fail(415, 'INVALID_IMAGE', 'فایل نهایی باید JPG یا PNG باشد.'));
       if (uploadsInFlight >= 2) return next(V.fail(429, 'UPLOAD_BUSY', 'بارگذاری دیگری در جریان است.'));
       uploadsInFlight++;
       let released = false;
       const release = () => { if (!released) { released = true; uploadsInFlight--; } };
-      express.raw({ type: 'image/jpeg', limit, inflate: false })(req, res, err => {
+      express.raw({ type: Object.values(imageTypes), limit, inflate: false })(req, res, err => {
         if (err) { release(); return next(err); }
         req.releaseUpload = release;
         next();
@@ -328,8 +342,8 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         const name = req.query.name;
         const version = /^\d+$/.test(req.query.version || '') ? Number(req.query.version) : -1;
         if (!V.uuid.test(id || '') || typeof name !== 'string' || name.length > 200 ||
-          /[\x00-\x1f\\/]/.test(name) || !/\.jpe?g$/i.test(name)) throw V.invalid('نام یا شناسهٔ JPG معتبر نیست.');
-        if (!Buffer.isBuffer(req.body) || !req.body.length) throw V.invalid('فایل JPG خالی است.');
+          /[\x00-\x1f\\/]/.test(name) || !/\.(?:jpe?g|png)$/i.test(name) || !req.is(imageTypes[imageFormat(name)])) throw V.invalid('نام یا شناسهٔ تصویر معتبر نیست.');
+        if (!Buffer.isBuffer(req.body) || !req.body.length) throw V.invalid('فایل تصویر خالی است.');
         const row = await current(db, req.params.id);
         const hash = digest(req.body);
         const prior = row.images.find(image => image.id === id);
@@ -341,9 +355,9 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         let image;
         try {
           image = sharp(req.body, { limitInputPixels: 50_000_000, failOn: 'warning' });
-          if ((await image.metadata()).format !== 'jpeg') throw new Error('format');
+          if ((await image.metadata()).format !== imageFormat(name)) throw new Error('format');
           await image.stats();
-        } catch { throw V.fail(415, 'INVALID_IMAGE', 'محتوای فایل JPG معتبر نیست.'); }
+        } catch { throw V.fail(415, 'INVALID_IMAGE', 'محتوای فایل تصویر معتبر نیست.'); }
 
         const record = { id, name, size: req.body.length, digest: hash };
         if (store) {
@@ -378,14 +392,15 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
   router.get('/dossiers/:id/images/:imageId', wrap(async (req, res) => {
     const row = await current(db, req.params.id);
     const id = req.params.imageId;
-    if (!V.uuid.test(id) || !row.images.some(item => item.id === id) ||
+    const record = row.images.find(item => item.id === id);
+    if (!V.uuid.test(id) || !record ||
       !row.payload.gallery.some(item => item.id === id)) throw notFound();
     if (store) {
       const image = await db.smartImage.findUnique({ where: { id }, select: { bytes: true } });
       if (!image?.bytes) throw notFound();
-      return res.type('jpeg').send(Buffer.from(image.bytes));
+      return res.type(imageTypes[imageFormat(record.name)]).send(Buffer.from(image.bytes));
     }
-    res.type('jpeg').sendFile(filePath(id), { dotfiles: 'allow', cacheControl: false }, error => {
+    res.type(imageTypes[imageFormat(record.name)]).sendFile(filePath(id), { dotfiles: 'allow', cacheControl: false }, error => {
       if (error && !res.headersSent) res.status(404).json({ code: 'NOT_FOUND', error: 'فایل پیدا نشد.' });
     });
   }));
@@ -422,7 +437,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       }
       const images = [...row.payload.gallery].sort((a, b) => Number(b.groups.includes('label')) - Number(a.groups.includes('label')))
         .map(item => ({ ...row.images.find(image => image.id === item.id), groups: item.groups }));
-      if (operation === 'analyze' && !images.length) throw V.invalid('برای تحلیل، ابتدا یک JPG ثبت کنید.');
+      if (operation === 'analyze' && !images.length) throw V.invalid('برای تحلیل، ابتدا یک تصویر ثبت کنید.');
       let result;
       try {
         result = await provider[operation]({ images, fields: row.payload, simulateFailure: req.body?.simulateFailure === true });
@@ -451,7 +466,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
           const data = await db.smartImage.findUnique({ where: { id: image.id }, select: { bytes: true } });
           const bytes = data?.bytes && Buffer.from(data.bytes);
           if (!bytes || bytes.length !== image.size || bytes.length > limit || digest(bytes) !== image.digest) throw notFound();
-          return { id: image.id, bytes };
+          return { id: image.id, bytes, mime: imageTypes[imageFormat(image.name)] };
         }
         const file = await open(filePath(image.id), O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
         try {
@@ -460,7 +475,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
           const bytes = Buffer.alloc(stat.size);
           const { bytesRead } = await file.read(bytes, 0, bytes.length, 0);
           if (bytesRead !== bytes.length || digest(bytes) !== image.digest) throw notFound();
-          return { id: image.id, bytes };
+          return { id: image.id, bytes, mime: imageTypes[imageFormat(image.name)] };
         } finally { await file.close(); }
       } catch { throw V.fail(422, 'AI_IMAGE_MISMATCH', 'فایل خصوصی با مرجع آزمون تطبیق ندارد.'); }
     }));
@@ -610,6 +625,9 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       }
       const { key, value, kind } = suggestion;
       const original = currentRow.payload[key];
+      if (store && (Array.isArray(original) ? original.length : original?.trim())) {
+        throw V.conflict();
+      }
       const replacement = Array.isArray(original) ? [...new Set([...original, value])] : value;
       const payload = V.draftFields({ [key]: replacement }, currentRow.payload);
       payload.sources[key] = kind;
