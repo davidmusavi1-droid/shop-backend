@@ -293,10 +293,15 @@ submitTracking('trackingVerify', 'verify', fields => ({
 async function showOnlinePayment(order) {
   if (!order || Date.parse(order.expiry) <= Date.now()) return;
   try {
-    const response = await fetch('/api/payment/availability', { cache: 'no-store' });
-    if (!response.ok || !(await response.json()).mock) return;
+    const response = await fetch('/api/payment/availability?orderId=' + encodeURIComponent(order.number), {
+      cache: 'no-store', headers: { 'Idempotency-Key': order.key },
+    });
+    if (!response.ok) return;
+    const mode = await response.json();
+    if (!mode.mock && !mode.live) return;
     const button = $('onlinePayment');
     button.hidden = false;
+    if (mode.live) button.textContent = 'پرداخت آنلاین با زیبال';
     button.onclick = async () => {
       button.disabled = true;
       try {
@@ -305,7 +310,12 @@ async function showOnlinePayment(order) {
         });
         const result = await response.json();
         if (!response.ok) throw Error(result.error || 'پرداخت آغاز نشد.');
-        if (result.status === 'OPEN' && /^\/api\/payment\/verify\?trackId=\d+$/.test(result.url)) {
+        if (mode.live && result.status === 'OPEN' &&
+            /^https:\/\/gateway\.zibal\.ir\/start\/[1-9]\d{0,15}$/.test(result.url)) {
+          location.assign(result.url);
+          return;
+        }
+        if (mode.mock && result.status === 'OPEN' && /^\/api\/payment\/verify\?trackId=\d+$/.test(result.url)) {
           location.assign(result.url);
           return;
         }

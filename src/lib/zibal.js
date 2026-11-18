@@ -12,7 +12,7 @@ function trackId(value) {
   return typeof digits === 'string' && /^[1-9]\d{0,15}$/.test(digits) && Number.isSafeInteger(Number(digits)) ? digits : null;
 }
 
-// Official v1 request, verify and inquiry. The application only wires the mock transport.
+// Official v1 request, verify and inquiry. The caller supplies the transport.
 function createZibalGateway({ merchant, callbackUrl, transport }) {
   const invoke = (operation, values) => transport(origin + '/v1/' + operation, { merchant, ...values });
   return {
