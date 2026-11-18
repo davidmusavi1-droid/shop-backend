@@ -8,7 +8,7 @@ const { O_NOFOLLOW, O_NONBLOCK, O_RDONLY } = require('node:fs').constants;
 const { isDeepStrictEqual } = require('node:util');
 const sharp = require('sharp');
 const V = require('../lib/smart-panel/validation');
-const { approvedSections } = require('../lib/smart-panel/store');
+const { approvedSections, reviewedFabric } = require('../lib/smart-panel/store');
 const { providerFor } = require('../lib/smart-panel/providers');
 const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
   displayResearch, researchAction, changeDraft } = require('../lib/smart-panel/brand-research');
@@ -135,7 +135,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     const row = await current(db, req.params.id);
     if (!row.productId) throw notFound();
     const product = await db.product.findUnique({ where: { id: row.productId },
-      select: { updatedAt: true, brand: true, productType: true, mainCategories: true, identityHistory: true, identityDesign: true, identityUseCases: true } });
+      select: { updatedAt: true, brand: true, productType: true, mainCategories: true, fabrics: true, mainFabric: true, complementaryFabrics: true, fabricBasis: true, fabricNote: true, identityHistory: true, identityDesign: true, identityUseCases: true } });
     if (!product) throw notFound();
     const sections = Object.fromEntries(Object.entries(approvedSections(row.payload)).filter(([key]) => !product[key]?.trim()));
     const { brand, type, sources, analysis, gallery } = row.payload;
@@ -146,6 +146,8 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     if (!product.brand?.trim() && brand?.trim() && accepted('brand', brand, 'label')) suggestions.brand = brand;
     if (!product.productType && !product.mainCategories.length && productTypes.includes(type) &&
         accepted('type', type, 'image')) suggestions.productType = type;
+    const fabric = reviewedFabric(product, row.payload);
+    if (fabric) suggestions.fabric = fabric;
     res.json({ id: row.id, version: row.version, productId: row.productId, updatedAt: product.updatedAt,
       brand, sections, suggestions });
   }));

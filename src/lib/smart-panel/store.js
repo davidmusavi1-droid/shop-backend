@@ -1,6 +1,8 @@
 'use strict';
 
 const { displayResearch } = require('./brand-research');
+const { fabricsOf } = require('../../../public/catalog');
+const { builtIn, keyFor } = require('../fabric-options');
 const { fail, uuid } = require('./validation');
 
 const targets = ['identityHistory', 'identityDesign', 'identityUseCases'];
@@ -32,4 +34,17 @@ async function checkTransfer(tx, product, data, receipt) {
   if (receipt.keys.some(key => product[key]?.trim() || !allowed[key] || data[key] !== allowed[key])) throw stale();
 }
 
-module.exports = { approvedSections, brandKey, checkTransfer };
+function reviewedFabric(product, payload) {
+  if (fabricsOf(product).length || product.mainFabric || product.complementaryFabrics?.length ||
+      product.fabricNote?.trim() || product.fabricBasis !== 'UNKNOWN') return null;
+  const { fabric, sources, analysis, gallery } = payload;
+  if (fabric?.length !== 1 || sources?.fabric !== 'label') return null;
+  const value = fabric[0].trim();
+  const evidence = analysis?.find(item => item.key === 'fabric' && item.kind === 'label' &&
+    item.value.trim() === value && item.evidence?.trim() && gallery.some(image => image.id === item.imageId));
+  if (!evidence) return null;
+  const label = builtIn.get(keyFor(value.replace(/^(?:100|۱۰۰|١٠٠)\s*[%٪]\s*/, '')));
+  return ['سایر', 'ترکیبی', 'کورتکس (اصطلاح رایج بازار)'].includes(label) ? null : label || null;
+}
+
+module.exports = { reviewedFabric, approvedSections, brandKey, checkTransfer };

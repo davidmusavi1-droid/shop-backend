@@ -749,7 +749,7 @@ document.addEventListener("click",e=>{
       if(transfer.version!==p.version){toast("نسخه پرونده تغییر کرده است.");return;}
       const specs=Object.entries(transfer.suggestions);
       if(!specs.length){toast("پیشنهاد تأییدشده برای مشخصات خالی پیدا نشد.");return;}
-      const titles={brand:"برند",productType:"نوع محصول"};
+      const titles={brand:"برند",productType:"نوع محصول",fabric:"جنس طبق لیبل"};
       dialog("پیشنهاد مشخصات محصول",specs.map(([field,value])=>
         '<p><strong>'+esc(titles[field])+'</strong> '+esc(value)+'</p>').join(""),
         ()=>window.parent.postMessage({type:"motif-c22-specs",id:p.id,version:p.version},location.origin),

@@ -977,8 +977,17 @@ window.addEventListener("message", async (event) => {
         input.value === suggestions.productType && MotifCatalog.productTypes.includes(input.value));
       const canSetBrand = suggestions.brand && !brand.value.trim();
       const canSetType = category && !type.value && !categories.querySelector("input:checked");
-      if (!canSetBrand && !canSetType) throw Error("فیلد خالی برای درج پیشنهاد وجود ندارد.");
+      const fabrics = productInput("fabrics");
+      const fabric = [...fabrics.querySelectorAll('input[type="checkbox"]')].find(input =>
+        input.value === suggestions.fabric && MotifCatalog.fabrics.includes(input.value));
+      const canSetFabric = fabric && !fabrics.querySelector("input:checked") &&
+        productInput("fabricBasis").value === "UNKNOWN" && !productInput("fabricNote").value.trim();
+      if (!canSetBrand && !canSetType && !canSetFabric) throw Error("فیلد خالی برای درج پیشنهاد وجود ندارد.");
       if (canSetBrand) brand.value = suggestions.brand;
+      if (canSetFabric) {
+        fabric.checked = true;
+        productInput("fabricBasis").value = "LABEL";
+      }
       if (canSetType) {
         category.checked = true;
         categories.dispatchEvent(new Event("change", { bubbles: true }));
