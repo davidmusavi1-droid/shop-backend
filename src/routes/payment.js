@@ -13,6 +13,9 @@ const gateway = createZibalGateway({
     const attempt = await prisma.zibalAttempt.findUnique({
       where: { trackId: String(payload.trackId) }, include: { payment: true },
     });
+    if (url.endsWith('/inquiry') && attempt) {
+      return { result: 100, status: attempt.payment.isSuccessful ? 1 : -1, amount: attempt.payment.amount * 10 };
+    }
     return attempt ? { result: 100, status: 1, amount: attempt.payment.amount * 10 } : { result: 203 };
   },
 });
@@ -40,6 +43,9 @@ router.post('/request/:orderId', handle(async (req, res) => {
 }));
 router.get('/verify', handle(async (req, res) => {
   const result = await payment.verify(req.query.trackId);
+  if (result.status === 'EXPIRED') {
+    return res.type('html').send('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>پرداخت منقضی</title><h1>پرداخت منقضی و رزرو آزاد شد</h1><a href="/collection">برای تلاش مجدد سفارش تازه ثبت کنید</a>');
+  }
   const message = result.status === 'PAID' ? 'پرداخت آزمایشی تأیید شد' : 'پرداخت آزمایشی تأیید نشده است';
   res.type('html').send('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>نتیجه پرداخت</title><h1>' + message + '</h1><a href="/cart">بازگشت به سبد</a>');
 }));
