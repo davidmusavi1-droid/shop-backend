@@ -298,10 +298,11 @@ async function showOnlinePayment(order) {
     });
     if (!response.ok) return;
     const mode = await response.json();
-    if (!mode.mock && !mode.live) return;
+    if (!mode.mock && !mode.live && !mode.sandbox) return;
     const button = $('onlinePayment');
     button.hidden = false;
     if (mode.live) button.textContent = 'پرداخت آنلاین با زیبال';
+    if (mode.sandbox) button.textContent = 'ورود به درگاه آزمایشی زیبال';
     button.onclick = async () => {
       button.disabled = true;
       try {
@@ -310,7 +311,7 @@ async function showOnlinePayment(order) {
         });
         const result = await response.json();
         if (!response.ok) throw Error(result.error || 'پرداخت آغاز نشد.');
-        if (mode.live && result.status === 'OPEN' &&
+        if ((mode.live || mode.sandbox) && result.status === 'OPEN' &&
             /^https:\/\/gateway\.zibal\.ir\/start\/[1-9]\d{0,15}$/.test(result.url)) {
           location.assign(result.url);
           return;

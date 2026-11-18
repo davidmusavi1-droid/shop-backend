@@ -1,3 +1,4 @@
+require('./lib/zibal-sandbox').assertSandboxEnvironment(process.env);
 const smartStore = process.env.MOTIF_SMART_PANEL === 'store';
 const smartTest = process.env.MOTIF_SMART_PANEL === 'test'
   ? require('./lib/smart-panel/test-environment').assertTestEnvironment()

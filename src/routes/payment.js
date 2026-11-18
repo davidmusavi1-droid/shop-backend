@@ -3,6 +3,7 @@ const { randomInt } = require('node:crypto');
 const prisma = require('../lib/prisma');
 const { createOnlinePayment } = require('../lib/online-payment');
 const { configureLiveZibal } = require('../lib/zibal-live');
+const { configureSandboxZibal } = require('../lib/zibal-sandbox');
 const { trackId, createZibalGateway } = require('../lib/zibal');
 const router = express.Router();
 
@@ -28,11 +29,13 @@ router.use((req, res, next) => {
   const mock = process.env.NODE_ENV === 'test' && process.env.MOTIF_CHECKOUT_PREVIEW === 'true' &&
     process.env.MOTIF_ZIBAL_PROVIDER === 'mock';
   const live = mock ? null : configureLiveZibal(process.env);
-  if (!mock && !live) {
+  const sandbox = mock || live ? null : configureSandboxZibal(process.env);
+  if (!mock && !live && !sandbox) {
     return res.status(503).json({ error: 'درگاه پرداخت هنوز فعال نشده است', code: 'PAYMENT_NOT_CONFIGURED' });
   }
   res.locals.live = live;
-  res.locals.payment = mock ? mockPayment : createOnlinePayment(prisma, live.gateway);
+  res.locals.sandbox = sandbox;
+  res.locals.payment = mock ? mockPayment : createOnlinePayment(prisma, (live || sandbox).gateway);
   next();
 });
 const handle = action => async (req, res) => {
@@ -44,28 +47,32 @@ const handle = action => async (req, res) => {
 router.post('/request/:orderId', handle(async (req, res) => {
   const key = req.get('Idempotency-Key');
   if (!key || !/^[0-9a-f-]{36}$/.test(key)) return res.sendStatus(404);
-  const live = res.locals.live;
-  if (live && !(await pilotOrder(req.params.orderId, key, live))) return res.sendStatus(404);
+  const pilot = res.locals.live || res.locals.sandbox;
+  if (pilot && !(await pilotOrder(req.params.orderId, key, pilot))) return res.sendStatus(404);
   res.json(await res.locals.payment.start(req.params.orderId, key));
 }));
-router.get('/verify', handle(async (req, res) => {
+const verifyPayment = handle(async (req, res) => {
   const live = res.locals.live;
-  if (live) {
+  const sandbox = res.locals.sandbox;
+  if (Boolean(sandbox) !== (req.path === '/sandbox/verify')) return res.sendStatus(404);
+  if (live || sandbox) {
     const id = trackId(req.query.trackId);
     if (!id || !(await prisma.zibalAttempt.findFirst({
-      where: { trackId: id, payment: { orderId: live.orderId } }, select: { paymentId: true },
+      where: { trackId: id, ...(live ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true },
     }))) return res.sendStatus(404);
   }
   const result = await res.locals.payment.verify(req.query.trackId);
   if (result.status === 'EXPIRED') {
     return res.type('html').send('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>پرداخت منقضی</title><h1>پرداخت منقضی و رزرو آزاد شد</h1><a href="/collection">برای تلاش مجدد سفارش تازه ثبت کنید</a>');
   }
-  const label = live ? 'پرداخت' : 'پرداخت آزمایشی';
+  const label = live ? 'پرداخت' : sandbox ? 'پرداخت آزمایشی زیبال' : 'پرداخت آزمایشی';
   const message = result.status === 'PAID' ? label + ' تأیید شد' : label + ' تأیید نشده است';
   res.type('html').send('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>نتیجه پرداخت</title><h1>' + message + '</h1><a href="/cart">بازگشت به سبد</a>');
-}));
+});
+router.get('/verify', verifyPayment);
+router.get('/sandbox/verify', verifyPayment);
 async function pilotOrder(orderId, key, live) {
-  if (orderId !== live.orderId || typeof key !== 'string' || !/^[0-9a-f-]{36}$/.test(key)) return false;
+  if ((live.orderId && orderId !== live.orderId) || typeof key !== 'string' || !/^[0-9a-f-]{36}$/.test(key)) return false;
   const order = await prisma.checkoutReservation.findFirst({
     where: { orderId, requestKey: key, order: { totalPrice: { gt: 0, lte: live.maxTomans } } },
     select: { orderId: true },
@@ -75,6 +82,9 @@ async function pilotOrder(orderId, key, live) {
 
 router.get('/availability', handle(async (req, res) => {
   const live = res.locals.live;
+  if (res.locals.sandbox) {
+    return res.json({ sandbox: await pilotOrder(req.query.orderId, req.get('Idempotency-Key'), res.locals.sandbox) });
+  }
   if (!live) return res.json({ mock: true });
   res.json({ live: await pilotOrder(req.query.orderId, req.get('Idempotency-Key'), live) });
 }));
