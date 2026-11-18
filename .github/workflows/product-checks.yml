@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feat/admin-product-editor]
+    branches: [main, feat/admin-product-editor, feat/motif-guest-cart-checkout]
 permissions:
   contents: read
 jobs:
