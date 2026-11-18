@@ -749,7 +749,7 @@ document.addEventListener("click",e=>{
       if(transfer.version!==p.version){toast("نسخه پرونده تغییر کرده است.");return;}
       const specs=Object.entries(transfer.suggestions);
       if(!specs.length){toast("پیشنهاد تأییدشده برای مشخصات خالی پیدا نشد.");return;}
-      const titles={brand:"برند"};
+      const titles={brand:"برند",productType:"نوع محصول"};
       dialog("پیشنهاد مشخصات محصول",specs.map(([field,value])=>
         '<p><strong>'+esc(titles[field])+'</strong> '+esc(value)+'</p>').join(""),
         ()=>window.parent.postMessage({type:"motif-c22-specs",id:p.id,version:p.version},location.origin),
@@ -790,6 +790,10 @@ document.addEventListener("click",e=>{
   if(act==="accept-proposal"){
     const proposal=p.analysis?.find(a=>a.key===key);
     if(!proposal) return;
+    if(p.store && hasValue(p[key])) {
+      toast("این فیلد مقدار دارد. اگر نیاز به اصلاح دارد، آن را دستی ویرایش کنید.");
+      return;
+    }
     const apply=()=>changeDossier(p,"/ai/accept","POST",{key},"پیشنهاد با اقدام مدیر ثبت شد.");
     if(hasValue(p[key]) && !Array.isArray(p[key])) {
       dialog("جایگزینی با پیشنهاد آزمایشی",'<p>'+esc(labels[key])+' از «'+esc(p[key])+'» به «'+esc(proposal.value)+'» تغییر کند؟</p>',apply,"پذیرش و جایگزینی","انصراف");

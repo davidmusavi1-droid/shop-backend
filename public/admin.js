@@ -969,9 +969,22 @@ window.addEventListener("message", async (event) => {
       throw Error("نسخهٔ پرونده یا برند با فرم محصول یکسان نیست. اطلاعات را بررسی کنید.");
     }
     if (event.data.type === "motif-c22-specs") {
-      const keys = ["brand"].filter(key => transfer.suggestions?.[key] && !productInput(key).value.trim());
-      if (!keys.length) throw Error("فیلد خالی برای درج پیشنهاد وجود ندارد.");
-      for (const key of keys) productInput(key).value = transfer.suggestions[key];
+      const suggestions = transfer.suggestions || {};
+      const brand = productInput("brand");
+      const type = productInput("productType");
+      const categories = productInput("mainCategories");
+      const category = [...categories.querySelectorAll('input[type="checkbox"]')].find(input =>
+        input.value === suggestions.productType && MotifCatalog.productTypes.includes(input.value));
+      const canSetBrand = suggestions.brand && !brand.value.trim();
+      const canSetType = category && !type.value && !categories.querySelector("input:checked");
+      if (!canSetBrand && !canSetType) throw Error("فیلد خالی برای درج پیشنهاد وجود ندارد.");
+      if (canSetBrand) brand.value = suggestions.brand;
+      if (canSetType) {
+        category.checked = true;
+        categories.dispatchEvent(new Event("change", { bubbles: true }));
+        type.value = category.value;
+        type.dispatchEvent(new Event("change", { bubbles: true }));
+      }
       mark();
       $("c22Dialog").close();
       notice("پیشنهادها در فرم قرار گرفتند. برای ثبت آن‌ها، پیش‌نویس را ذخیره کنید.");

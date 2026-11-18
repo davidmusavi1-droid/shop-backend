@@ -16,6 +16,7 @@ const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
 const base = '/api/admin/smart-panel';
 const limit = 3_000_000;
 const include = { images: { select: { id: true, name: true, size: true, digest: true } }, reservation: true };
+const { productTypes } = require('../../public/catalog');
 const suggestionFields = ['brand', 'labelSize', 'fabric', 'type', 'name'];
 const pilotDigests = [
   '7f0713a68fd6cd89cdee22195247ea2eada8eccbb60e549eb334f4c8237d6a84',
@@ -134,15 +135,19 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     const row = await current(db, req.params.id);
     if (!row.productId) throw notFound();
     const product = await db.product.findUnique({ where: { id: row.productId },
-      select: { updatedAt: true, brand: true, identityHistory: true, identityDesign: true, identityUseCases: true } });
+      select: { updatedAt: true, brand: true, productType: true, mainCategories: true, identityHistory: true, identityDesign: true, identityUseCases: true } });
     if (!product) throw notFound();
     const sections = Object.fromEntries(Object.entries(approvedSections(row.payload)).filter(([key]) => !product[key]?.trim()));
-    const { brand, sources, analysis, gallery } = row.payload;
-    const suggestedBrand = !product.brand?.trim() && brand?.trim() && sources.brand === 'label' &&
-      analysis?.some(item => item.key === 'brand' && item.value.trim() === brand.trim() &&
+    const { brand, type, sources, analysis, gallery } = row.payload;
+    const accepted = (key, value, kind) => sources[key] === kind &&
+      analysis?.some(item => item.key === key && item.value.trim() === value?.trim() &&
         gallery.some(image => image.id === item.imageId));
+    const suggestions = {};
+    if (!product.brand?.trim() && brand?.trim() && accepted('brand', brand, 'label')) suggestions.brand = brand;
+    if (!product.productType && !product.mainCategories.length && productTypes.includes(type) &&
+        accepted('type', type, 'image')) suggestions.productType = type;
     res.json({ id: row.id, version: row.version, productId: row.productId, updatedAt: product.updatedAt,
-      brand, sections, suggestions: suggestedBrand ? { brand } : {} });
+      brand, sections, suggestions });
   }));
 
   router.get('/dossiers/:id/store-images', wrap(async (req, res) => {
