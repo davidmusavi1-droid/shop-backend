@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { PrismaClient } = require('@prisma/client');
 const { reserve, checkoutInput } = require('../src/lib/checkout');
+const { createOnlinePayment } = require('../src/lib/online-payment');
 const { createRetryPayment } = require('../src/lib/online-payment-retry');
 const { TTL } = require('../src/lib/zibal-retry-policy');
 // Fixed, synthetic, disposable CI database only. No inherited production URL.
@@ -33,7 +34,7 @@ const gateway = {
 };
 const options = { now: () => new Date(time), status11Final: true }; // Mock-only terminality assumption.
 const service = () => createRetryPayment(p, gateway, options);
-async function fixture() {
+async function fixture(legacy = false) {
   time = Date.now();
   const product = await p.product.create({ data: {
     title: 'Synthetic retry fixture', basePrice: 100000, images: [], customerNeeds: [], styles: [],
@@ -43,7 +44,7 @@ async function fixture() {
   const order = await reserve(p, checkoutInput({ customer: { fullName: 'Synthetic retry', phone: '09000000000',
     province: 'Fixture', city: 'Fixture', address: 'Not a shipping address', postalCode: '0000000000' },
   items: [{ variantId, quantity: 1 }] }, key));
-  const first = await service().start(order.orderNumber, key);
+  const first = await (legacy ? createOnlinePayment(p, gateway, options.now) : service()).start(order.orderNumber, key);
   assert.equal(first.status, 'OPEN');
   return { orderId: order.orderNumber, key, variantId, first: first.url.split('/').pop() };
 }
@@ -115,6 +116,30 @@ async function run() {
   assert.equal((await service().start(lost.orderId, lost.key)).status, 'PENDING');
   assert.equal(requests, lostCalls); assert.equal(await stock(lost), 0);
   console.log('PASS lost request response cannot be retried blindly');
+
+  const imported = await fixture(true); failed(imported.first); time += TTL;
+  const importedPayment = await p.payment.findUniqueOrThrow({ where: { orderId: imported.orderId } });
+  const importedTrack = await p.zibalAttempt.findUniqueOrThrow({ where: { paymentId: importedPayment.id } });
+  assert.equal((await service().start(imported.orderId, imported.key)).status, 'OPEN');
+  assert.deepEqual(await p.zibalAttempt.findUniqueOrThrow({ where: { paymentId: importedPayment.id } }), importedTrack);
+  assert.equal(await p.zibalPaymentAttempt.count({ where: { paymentId: importedPayment.id } }), 2);
+  console.log('PASS existing v37 track is imported without rewriting its record');
+
+  const closed = await fixture();
+  await p.order.update({ where: { id: closed.orderId }, data: { status: 'CANCELED' } }); // Test-only inconsistent fixture.
+  responses.set(closed.first, { result: 100, status: 1, amount: 1000000 });
+  assert.equal((await service().verify(closed.first)).status, 'PENDING');
+  assert.equal((await p.payment.findUniqueOrThrow({ where: { orderId: closed.orderId } })).isSuccessful, false);
+  assert.equal(await stock(closed), 0);
+  console.log('PASS a closed order is never reported paid without a committed settlement');
+
+  const limit = await fixture();
+  for (let i = 0; i < 2; i++) { failed(String(next)); time += TTL; assert.equal((await service().start(limit.orderId, limit.key)).status, 'OPEN'); }
+  failed(String(next)); time += TTL;
+  const limitCalls = requests;
+  assert.equal((await service().start(limit.orderId, limit.key)).code, 'RETRY_LIMIT');
+  assert.equal(requests, limitCalls); assert.equal(await stock(limit), 0);
+  console.log('PASS three-attempt and absolute reservation limits block unlimited renewal');
 
   const late = await fixture(); failed(late.first); time += TTL;
   await service().start(late.orderId, late.key);

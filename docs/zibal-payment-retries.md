@@ -73,6 +73,9 @@ Until then, real status-11 retry is intentionally blocked, including this pilot.
 5. Present the exact order ID and total cap again for separate payment approval;
    only then configure live and let the owner complete banking. Disable live again
    only after reconciling all outstanding tracks, retaining audit records.
+   `MOTIF_ZIBAL_REQUESTS_DISABLED=true` separately closes request/availability
+   while leaving configured callbacks and admin reconciliation available. Use
+   this while draining tracks; it does not activate an otherwise disabled provider.
 
 ## Safe return to v37
 
@@ -84,6 +87,12 @@ orders. v37 cannot reconcile new ledger tracks: if any are unresolved, retain a
 retry-capable reconciliation instance with requests disabled, or postpone rollback
 until they are conclusively resolved. It is not safe to claim full payment rollback
 while new bank sessions are outstanding. Initial legacy tracks remain intact.
+
+## Current evidence
+
+First implementation commit: 71e233913010d926b76e3b674735bba989713421.
+Targeted independent PostgreSQL run: https://github.com/davidmusavi1-droid/shop-backend/actions/runs/44588571670
+(successful; final-head checks are linked in the PR).
 
 ## Targeted validation
 

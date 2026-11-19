@@ -58,6 +58,9 @@ const handle = action => async (req, res) => {
   }
 };
 router.post('/request/:orderId', previewAdmin, handle(async (req, res) => {
+  if (process.env.MOTIF_ZIBAL_REQUESTS_DISABLED === 'true') {
+    return res.status(503).json({ code: 'NEW_PAYMENT_REQUESTS_DISABLED' });
+  }
   const key = req.get('Idempotency-Key');
   if (!key || !/^[0-9a-f-]{36}$/.test(key)) return res.sendStatus(404);
   const pilot = res.locals.live || res.locals.sandbox;
@@ -106,6 +109,9 @@ async function pilotOrder(orderId, key, live) {
 }
 
 router.get('/availability', previewAdmin, handle(async (req, res) => {
+  if (process.env.MOTIF_ZIBAL_REQUESTS_DISABLED === 'true') {
+    return res.json({ live: false, sandbox: false, mock: false });
+  }
   const live = res.locals.live;
   if (res.locals.sandbox) {
     return res.json({ sandbox: await pilotOrder(req.query.orderId, req.get('Idempotency-Key'), res.locals.sandbox) });

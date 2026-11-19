@@ -88,7 +88,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
         ([1, 2].includes(response.status) || response.paidAt || response.verifiedAt || response.refNumber)) {
       await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });
     }
-    if (state === 'PAID') { await settle(payment, attempt); return 'PAID'; }
+    if (state === 'PAID') return (await settle(payment, attempt)).status === 'PAID' ? 'PAID' : 'REVIEW';
     if (state === 'REVIEW') {
       // Paid/unverified is never treated as a failed payment.
       await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });
@@ -127,6 +127,9 @@ function createRetryPayment(prisma, gateway, options = {}) {
       if (!rows.length && !newPayment) return pending('LEGACY_REQUEST_OUTCOME_UNKNOWN');
       if (!rows.length && payment.zibalAttempt.state !== 'STARTING') return pending('PAYMENT_REVIEW');
       if (rows.length) {
+        if (rows.some(row => ['STARTING', 'UNKNOWN', 'REVIEW'].includes(row.state))) {
+          return pending('PAYMENT_REVIEW');
+        }
         // Recheck ALL historical tracks before issuing another. A late callback
         // cannot race this check because both paths hold the same durable gate.
         for (const row of rows) {
