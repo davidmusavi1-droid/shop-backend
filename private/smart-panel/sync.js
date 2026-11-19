@@ -85,7 +85,7 @@ function updateSaveLabel() {
   const p = current();
   if (!p) return;
   const label = $('#save-label');
-  if (label) label.textContent = notices.get(p.id) ?? 'ذخیره‌شده در سرور آزمایشی';
+  if (label) label.textContent = notices.get(p.id) ?? (p.store ? 'ذخیره‌شده در MOTIF' : 'ذخیره‌شده در سرور آزمایشی');
   const conflictButton = $('[data-act=resolve-conflict]', main);
   if (conflictButton) conflictButton.hidden = !conflicts.has(p.id);
 }
@@ -115,7 +115,7 @@ async function saveDraft(p, explicit = false) {
     if (baseline.has(p.id)) p.phase = baseline.get(p.id).phase;
     updateEditorStatus(p);
     updateSaveLabel();
-    if (explicit) toast('پرونده در سرور آزمایشی ذخیره شده است.');
+    if (explicit) toast(p.store ? 'پرونده در MOTIF ذخیره شد.' : 'پرونده در سرور آزمایشی ذخیره شده است.');
     return true;
   }
   const before = editable(p);
@@ -200,6 +200,12 @@ async function loadPanel(session) {
   if (epoch !== loginEpoch) return;
   baseline.clear();
   state.products = items;
+  if (items.some(item=>item.store)) {
+    const note=document.querySelector('.side-note');
+    if(note) note.textContent='متصل به فروشگاه MOTIF؛ انتشار فقط با اقدام مستقل مدیر انجام می‌شود.';
+    const badge=document.querySelector('.top-left .badge');
+    if(badge) badge.textContent='پنل فروشگاه';
+  }
   state.registry = registry;
   items.forEach(p => baseline.set(p.id, structuredClone(p)));
   loggedIn = true;

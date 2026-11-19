@@ -34,10 +34,17 @@ const vision = { brand: { value: 'PUMA', image: 1, evidence: 'PUMA' }, labelSize
   ] };
 let server, browser, jpeg, product, cookie, csrf, dossier, calls = [], responseMode = 'normal';
 const cfg = { operations: ['analyze', 'research'], dailyLimit: 4, labelObservations: true, separateStyle: true,
+  estimates: { analyze: 0.02, research: 0.03 }, dailyBudgetUsd: 1,
   model: 'google/gemini-2.5-flash', researchModel: 'perplexity/sonar',
   endpoint: 'https://fixture.invalid/chat/completions', key: 'local-fixture-key' };
 
 async function request(path, method = 'GET', data, auth = true) {
+  if (method === 'POST' && path.startsWith(base) && /\/ai\/c2\/(analyze|research)$/.test(path)) {
+    const operation = path.split('/').at(-1);
+    const preview = await request(path.replace(/\/ai\/c2\/[^/]+$/, '/ai/quote?operation=' + operation));
+    if (preview.status !== 200) return preview;
+    data = { ...data, quote: preview.data.token };
+  }
   const binary = Buffer.isBuffer(data);
   const headers = { Origin: origin, ...(auth && { Cookie: cookie, 'X-Admin-CSRF': csrf }) };
   if (data !== undefined) headers['Content-Type'] = binary ? 'image/jpeg' : 'application/json';
@@ -203,7 +210,7 @@ test('at 320px the linked form previews reviewed text and leaves saving to the m
   assert.equal(html.total, html.visible);
   assert.equal(await page.locator('html').evaluate(node => node.scrollWidth), 320);
   await frame.getByRole('button', { name: 'پیش‌نمایش انتقال به فرم محصول', exact: true }).click();
-  await frame.getByRole('button', { name: 'درج در فرم محصول', exact: true }).click();
+  await frame.getByRole('button', { name: 'تأیید و درج در فرم محصول', exact: true }).click();
   await page.locator('#clearC22').waitFor();
   assert.equal(await page.locator('[data-key="identityHistory"]').inputValue(), 'متن دستی محفوظ');
   assert.ok(await page.locator('[data-key="identityDesign"]').inputValue());

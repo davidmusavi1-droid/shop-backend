@@ -2,23 +2,29 @@
 
 const { displayResearch } = require('./brand-research');
 const { fabricsOf } = require('../../../public/catalog');
-const { builtIn, keyFor } = require('../fabric-options');
 const { fail, uuid } = require('./validation');
+const { mapFabric } = require('./suggestion-options');
 
 const targets = ['identityHistory', 'identityDesign', 'identityUseCases'];
 const brandKey = value => (value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 const stale = () => fail(409, 'C22_TRANSFER_STALE', 'پیشنهاد یا محصول تغییر کرده است. متن را در پنل هوشمند دوباره بررسی کنید.');
 
 function approvedSections(payload) {
+  // Independently reviewed manual content is valid even when research has gone stale.
+  // Prefer it over a research draft; neither path can replace existing product text.
+  const manual = Object.fromEntries(targets.flatMap((key, i) =>
+    payload.content?.[i]?.approved === true && payload.content[i].text?.trim()
+      ? [[key, payload.content[i].text.trim()]] : []));
   const research = displayResearch(payload);
   const draft = research?.draft;
-  if (research?.mode !== 'live' || !research.draftCurrent || draft.status !== 'pending') return {};
+  if (research?.mode !== 'live' || !research.draftCurrent || draft.status !== 'pending') return manual;
   const { finding } = research;
   if ([finding.status, finding.design?.status, finding.style?.status]
-    .some(status => ['pending_source_review', 'invalid_source'].includes(status))) return {};
-  return Object.fromEntries(targets.flatMap((key, i) =>
+    .some(status => ['pending_source_review', 'invalid_source'].includes(status))) return manual;
+  const generated = Object.fromEntries(targets.flatMap((key, i) =>
     draft.decisions[i] === 'approved' && draft.sections[i]?.trim() &&
       (i !== 0 || research.finding.status === 'manager_verified') ? [[key, draft.sections[i]]] : []));
+  return { ...generated, ...manual };
 }
 
 async function checkTransfer(tx, product, data, receipt) {
@@ -41,9 +47,9 @@ function reviewedFabric(product, payload) {
   if (fabric?.length !== 1 || sources?.fabric !== 'label') return null;
   const value = fabric[0].trim();
   const evidence = analysis?.find(item => item.key === 'fabric' && item.kind === 'label' &&
-    item.value.trim() === value && item.evidence?.trim() && gallery.some(image => image.id === item.imageId));
+    mapFabric(item.value) === mapFabric(value) && item.evidence?.trim() && gallery.some(image => image.id === item.imageId));
   if (!evidence) return null;
-  const label = builtIn.get(keyFor(value.replace(/^(?:100|۱۰۰|١٠٠)\s*[%٪]\s*/, '')));
+  const label = mapFabric(value);
   return ['سایر', 'ترکیبی', 'کورتکس (اصطلاح رایج بازار)'].includes(label) ? null : label || null;
 }
 

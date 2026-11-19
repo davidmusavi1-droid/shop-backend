@@ -9,6 +9,9 @@ const { isDeepStrictEqual } = require('node:util');
 const sharp = require('sharp');
 const V = require('../lib/smart-panel/validation');
 const { approvedSections, reviewedFabric } = require('../lib/smart-panel/store');
+const { mapType, mapFabric } = require('../lib/smart-panel/suggestion-options');
+const { checkCode } = require('../lib/motif-code');
+const budget = require('../lib/smart-panel/ai-budget');
 const { providerFor } = require('../lib/smart-panel/providers');
 const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
   displayResearch, researchAction, changeDraft } = require('../lib/smart-panel/brand-research');
@@ -16,7 +19,6 @@ const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
 const base = '/api/admin/smart-panel';
 const limit = 3_000_000;
 const include = { images: { select: { id: true, name: true, size: true, digest: true } }, reservation: true };
-const { productTypes } = require('../../public/catalog');
 const suggestionFields = ['brand', 'labelSize', 'fabric', 'type', 'name'];
 const pilotDigests = [
   '7f0713a68fd6cd89cdee22195247ea2eada8eccbb60e549eb334f4c8237d6a84',
@@ -25,8 +27,8 @@ const pilotDigests = [
 ];
 const notFound = () => V.fail(404, 'NOT_FOUND', 'پرونده یا فایل پیدا نشد.');
 
-const imageTypes = { jpeg: 'image/jpeg', png: 'image/png' };
-const imageFormat = name => /\.png$/i.test(name) ? 'png' : 'jpeg';
+const imageTypes = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const imageFormat = name => /\.png$/i.test(name) ? 'png' : /\.webp$/i.test(name) ? 'webp' : 'jpeg';
 
 function serializeDossier(row) {
   const { gallery, ...fields } = row.payload;
@@ -42,7 +44,7 @@ function serializeDossier(row) {
     publication: 'none', sale: 'نامشخص',
     images: gallery.map(item => {
       const { id, name, size } = images.get(item.id);
-      return { id, name, size, groups: item.groups, valid: true, format: imageFormat(name) === 'png' ? 'PNG' : 'JPG', url: base + '/dossiers/' + row.id + '/images/' + id };
+      return { id, name, size, groups: item.groups, valid: true, format: { png: 'PNG', jpeg: 'JPG', webp: 'WebP' }[imageFormat(name)], url: base + '/dossiers/' + row.id + '/images/' + id };
     }),
   };
 }
@@ -72,11 +74,13 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
   const activeImage = (row, hash) => row.images.find(image => image.digest === hash &&
     row.payload.gallery.some(item => item.id === image.id && !item.groups.includes('defect')));
   const storeImages = row => row.payload.gallery.filter(item => !item.groups.includes('defect'))
-    .map(item => row.images.find(image => image.id === item.id));
+    .slice(0, 4).map(item => row.images.find(image => image.id === item.id));
   const canAnalyze = row => c2?.operations.includes('analyze') === true && (store
     ? storeImages(row).length > 0
     : Date.now() < c2.expiresAt && imageDigests.every(hash => activeImage(row, hash)));
-  const serialize = row => ({ ...serializeDossier(row), store, researchMode, canAnalyze: canAnalyze(row) });
+  const serialize = row => ({ ...serializeDossier(row), store, researchMode, canAnalyze: canAnalyze(row),
+    analysis: row.payload.analysis?.map(item => ({ ...item, ...(store && ['type', 'fabric'].includes(item.key)
+      ? { mappedValue: item.key === 'type' ? mapType(item.value) : mapFabric(item.value) } : {}) })) || null });
   const digest = bytes => createHash('sha256').update(bytes).digest('hex');
   const analysisScope = row => row.id + ':' +
     digest(JSON.stringify([...new Set(storeImages(row).map(image => image.digest))].sort()));
@@ -112,6 +116,15 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
   const resetReview = { phase: 'draft', approvedVersion: null };
 
   router.get('/store/status', (req, res, next) => store ? res.json({ enabled: true }) : next(notFound()));
+  const usageToday = async tx => budget.summarize(await tx.smartAiRun.findMany({
+    where: { at: { gte: budget.utcDay() } }, select: { operation: true, usage: true, status: true },
+  }), c2 || { dailyLimit: Number(process.env.MOTIF_C22_DAILY_LIMIT) || 0, ...budget.budgetConfig(process.env) });
+  router.get('/ai/usage', wrap(async (req, res) => res.json(await usageToday(db))));
+  router.get('/dossiers/:id/ai/quote', wrap(async (req, res) => {
+    if (!store || !['analyze', 'research'].includes(req.query.operation)) throw notFound();
+    const row = await current(db, req.params.id);
+    res.json(budget.quote(row, req.query.operation, c2, await usageToday(db)));
+  }));
   router.post('/store/products/:productId/dossier', wrap(async (req, res) => {
     const { productId } = req.params;
     if (!store || !V.uuid.test(productId)) throw notFound();
@@ -140,16 +153,19 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     const sections = Object.fromEntries(Object.entries(approvedSections(row.payload)).filter(([key]) => !product[key]?.trim()));
     const { brand, type, sources, analysis, gallery } = row.payload;
     const accepted = (key, value, kind) => sources[key] === kind &&
-      analysis?.some(item => item.key === key && item.value.trim() === value?.trim() &&
+      analysis?.some(item => item.key === key && (key === 'type'
+        ? mapType(item.value) === mapType(value) : item.value.trim() === value?.trim()) &&
         gallery.some(image => image.id === item.imageId));
     const suggestions = {};
     if (!product.brand?.trim() && brand?.trim() && accepted('brand', brand, 'label')) suggestions.brand = brand;
-    if (!product.productType && !product.mainCategories.length && productTypes.includes(type) &&
-        accepted('type', type, 'image')) suggestions.productType = type;
+    if (!product.productType && !product.mainCategories.length && mapType(type) &&
+        accepted('type', type, 'image')) suggestions.productType = mapType(type);
     const fabric = reviewedFabric(product, row.payload);
     if (fabric) suggestions.fabric = fabric;
     res.json({ id: row.id, version: row.version, productId: row.productId, updatedAt: product.updatedAt,
-      brand, sections, suggestions });
+      brand, sections, suggestions, gallery: row.payload.gallery
+        .filter(item => item.groups.includes('product') && !item.groups.includes('defect'))
+        .map(item => row.payload.imageLinks?.[item.id]).filter(Boolean) });
   }));
 
   router.get('/dossiers/:id/store-images', wrap(async (req, res) => {
@@ -244,6 +260,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
               where: { id: currentRow.productId }, select: { productCode: true },
             });
             if (!product) throw notFound();
+            await checkCode(tx, product.productCode, { productId: currentRow.productId, dossierId: currentRow.id, final: true });
             await tx.smartApproval.create({
               data: { dossierId: currentRow.id, version, snapshot: { code: product.productCode, fields: currentRow.payload } },
             });
@@ -281,11 +298,11 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
   router.post('/dossiers/:id/archive', retire('archived'));
   router.delete('/dossiers/:id', retire('deleted'));
 
-  const addImage = (req, version, image, bytes) => mutate(req, version, 'image_added', row => {
-    if (row.payload.gallery.length >= (store ? 4 : 24)) throw V.invalid(store
-      ? 'حداکثر چهار عکس در پرونده مجاز است.' : 'حداکثر ۲۴ عکس در هر پرونده مجاز است.');
+  const addImage = (req, version, image, bytes, sourceUrl) => mutate(req, version, 'image_added', row => {
+    if (row.payload.gallery.length >= 24) throw V.invalid('حداکثر ۲۴ عکس در هر پرونده مجاز است.');
     const payload = { ...row.payload, ...(store && { analysis: null, labelObservations: [] }), gallery: [...row.payload.gallery, { id: image.id, groups: ['product'] }],
-      mainImage: row.payload.mainImage || image.id };
+      mainImage: row.payload.mainImage || image.id,
+      ...(sourceUrl && { imageLinks: { ...row.payload.imageLinks, [image.id]: sourceUrl } }) };
     return { data: { payload, ...resetReview },
       after: tx => tx.smartImage.create({ data: { ...image, dossierId: row.id, ...(store && { bytes }) } }) };
   });
@@ -298,29 +315,58 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       const row = await current(db, req.params.id);
       const { index, version, updatedAt } = req.body ?? {};
       if (row.version !== V.expectedVersion(version)) throw V.conflict();
-      if (!row.productId || !Number.isSafeInteger(index) || index < 0 || row.payload.gallery.length >= 4) {
+      if (!row.productId || !Number.isSafeInteger(index) || index < 0 || row.payload.gallery.length >= 24) {
         throw V.invalid('عکس انتخاب‌شده یا ظرفیت گالری معتبر نیست.');
       }
       const product = await db.product.findUnique({ where: { id: row.productId }, select: { images: true, updatedAt: true } });
       if (!product || product.updatedAt.toISOString() !== updatedAt) throw V.conflict();
       const url = product?.images[index];
       if (!storage?.canRead(url)) throw notFound();
-      let bytes;
+      let bytes, format;
       try {
-        const source = await storage.read(url, limit);
-        bytes = await sharp(source, { limitInputPixels: 50_000_000, failOn: 'warning' }).jpeg({ quality: 92 }).toBuffer();
+        bytes = await storage.read(url, limit);
+        const picture = sharp(bytes, { limitInputPixels: 50_000_000, failOn: 'warning' });
+        const meta = await picture.metadata();
+        format = meta.format;
+        if (!imageTypes[format] || (meta.pages || 1) > 1) throw new Error('format');
+        await picture.stats();
       } catch {
         throw V.fail(503, 'IMAGE_UNAVAILABLE', 'خواندن عکس محصول ممکن نشد.');
       }
-      if (bytes.length > limit) throw V.invalid('حجم عکس تبدیل‌شده بیش از ۳ مگابایت است.');
+      if (bytes.length > limit) throw V.invalid('حجم عکس بیش از ۳ مگابایت است.');
       const hash = digest(bytes);
       if (row.payload.gallery.some(item => row.images.some(image => image.id === item.id && image.digest === hash))) {
         return res.json(serialize(row));
       }
-      const updated = await addImage(req, version, { id: randomUUID(), name: 'product-' + (index + 1) + '.jpg',
-        size: bytes.length, digest: hash }, bytes);
+      const updated = await addImage(req, version, { id: randomUUID(), name: 'product-' + (index + 1) + '.' + (format === 'jpeg' ? 'jpg' : format),
+        size: bytes.length, digest: hash }, bytes, url);
       res.status(201).json(serialize(updated));
     } finally { uploadsInFlight--; }
+  }));
+
+  // Stage public gallery URLs only after the manager reviews the selected photos.
+  // Product data is unchanged until the manager explicitly saves the parent form.
+  router.post('/dossiers/:id/store-gallery-export', wrap(async (req, res) => {
+    if (!store || !storage?.upload) throw V.fail(503, 'STORAGE_UNAVAILABLE', 'فضای تصاویر آماده نیست.');
+    const row = await current(db, req.params.id);
+    if (row.version !== V.expectedVersion(req.body?.version)) throw V.conflict();
+    const product = row.productId && await db.product.findUnique({ where: { id: row.productId }, select: { updatedAt: true } });
+    if (!product || req.body.updatedAt !== product.updatedAt.toISOString()) throw V.conflict();
+    const selected = row.payload.gallery.filter(item => item.groups.includes('product') && !item.groups.includes('defect'));
+    if (!selected.length) throw V.invalid('ابتدا عکس‌های گروه محصول را انتخاب کنید.');
+    const links = { ...row.payload.imageLinks };
+    for (const item of selected) {
+      if (links[item.id]) continue;
+      const image = await db.smartImage.findUnique({ where: { id: item.id }, select: { bytes: true, name: true, digest: true } });
+      if (!image?.bytes || image.bytes.length > limit) throw notFound();
+      const uploaded = await storage.upload(Buffer.from(image.bytes), { format: imageFormat(image.name), digest: image.digest });
+      if (!uploaded?.url || !storage.canRead(uploaded.url)) throw V.fail(503, 'STORAGE_UNAVAILABLE', 'ذخیرهٔ تصویر تکمیل نشد.');
+      links[item.id] = uploaded.url;
+    }
+    const updated = await mutate(req, row.version, 'gallery_export_prepared', currentRow => ({
+      data: { payload: { ...currentRow.payload, imageLinks: links } },
+    }));
+    res.json({ dossier: serialize(updated) });
   }));
 
   router.post('/dossiers/:id/images',
@@ -355,7 +401,8 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         let image;
         try {
           image = sharp(req.body, { limitInputPixels: 50_000_000, failOn: 'warning' });
-          if ((await image.metadata()).format !== imageFormat(name)) throw new Error('format');
+          const metadata = await image.metadata();
+          if (metadata.format !== imageFormat(name) || (metadata.pages || 1) > 1) throw new Error('format');
           await image.stats();
         } catch { throw V.fail(415, 'INVALID_IMAGE', 'محتوای فایل تصویر معتبر نیست.'); }
 
@@ -506,7 +553,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       throw V.fail(503, 'AI_UNAVAILABLE', 'اجرای واقعی این عملیات فعال نیست.');
     }
     const version = V.expectedVersion(req.body?.version);
-    const allowed = research ? ['version', 'mode', 'labelConfirmed', 'simulateFailure'] : ['version'];
+    const allowed = research ? ['version', 'mode', 'labelConfirmed', 'simulateFailure', 'quote'] : ['version', 'quote'];
     if (Object.keys(req.body).some(key => !allowed.includes(key))) throw V.invalid('ورودی اجرای AI نامعتبر است.');
     if (research && (req.body.mode !== researchMode ||
         (req.body.simulateFailure !== undefined && (liveResearch || typeof req.body.simulateFailure !== 'boolean')))) {
@@ -514,6 +561,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
     }
     const row = await current(db, req.params.id);
     if (row.version !== version) throw V.conflict();
+    const estimate = store ? budget.verifyQuote(req.body.quote, row, operation, c2) : null;
     if (store && !row.productId) throw notFound();
     const id = randomUUID();
     if (research) {
@@ -552,11 +600,16 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         if (await tx.smartAiRun.count({ where: { at: { gte: day } } }) >= c2.dailyLimit) {
           throw V.fail(429, 'AI_DAILY_LIMIT', 'سقف روزانهٔ اجرای هوش مصنوعی پر شده است.');
         }
+        const usage = await usageToday(tx);
+        if (usage.reservedUsd + estimate.estimateUsd > c2.dailyBudgetUsd + 1e-9) {
+          throw V.fail(429, 'AI_DAILY_LIMIT', 'سقف بودجهٔ برآوردی امروز پر شده است.');
+        }
       }
       await lockRevision(tx, row.id, version);
       // Reserve before sending. A restart, timeout or duplicate cannot repeat the paid operation.
       const inserted = await tx.smartAiRun.createMany({
-        data: { id, operation, scope, model, dossierId: row.id, version, status: 'pending' }, skipDuplicates: true,
+        data: { id, operation, scope, model, dossierId: row.id, version, status: 'pending',
+          ...(estimate && { usage: { estimateUsd: estimate.estimateUsd } }) }, skipDuplicates: true,
       });
       if (!inserted.count) throw V.fail(409, 'AI_ALREADY_ATTEMPTED', 'سهم این عملیات قبلاً استفاده شده است. گزارش اجرا را بررسی کنید.');
     });
@@ -577,7 +630,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         return {
           data: { payload: { ...currentRow.payload, ...field } },
           after: tx => tx.smartAiRun.update({ where: { id }, data: {
-            status: 'completed', result: outcome.result, usage: outcome.usage,
+            status: 'completed', result: outcome.result, usage: { ...outcome.usage, ...(estimate && { estimateUsd: estimate.estimateUsd }) },
           } }),
         };
       });
@@ -585,7 +638,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       // If the transaction outcome is uncertain, only transition an unfinished reservation.
       await db.smartAiRun.updateMany({ where: { id, status: 'pending' }, data: {
         status: 'failed', errorCode: error.code || 'AI_UNKNOWN',
-        ...(outcome?.usage || error.usage ? { usage: outcome?.usage || error.usage } : {}),
+        ...(outcome?.usage || error.usage ? { usage: { ...(outcome?.usage || error.usage), ...(estimate && { estimateUsd: estimate.estimateUsd }) } } : {}),
       } });
       throw error;
     }
@@ -623,7 +676,10 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
           !currentRow.payload.gallery.some(item => item.id === suggestion.imageId)) {
         throw V.invalid('پیشنهاد معتبر و دارای تصویر لازم است.');
       }
-      const { key, value, kind } = suggestion;
+      const { key, kind } = suggestion;
+      const value = store && key === 'type' ? mapType(suggestion.value)
+        : store && key === 'fabric' ? mapFabric(suggestion.value) : suggestion.value;
+      if (!value) throw V.invalid('این پیشنهاد با گزینه‌های فروشگاه تطبیق قطعی ندارد. گزینهٔ مناسب را دستی انتخاب کنید.');
       const original = currentRow.payload[key];
       if (store && (Array.isArray(original) ? original.length : original?.trim())) {
         throw V.conflict();

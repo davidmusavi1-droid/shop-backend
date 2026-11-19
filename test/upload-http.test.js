@@ -40,11 +40,11 @@ test('HTTP upload enforces authentication, formats, limits, missing config and s
     assert.equal((await upload(Buffer.alloc(10 * 1024 * 1024 + 1))).status, 413);
     const result = await upload(photo); assert.equal(result.status, 201); assert.equal(received.length, 1);
     const metadata = await sharp(received[0]).metadata();
-    assert.equal(metadata.format, 'webp'); assert.equal(metadata.width, 3200); assert.equal(metadata.exif, undefined);
+    assert.equal(metadata.format, 'jpeg'); assert.equal(metadata.width, 4000); assert.deepEqual(received[0], photo);
     assert.ok(received[0].length <= MAX_IMAGE_BYTES);
     assert.equal((await result.json()).width, metadata.width);
     const png = await sharp({create:{width:120,height:80,channels:3,background:'green'}}).png().toBuffer();
-    assert.equal((await upload(png)).status,201);assert.equal((await sharp(received.at(-1)).metadata()).format,'webp');
+    assert.equal((await upload(png)).status,201);assert.equal((await sharp(received.at(-1)).metadata()).format,'png');
     failure = true;
     const failed = await upload(photo); assert.equal(failed.status, 502); assert.ok(!(await failed.text()).includes('SECRET'));
     failure = false; assert.equal((await upload(photo)).status, 201);
@@ -57,9 +57,9 @@ test('HTTP upload enforces authentication, formats, limits, missing config and s
   }
 });
 
-test('small images retain dimensions; EXIF rotation is applied without keeping metadata', async () => {
+test('original JPEG dimensions and orientation metadata survive without re-encoding', async () => {
   const small = await sharp({ create: { width: 120, height: 80, channels: 3, background: 'blue' } }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
   const result = await prepareImage(small); const metadata = await sharp(result.buffer).metadata();
-  assert.equal(metadata.width, 80); assert.equal(metadata.height, 120);
-  assert.equal(metadata.orientation, undefined); assert.equal(metadata.exif, undefined);
+  assert.equal(metadata.width, 120); assert.equal(metadata.height, 80);
+  assert.equal(metadata.orientation, 6); assert.deepEqual(result.buffer, small);
 });

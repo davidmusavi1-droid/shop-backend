@@ -958,7 +958,7 @@ $("clearC22").onclick = () => {
 
 window.addEventListener("message", async (event) => {
   if (event.origin !== location.origin || event.source !== $("c22Frame").contentWindow ||
-      !$("c22Dialog").open || !["motif-c22-transfer", "motif-c22-specs"].includes(event.data?.type) ||
+      !$("c22Dialog").open || !["motif-c22-transfer", "motif-c22-specs", "motif-c22-gallery"].includes(event.data?.type) ||
       !/^[a-f0-9-]{36}$/.test(event.data.id) || !editing) return;
   const product = editing;
   try {
@@ -967,6 +967,25 @@ window.addEventListener("message", async (event) => {
     if (transfer.productId !== product.id || transfer.updatedAt !== product.updatedAt ||
         transfer.version !== event.data.version) {
       throw Error("نسخهٔ پرونده یا برند با فرم محصول یکسان نیست. اطلاعات را بررسی کنید.");
+    }
+    if (c22Transfer && c22Transfer.version !== transfer.version) {
+      if (c22Transfer.id !== transfer.id || c22Transfer.keys.some(key =>
+        productInput(key).value !== transfer.sections[key])) {
+        throw Error("متن پیشنهادی تغییر کرده است؛ ابتدا متن‌های قبلی فرم را بررسی کنید.");
+      }
+      c22Transfer = { ...c22Transfer, version: transfer.version };
+    }
+    if (event.data.type === "motif-c22-gallery") {
+      const input = productInput("images");
+      const existing = input.value.split(/\r?\n/).map(value=>value.trim()).filter(Boolean);
+      const images = [...new Set([...existing, ...(transfer.gallery || [])])];
+      input.value = images.join("\n");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      mark();
+      $("c22Dialog").close();
+      input.closest("details").open = true;
+      notice("عکس‌ها به فرم اضافه شدند؛ عکس‌های قبلی محفوظ‌اند. ترتیب و حذف را بررسی و سپس پیش‌نویس را ذخیره کنید.");
+      return;
     }
     if (event.data.type === "motif-c22-specs") {
       const suggestions = transfer.suggestions || {};
