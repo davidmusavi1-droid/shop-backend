@@ -16,6 +16,18 @@ jobs:
         with:
           node-version: '22'
       - run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Use official HTTPS Ubuntu package mirrors
+        run: |
+          # Runner regional mirrors failed before any browser tests could run.
+          # Keep package signatures and all Playwright dependency checks enabled.
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path('/etc/apt/sources.list.d/ubuntu.sources')
+          text = source.read_text()
+          text = re.sub(r'^URIs:.*$', lambda m: 'URIs: https://security.ubuntu.com/ubuntu/' if 'security' in m[0] else 'URIs: https://archive.ubuntu.com/ubuntu/', text, flags=re.M)
+          source.write_text(text)
+          PY
       - run: npx playwright install --with-deps chromium
       - run: node test/admin-browser.cjs
       - run: node test/structure-browser.cjs

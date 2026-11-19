@@ -5,7 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const productTypes = ['کاپشن','بادگیر','شلوار','سویشرت'];
-  const fabrics = ['کورتکس (اصطلاح رایج بازار)','شمعی','پلی‌استر','نایلون','کتان','پنبه','جین','فلیس','پلار','ترکیبی','سایر'];
+  const fabrics = ['کورتکس (اصطلاح رایج بازار)','شمعی','پلی‌استر','پلی‌آمید','نایلون','کتان','پنبه','جین','فلیس','پلار','ترکیبی','سایر'];
   const fabricBases = [['SELLER','تشخیص و اعلام فروشنده'],['LABEL','اطلاعات لیبل یا مشخصات معتبر سازنده'],['UNKNOWN','نامشخص']];
   const categoriesOf = p => p.mainCategories ?? (p.productType?.trim() ? [p.productType] : []);
   const fabricsOf = p => p.fabrics ?? [...new Set([p.mainFabric,...(p.complementaryFabrics||[])].filter(Boolean))];

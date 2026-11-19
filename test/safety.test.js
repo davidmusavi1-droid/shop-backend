@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 function load(name, prisma = {}, env = {}) {
+  if (name === 'products') prisma = require('./product-db-fixture.cjs')(prisma);
   const routes = {};
   const admin = () => { admin.calls = (admin.calls || 0) + 1; };
   const router = Object.fromEntries(['get', 'post', 'patch'].map(method => [method, (url, ...handlers) => { routes[method + ' ' + url] = handlers; }]));
@@ -77,13 +78,13 @@ test('blank measurements remain null and public listing filters stock', async ()
     create: async args => { created = args.data; return args.data; },
     findMany: async args => { query = args; return []; },
   } });
-  await call(routes['post /'], { title: 'test', productType: 'کاپشن', basePrice: 100, variants: [{ sku: 'test', size: 'L', color: 'black', chestWidthCm: null, lengthCm: 65 }] });
+  await call(routes['post /'], { productCode: 'MOTIF-960', title: 'test', productType: 'کاپشن', basePrice: 100, variants: [{ sku: 'test', size: 'L', color: 'black', chestWidthCm: null, lengthCm: 65 }] });
   assert.equal(created.variants.create[0].chestWidthCm, null);
   assert.equal(created.variants.create[0].lengthCm, 65);
   await call(routes['get /']);
   assert.equal(query.where.variants.some.stock.gt, 0);
 });
-const productBody = { title: 'test', productType: 'کاپشن', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'one', size: 'L', color: 'black', stock: 1 }] };
+const productBody = { productCode: 'MOTIF-960', title: 'test', productType: 'کاپشن', basePrice: 100, inventoryMode: 'MULTI', variants: [{ sku: 'one', size: 'L', color: 'black', stock: 1 }] };
 test('all product management endpoints require admin', () => {
   const { routes, admin } = load('products');
   for (const key of ['get /admin/list', 'get /admin/fabrics', 'post /admin/fabrics', 'post /', 'patch /:id']) assert.equal(routes[key][0], admin);
@@ -147,13 +148,14 @@ test('single items accept unknown label size while multi-size items still requir
 });
 test('legacy editors preserve product codes when omitted from updates',async()=>{
   let changed;
+  const legacyBody={...productBody};delete legacyBody.productCode;
   const updatedAt=new Date('2026-11-06T00:00:00Z');
   const current={id:'p1',productCode:'MOTIF-004',updatedAt,variants:[{id:'v1'}]};
   const tx={product:{findUnique:async()=>current,updateMany:async({data})=>{changed=data;return {count:1};}},variant:{updateMany:async()=>({count:1})}};
   const {routes}=load('products',{$transaction:fn=>fn(tx)});
-  assert.equal((await call(routes['patch /:id'],{...productBody,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
+  assert.equal((await call(routes['patch /:id'],{...legacyBody,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
   assert.equal(Object.hasOwn(changed,'productCode'),false);
-  assert.equal((await call(routes['patch /:id'],{...productBody,productCode:null,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
+  assert.equal((await call(routes['patch /:id'],{...legacyBody,productCode:null,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
   assert.equal(Object.hasOwn(changed,'productCode'),false);
 });
 

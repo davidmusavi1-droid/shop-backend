@@ -2,6 +2,7 @@
 
 const { fail } = require('./validation');
 const { httpsSource } = require('./brand-research');
+const { budgetConfig } = require('./ai-budget');
 
 const visionModel = 'google/gemini-2.5-flash';
 const researchModels = [visionModel + ':online', 'perplexity/sonar'];
@@ -63,7 +64,7 @@ function storeConfiguration(env) {
       !/^[!-~]{16,256}$/.test(key || '') || !Number.isSafeInteger(dailyLimit) ||
       dailyLimit < 1 || dailyLimit > 200) return null;
   return { operations, model: visionModel, researchModel: 'perplexity/sonar', labelObservations: true,
-    dailyLimit, separateStyle: true, key, endpoint: url.href.replace(/\/$/, '') + '/chat/completions' };
+    dailyLimit, ...budgetConfig(env), separateStyle: true, key, endpoint: url.href.replace(/\/$/, '') + '/chat/completions' };
 }
 
 function imageResult(value, images, readLabels) {

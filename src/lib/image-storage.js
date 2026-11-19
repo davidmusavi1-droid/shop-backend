@@ -38,7 +38,7 @@ function createStorage(env = process.env, makeClient = options => new S3Client(o
   const keyFor = url => {
     if (typeof url !== 'string' || !url.startsWith(config.publicUrl + '/')) return null;
     const key = url.slice(config.publicUrl.length + 1);
-    return /^motif\/products\/[0-9a-f-]{36}\.webp$/.test(key) ? key : null;
+      return /^motif\/products\/(?:[0-9a-f-]{36}|[0-9a-f]{64})\.(?:webp|jpg|png)$/.test(key) ? key : null;
   };
   return {
     configured: true,
@@ -57,10 +57,12 @@ function createStorage(env = process.env, makeClient = options => new S3Client(o
       }
       return Buffer.concat(chunks, size);
     },
-    async upload(buffer) {
-      const key = `motif/products/${randomUUID()}.webp`;
+    async upload(buffer, { format = 'webp', digest } = {}) {
+      const extension = { jpeg: 'jpg', png: 'png', webp: 'webp' }[format];
+      if (!extension || (digest && !/^[a-f0-9]{64}$/.test(digest))) throw new Error('Invalid image format');
+      const key = `motif/products/${digest || randomUUID()}.${extension}`;
       await client.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: buffer,
-        ContentType: 'image/webp', ContentLength: buffer.length, CacheControl: 'public, max-age=31536000, immutable' }),
+        ContentType: 'image/' + format, ContentLength: buffer.length, CacheControl: 'public, max-age=31536000, immutable' }),
       { abortSignal: AbortSignal.timeout(60000) });
       return { url: `${config.publicUrl}/${key}` };
     }

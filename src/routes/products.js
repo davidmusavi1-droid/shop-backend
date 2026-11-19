@@ -4,6 +4,7 @@ const prisma = require('../lib/prisma');
 const requireAdmin = require('../middleware/requireAdmin');
 const catalog = require('../../public/catalog');
 const fabricOptions = require('../lib/fabric-options');
+const { checkCode } = require('../lib/motif-code');
 const router = express.Router();
 
 // Administrative reads include inactive and sold-out products.
@@ -215,6 +216,11 @@ router.patch('/:id', requireAdmin, async (req, res, next) => {
       if (!current) throw Object.assign(new Error('محصول پیدا نشد'), { statusCode: 404 });
       if (req.body.updatedAt !== current.updatedAt.toISOString()) throw conflict();
       const { data, variants } = normalize(req.body, current);
+      if ((data.productCode !== undefined && data.productCode !== current.productCode) || (data.isActive && (current.isActive === false || req.body.publicationIntent === true))) {
+        const linked = await tx.smartDossier.findUnique({ where: { productId: current.id }, select: { id: true } });
+        await checkCode(tx, data.productCode ?? current.productCode, { productId: current.id, dossierId: linked?.id,
+          final: data.isActive && (current.isActive === false || req.body.publicationIntent === true) });
+      }
       if (req.body.c22Transfer !== undefined) await checkTransfer(tx, current, data, req.body.c22Transfer);
       await resolveFabrics(tx, data, current, req.body);
       const ids = req.body.variants.filter(v => v.id).map(v => v.id);
@@ -272,8 +278,12 @@ router.post('/', requireAdmin, async (req, res, next) => {
   try {
     if (req.body?.c22Transfer !== undefined) throw invalid('ابتدا پیش‌نویس محصول را ذخیره کنید.');
     const { data, variants } = normalize(req.body);
-    await resolveFabrics(prisma, data, null, req.body);
-    res.status(201).json(await prisma.product.create({ data: { ...data, variants: { create: variants } }, include: { variants: true } }));
+    const created = await prisma.$transaction(async tx => {
+      await checkCode(tx, data.productCode, { final: data.isActive });
+      await resolveFabrics(tx, data, null, req.body);
+      return tx.product.create({ data: { ...data, variants: { create: variants } }, include: { variants: true } });
+    });
+    res.status(201).json(created);
   } catch (err) { productError(err, next); }
 });
 module.exports = router;

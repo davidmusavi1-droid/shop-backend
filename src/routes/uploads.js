@@ -10,7 +10,7 @@ function createRouter({ provider, decode = sharp, env = process.env, authorize =
   provider = provider || createStorage(env);
   const router = express.Router();
   const parse = multer({ storage: multer.memoryStorage(), limits: {
-    fileSize: 10 * 1024 * 1024, files: 1, fields: 0, parts: 1
+    fileSize: 3_000_000, files: 1, fields: 0, parts: 1
   }}).single('image');
   let busy = false;
   router.post('/images', authorize, (req, res) => {
@@ -24,7 +24,7 @@ function createRouter({ provider, decode = sharp, env = process.env, authorize =
     parse(req, res, async err => {
       try {
         if (err) return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({
-          error: err.code === 'LIMIT_FILE_SIZE' ? 'حجم هر عکس باید حداکثر ۱۰ مگابایت باشد.' : 'هر بار فقط یک فایل عکس ارسال کنید.'
+          error: err.code === 'LIMIT_FILE_SIZE' ? 'حجم هر عکس باید حداکثر ۳٬۰۰۰٬۰۰۰ بایت باشد.' : 'هر بار فقط یک فایل عکس ارسال کنید.'
         });
         if (!req.file) return res.status(400).json({ error: 'یک عکس انتخاب کنید.' });
         let photo;
@@ -35,7 +35,7 @@ function createRouter({ provider, decode = sharp, env = process.env, authorize =
           return res.status(400).json({ error: 'عکس معتبر JPG، PNG یا WebP انتخاب کنید (حداکثر ۵۰ مگاپیکسل).' });
         }
         if (res.destroyed) return;
-        const result = await provider.upload(photo.buffer);
+        const result = await provider.upload(photo.buffer, { format: photo.format });
         if (!result || !/^https:\/\//.test(result.url || '')) throw new Error('upload result');
         res.status(201).json({ url: result.url, width: photo.width, height: photo.height });
       } catch (error) {

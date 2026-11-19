@@ -277,8 +277,9 @@ function imageGallery(p) {
 }
 function images(p) {
   return '<div class="stack"><label class="drop">'+icon("upload")+'<strong>انتخاب عکس‌های محصول</strong><small>عکس‌های JPG یا PNG را انتخاب کنید. سقف هر عکس ۳٬۰۰۰٬۰۰۰ بایت است.</small><span class="btn primary">انتخاب فایل</span><input id="files" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" multiple aria-label="انتخاب فایل‌های تصویر"></label>'+
-    (p.store?btn("انتخاب از تصاویر ذخیره‌شده محصول","store-images","compact","image","",p.images.length>=4):"")+
-    imageGallery(p)+notice(p.store?"حداکثر چهار تصویر برای تحلیل انتخاب کنید. گالری اصلی محصول در اینجا قابل تغییر نیست.":"هر عکس می‌تواند هم‌زمان عضو چند گروه باشد. فایل اصلی در فضای خصوصی محیط تست نگه‌داری می‌شود.")+'</div>';
+    (p.store?btn("انتخاب از تصاویر ذخیره‌شده محصول","store-images","compact","image","",p.images.length>=24)+
+      (embedded?btn("پیش‌نمایش افزودن عکس‌ها به محصول","export-gallery","compact","image","",!p.images.some(a=>a.groups.includes('product')&&!a.groups.includes('defect'))):""):"")+
+    imageGallery(p)+notice(p.store?"چهار تصویر اولِ بدون گروه ایراد برای تحلیل استفاده می‌شوند. اصل فایل حفظ می‌شود. افزودن به گالری محصول با تأیید شماست؛ ترتیب و حذف نهایی در فرم محصول انجام می‌شود.":"هر عکس می‌تواند هم‌زمان عضو چند گروه باشد. فایل اصلی در فضای خصوصی محیط تست نگه‌داری می‌شود.")+'</div>';
 }
 function labelReview(p) {
   const observations=p.labelObservations||[];
@@ -307,13 +308,19 @@ function analysis(p) {
   return '<div class="stack">'+notice(p.store?(p.canAnalyze?"تصاویر انتخاب‌شده برای تحلیل ارسال می‌شوند.":"تحلیل زنده برای این پرونده در دسترس نیست."):p.canAnalyze?"تحلیل لیبل فقط برای عکس‌های تأییدشدهٔ این آزمون در دسترس است.":"تحلیل شبیه‌سازی‌شده از پاسخ ثابت استفاده می‌کند.","amber")+
     '<div class="actions">'+btn(p.canAnalyze?"تحلیل تصاویر تأییدشده":p.analysis?"تکرار تحلیل آزمایشی":"شبیه‌سازی تحلیل تصاویر",
       "run-analysis","primary","spark","",lock||!p.images.length||(p.store&&!p.canAnalyze))+(p.images.length?"":'<small>برای شروع، یک عکس به پرونده اضافه کنید.</small>')+'</div>'+
-    (p.analysis?.length?'<div class="stack">'+p.analysis.map(({key,value,kind,evidence,imageId})=>{
+    (p.analysis?.length?'<div class="stack">'+p.analysis.map(({key,value,kind,evidence,imageId,mappedValue})=>{
       const image=p.images.find(image=>image.id===imageId);
       return '<div class="result-item"><div><strong>'+labels[key]+'</strong> <span>'+esc(value)+'</span> '+metaBadge(sources[kind])+
+        (mappedValue?'<p>گزینهٔ پیشنهادی فروشگاه: '+esc(mappedValue)+'؛ فقط با پذیرش شما ثبت می‌شود.</p>':mappedValue===null?'<p>تطبیق مشخصی پیدا نشد؛ گزینهٔ مناسب را دستی انتخاب کنید.</p>':'')+
         (evidence?'<blockquote>'+esc(evidence)+'</blockquote>':'')+
         (image&&evidence?'<a class="research-source" href="'+esc(image.url)+'" target="_blank" rel="noopener noreferrer">'+esc(image.name)+'</a>':'')+
-        '</div>'+btn("پذیرش پیشنهاد","accept-proposal","compact","check",'data-key="'+key+'"',lock || (Array.isArray(p[key])?p[key].includes(value):p[key]===value))+'</div>';
+        '</div>'+btn("پذیرش پیشنهاد","accept-proposal","compact","check",'data-key="'+key+'"',lock || mappedValue===null || (Array.isArray(p[key])?p[key].includes(mappedValue||value):p[key]===(mappedValue||value)))+'</div>';
     }).join("")+'</div>':"")+labelReview(p)+'</div>';
+}
+function usagePreview(u) {
+  return '<p>امروز (UTC): '+number(u.used)+' از '+number(u.dailyLimit)+' درخواست؛ باقی‌مانده: '+number(u.remaining)+
+    '</p><p>هزینهٔ گزارش‌شده: '+esc(u.reportedUsd)+' دلار / '+number(u.reportedToman)+' تومان؛ تعداد هزینه‌های نامشخص: '+number(u.unknownCosts)+
+    '</p><p>مصرف بودجهٔ برآوردی: '+esc(u.reservedUsd)+' از '+esc(u.dailyBudgetUsd??'تعیین نشده')+' دلار.</p>';
 }
 const sourceStatus = {
   pending_source_review: "در انتظار بررسی منبع", manager_verified: "تأیید مدیر",
@@ -338,6 +345,20 @@ function canTransferDraft(p) {
 function syncDraftTransfer(p) {
   const button=$('[data-key="apply-draft"]');
   if(button) button.disabled=!canTransferDraft(p)||(p.store&&!embedded);
+}
+function previewContentTransfer(p) {
+  if (!embedded) return;
+  withAction(async()=>{
+    const transfer=await requestPanel(dossierPath(p)+"/store-transfer");
+    if(transfer.version!==p.version){toast("نسخهٔ پرونده تغییر کرده است.");return;}
+    const titles={identityHistory:contentTitles[0],identityDesign:contentTitles[1],identityUseCases:contentTitles[2]};
+    const preview=Object.entries(transfer.sections).map(([key,text])=>
+      '<div class="content-box"><strong>'+esc(titles[key])+'</strong><p>'+esc(text)+'</p></div>').join('');
+    if(!preview){toast("متن تأییدشده‌ای برای بخش‌های خالی محصول وجود ندارد؛ متن‌های قبلی محفوظ می‌مانند.");return;}
+    dialog("پیش‌نمایش انتقال متن‌های تأییدشده",preview+'<p>فقط بخش‌های خالی پر می‌شوند. ثبت نهایی با ذخیرهٔ فرم محصول است.</p>',
+      ()=>window.parent.postMessage({type:'motif-c22-transfer',id:p.id,version:p.version},location.origin),
+      "تأیید و درج در فرم محصول","انصراف");
+  },p);
 }
 function research(p) {
   const lock=readOnly(p);
@@ -404,9 +425,10 @@ function research(p) {
     (p.styleNumber&&!p.styleConfirmed?'<small>برای تحقیق، شمارهٔ استایل را در بخش تحلیل لیبل تأیید کنید یا آن را خالی بگذارید.</small>':"")+
     '<div class="actions">'+btn(live?"اجرای تحقیق برند در لیارا":"اجرای تحقیق آزمایشی","run-research","primary","spark","",
       lock||!canResearch||p.researchMode==="off"||Boolean(current&&r.mode===p.researchMode))+'</div>'+
-    (p.store&&embedded?'<div class="actions">'+btn("پیشنهادهای مشخصات محصول","transfer-specs","compact")+'</div>':'')+
+    (p.store?'<div class="actions">'+btn("مصرف امروز AI","ai-usage","compact")+(embedded?btn("پیشنهادهای مشخصات محصول","transfer-specs","compact"):" ")+'</div>':'')+
     '<p id="brand-research-progress" role="status" hidden></p>'+report+preview+
-    '<h3>متن فروشگاهی پرونده</h3>'+p.content.map((c,i)=>'<article class="content-box stack"><div class="field-top"><label for="text-'+i+'"><strong>'+contentTitles[i]+'</strong></label>'+metaBadge(c.approved?"تأیید مدیر":"در انتظار تأیید",c.approved?"green":"amber")+'</div><textarea id="text-'+i+'" data-content="'+i+'" placeholder="متن این بخش…" '+(lock?"disabled":"")+'>'+esc(c.text)+'</textarea><div class="actions">'+btn(c.approved?"لغو تأیید این متن":"تأیید این متن","approve-text","compact","check",'data-index="'+i+'"',lock)+'</div></article>').join("")+'</div>';
+    '<h3>متن فروشگاهی پرونده</h3>'+p.content.map((c,i)=>'<article class="content-box stack"><div class="field-top"><label for="text-'+i+'"><strong>'+contentTitles[i]+'</strong></label>'+metaBadge(c.approved?"تأیید مدیر":"در انتظار تأیید",c.approved?"green":"amber")+'</div><textarea id="text-'+i+'" data-content="'+i+'" placeholder="متن این بخش…" '+(lock?"disabled":"")+'>'+esc(c.text)+'</textarea><div class="actions">'+btn(c.approved?"لغو تأیید این متن":"تأیید این متن","approve-text","compact","check",'data-index="'+i+'"',lock)+'</div></article>').join("")+
+    (p.store&&embedded?'<div class="actions">'+btn("پیش‌نمایش انتقال متن‌های تأییدشده","transfer-content","primary","check")+'</div>':'')+'</div>';
 }
 function productChecks(p) {
   const out=[];
@@ -703,6 +725,45 @@ document.addEventListener("click",e=>{
     },p);
     return;
   }
+  if(act==="transfer-content") { previewContentTransfer(p); return; }
+  if(act==="export-gallery") {
+    const photos=p.images.filter(image=>image.groups.includes('product')&&!image.groups.includes('defect'));
+    dialog("پیش‌نمایش افزودن عکس‌ها به محصول",photos.map(image=>
+      '<div class="content-box">'+previewImage(p,image)+'<p>'+esc(image.name)+'</p></div>').join('')+
+      '<p>عکس‌ها با حفظ اصل فایل به فرم محصول اضافه می‌شوند. عکس‌های قبلی حذف نمی‌شوند. ترتیب و حذف را در فرم بررسی کنید و سپس ذخیره کنید.</p>',
+      ()=>withAction(async()=>{
+        const preview=await requestPanel(dossierPath(p)+"/store-transfer");
+        const result=await requestPanel(dossierPath(p)+"/store-gallery-export","POST",{version:p.version,updatedAt:preview.updatedAt});
+        useServer(p,result.dossier);
+        window.parent.postMessage({type:'motif-c22-gallery',id:p.id,version:p.version},location.origin);
+      },p),"تأیید و افزودن به فرم محصول","انصراف");
+    return;
+  }
+  if(act==="ai-usage") {
+    withAction(async()=>{
+      const u=await requestPanel('/ai/usage');
+      dialog("مصرف امروز AI",usagePreview(u));
+    },p);
+    return;
+  }
+  if((act==="run-analysis"||act==="run-research")&&p.store) {
+    const operation=act==="run-analysis"?'analyze':'research';
+    if(p.store) {
+      withAction(async()=>{
+        const q=await requestPanel(dossierPath(p)+'/ai/quote?operation='+operation);
+        const subject=operation==='analyze'?'چهار تصویر اولِ بدون گروه ایراد':'برند ثبت‌شده و شمارهٔ لیبل، در صورت تأیید';
+        dialog("تأیید مصرف AI",'<p>این عملیات دقیقاً یک درخواست '+(operation==='analyze'?'Gemini':'Sonar')+' ارسال می‌کند.</p>'+
+          '<p>ورودی: '+subject+'</p><p>برآورد این درخواست: '+esc(q.estimateUsd)+' دلار. هزینهٔ واقعی ممکن است متفاوت باشد؛ تلاش مجدد خودکار انجام نمی‌شود.</p>'+
+          usagePreview(q.usage),()=>withAction(async()=>{
+            const response=await requestPanel(dossierPath(p)+'/ai/c2/'+operation,'POST',{
+              version:p.version,quote:q.token,...(operation==='research'?{mode:'live',labelConfirmed:true}:{})});
+            useServer(p,response.dossier);
+            refreshEditor();
+          },p),'تأیید هزینه و اجرای یک درخواست','انصراف');
+      },p);
+      return;
+    }
+  }
   if(act==="run-analysis"){
     if(p.canAnalyze){
       dialog("تحلیل عکس‌های تأییدشده",'<p>این اجرا عکس‌های انتخاب‌شده را برای تحلیل ارسال می‌کند.</p>',
@@ -760,18 +821,7 @@ document.addEventListener("click",e=>{
   if(act==="research-action"){
     const claim=b.dataset.claim;
     if(key==="apply-draft"&&p.store){
-      if(!embedded) return;
-      withAction(async()=>{
-        const transfer=await requestPanel(dossierPath(p)+"/store-transfer");
-        if(transfer.version!==p.version){toast("نسخه پرونده تغییر کرده است.");return;}
-        const titles={identityHistory:contentTitles[0],identityDesign:contentTitles[1],identityUseCases:contentTitles[2]};
-        const preview=Object.entries(transfer.sections).map(([field,text])=>
-          '<div class="content-box"><strong>'+esc(titles[field])+'</strong><p>'+esc(text)+'</p></div>').join("");
-        if(!preview){toast("متن تأییدشده‌ای برای فیلدهای خالی محصول وجود ندارد.");return;}
-        dialog("پیش‌نمایش انتقال",preview,()=>window.parent.postMessage({
-          type:"motif-c22-transfer",id:p.id,version:p.version
-        },location.origin),"درج در فرم محصول","انصراف");
-      },p);
+      previewContentTransfer(p);
       return;
     }
     if(key==="approve-section"||key==="reject-section") {
@@ -791,7 +841,7 @@ document.addEventListener("click",e=>{
     const proposal=p.analysis?.find(a=>a.key===key);
     if(!proposal) return;
     if(p.store && hasValue(p[key])) {
-      toast("این فیلد مقدار دارد. اگر نیاز به اصلاح دارد، آن را دستی ویرایش کنید.");
+      toast("این مشخصه قبلاً در پرونده ثبت شده و محفوظ مانده است. برای اصلاح، مقدار ثبت‌شده را دستی ویرایش کنید.");
       return;
     }
     const apply=()=>changeDossier(p,"/ai/accept","POST",{key},"پیشنهاد با اقدام مدیر ثبت شد.");

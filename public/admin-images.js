@@ -31,7 +31,7 @@ window.MotifImages = (() => {
     );
     const hint = node(
       "small",
-      "عکس اول، عکس اصلی است. JPG، PNG یا WebP؛ ورودی تا ۱۰ مگابایت؛ خروجی سایت تا سقف ۳ مگابایت، بدون روتوش. تغییرات عکس‌ها با ذخیره محصول ثبت می‌شوند.",
+      "عکس اول، عکس اصلی است. JPG و PNG تا ۳٬۰۰۰٬۰۰۰ بایت با حفظ فایل اصلی؛ عکس‌های WebP قبلی نیز پشتیبانی می‌شوند. تغییرات عکس‌ها با ذخیره محصول ثبت می‌شوند.",
     );
     const pickerLabel = node("label", "انتخاب عکس از گوشی یا رایانه"),
       picker = node("input");
@@ -181,7 +181,7 @@ window.MotifImages = (() => {
           const controller = new AbortController(),
             timer = setTimeout(() => controller.abort(), 45000);
           try {
-            if (file.size > 10 * 1024 * 1024) throw Error("بیش از ۱۰ مگابایت");
+            if (file.size > 3_000_000) throw Error("بیش از ۳٬۰۰۰٬۰۰۰ بایت");
             if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
               throw Error("فرمت فایل پشتیبانی نمی‌شود");
             const form = new FormData();

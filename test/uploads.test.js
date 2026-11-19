@@ -33,18 +33,14 @@ test('S3 writes sanitized bytes with unique names, content type and a persistent
   assert.ok(!first.url.includes('test-secret'));
 });
 
-test('image budget lowers quality only as needed and accepts photos larger than 1 MB', async () => {
-  const qualities = [];
-  const picture = { metadata: async () => ({ format: 'jpeg' }), clone() { return this; }, rotate() { return this; },
-    resize() { return this; }, webp({ quality }) { qualities.push(quality); return this; },
-    async toBuffer() { return { data: Buffer.alloc(qualities.length === 1 ? MAX_IMAGE_BYTES + 1 : 2500000), info: { width: 3200, height: 2400 } }; } };
-  const result = await prepareImage(Buffer.from('source'), () => picture);
-  assert.deepEqual(qualities, [95, 92]); assert.equal(result.buffer.length, 2500000);
-});
-test('oversized detailed photos are rejected instead of silently compressing at very low quality', async () => {
-  const picture = { metadata: async () => ({ format: 'jpeg' }), clone() { return this; }, rotate() { return this; },
-    resize() { return this; }, webp() { return this; }, async toBuffer() { return { data: Buffer.alloc(MAX_IMAGE_BYTES + 1), info: {} }; } };
-  await assert.rejects(prepareImage(Buffer.from('source'), () => picture), { code: 'IMAGE_TOO_LARGE' });
+test('original image bytes are retained, decoded and limited to 3 MB', async () => {
+  let decoded = false;
+  const source = Buffer.alloc(2500000, 1);
+  const picture = { metadata: async () => ({ format: 'jpeg', width: 4000, height: 2000 }),
+    stats: async () => { decoded = true; } };
+  const result = await prepareImage(source, () => picture);
+  assert.equal(result.buffer, source); assert.equal(result.format, 'jpeg'); assert.ok(decoded);
+  await assert.rejects(prepareImage(Buffer.alloc(MAX_IMAGE_BYTES + 1), () => picture), { code: 'IMAGE_TOO_LARGE' });
 });
 
  test('existing Iran liara.site endpoint is accepted without accepting lookalike hosts', () => {

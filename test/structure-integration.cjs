@@ -10,7 +10,7 @@ const edit=p=>({...p,variants:p.variants.map(v=>({...v,expectedStock:v.stock}))}
  for(let i=0;i<40;i++){try{if((await fetch(base+'/health')).ok)break;}catch{}if(i===39)throw Error('Startup failure');await delay(250);}
  adminHeaders=await loginAdmin(base,token);
  for(const [i,productType]of ['کاپشن','شلوار','سویشرت'].entries()){
- const data={title:productType,brand:'MOTIF',productType,productCode:'STRUCTURE-'+i,basePrice:2350000,inventoryMode:'MULTI',qualityGrade:'A_PLUS',images:['https://img.example/front.webp'],mainFabric:'شمعی',complementaryFabrics:['نایلون','کتان'],seasons:['پاییز','زمستان'],uses:['روزمره','مناسب کار'],hasHood:true,garmentDesign:'تمام‌زیپ',variants:[{size:'M',color:'green',sku:'structure-'+i,stock:1,priceDelta:-50000,chestWidthCm:59,lengthCm:69,sleeveFromNeckCm:73,waistCm:84,riseCm:28,totalLengthCm:100,thighWidthCm:30,hemWidthCm:20,itemGrade:'N',itemImages:['https://img.example/item.webp']}]};
+ const data={title:productType,brand:'MOTIF',productType,productCode:'MOTIF-'+(910+i),basePrice:2350000,inventoryMode:'MULTI',qualityGrade:'A_PLUS',images:['https://img.example/front.webp'],mainFabric:'شمعی',complementaryFabrics:['نایلون','کتان'],seasons:['پاییز','زمستان'],uses:['روزمره','مناسب کار'],hasHood:true,garmentDesign:'تمام‌زیپ',variants:[{size:'M',color:'green',sku:'structure-'+i,stock:1,priceDelta:-50000,chestWidthCm:59,lengthCm:69,sleeveFromNeckCm:73,waistCm:84,riseCm:28,totalLengthCm:100,thighWidthCm:30,hemWidthCm:20,itemGrade:'N',itemImages:['https://img.example/item.webp']}]};
  let r=await api('POST',data);assert.equal(r.status,201,JSON.stringify(r.body));let p=r.body;ids.push(p.id);const variantId=p.variants[0].id;
  assert.equal(p.variants[0].sleeveFromNeckCm,73);assert.equal(p.basePrice+p.variants[0].priceDelta,2300000);assert.deepEqual(p.seasons,data.seasons);assert.deepEqual(p.uses,data.uses);
  // Older client edits preserve every new field and both explicitly different grades.
@@ -39,7 +39,7 @@ const edit=p=>({...p,variants:p.variants.map(v=>({...v,expectedStock:v.stock}))}
  assert((await (await fetch(optionsUrl,{headers})).json()).includes('ویسکوز آزمایشی'));
  const {fabrics,categoryPath}=require('../public/catalog');
  const input={
-  title:'Integration windbreaker',productCode:'STRUCTURE-WIND',basePrice:200,qualityGrade:'A',
+  title:'Integration windbreaker',productCode:'MOTIF-920',basePrice:200,qualityGrade:'A',
   productType:'بادگیر',mainCategories:['بادگیر','کاپشن'],fabrics:[fabrics[0],'ویسکوز آزمایشی'],
   fabricBasis:'SELLER',customerNeeds:['روزمره'],variants:[{size:'M',color:'red',sku:'wind-1',stock:1}],
  };

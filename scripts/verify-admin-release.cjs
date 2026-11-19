@@ -125,13 +125,14 @@ let stage = "snapshot",
       assert.equal(publicImage.status, 200);
       const bytes = Buffer.from(await publicImage.arrayBuffer());
       assert(bytes.length <= 3000000);
-      assert.equal((await sharp(bytes).metadata()).format, "webp");
+      assert.equal((await sharp(bytes).metadata()).format, format);
+      assert.deepEqual(bytes, buffer, "Original upload bytes must survive storage");
     }
   }
   stage = "save-and-edit";
   const body = {
     title: "",
-    productCode: "MOTIF-SMOKE-" + randomBytes(6).toString("hex").toUpperCase(),
+    productCode: "MOTIF-991", // This record exists only inside the random isolated schema.
     basePrice: 0,
     inventoryMode: "SINGLE",
     isActive: false,
