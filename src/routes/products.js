@@ -191,6 +191,23 @@ function productError(err, next) {
   if (err.code === 'P2034') return next(conflict());
   next(err);
 }
+router.patch('/:id/unpublish', requireAdmin, async (req, res, next) => {
+  try {
+    const current = await prisma.product.findUnique({
+      where: { id: req.params.id }, select: { id: true, updatedAt: true, isActive: true },
+    });
+    if (!current) return res.status(404).json({ error: 'محصول پیدا نشد' });
+    if (req.body?.updatedAt !== current.updatedAt.toISOString()) throw conflict();
+    if (current.isActive) {
+      const result = await prisma.product.updateMany({
+        where: { id: current.id, updatedAt: current.updatedAt, isActive: true },
+        data: { isActive: false },
+      });
+      if (result.count !== 1) throw conflict();
+    }
+    res.json({ isActive: false });
+  } catch (err) { productError(err, next); }
+});
 router.patch('/:id', requireAdmin, async (req, res, next) => {
   try {
     const result = await prisma.$transaction(async tx => {

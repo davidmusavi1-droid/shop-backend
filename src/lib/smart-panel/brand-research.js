@@ -154,10 +154,11 @@ function buildSections(input, finding) {
   const traits = details.length ? details.join(' و ') + ' است' : '';
   const description = [closure, traits].filter(Boolean).join(' و ');
   const design = finding.design?.status === 'manager_verified' ? finding.design.claim : '';
+  const model = finding.style?.status === 'manager_verified' ? finding.style.claim : '';
   const use = input.uses.map(value => suggestedUses[value]);
   return [
     finding.status === 'manager_verified' ? finding.claim : '',
-    [design, description ? 'این ' + input.type + ' ' + description + '.' : 'نوع پوشاک ' + input.type + ' است.'].filter(Boolean).join('\n'),
+    [design, model, description ? 'این ' + input.type + ' ' + description + '.' : 'نوع پوشاک ' + input.type + ' است.'].filter(Boolean).join('\n'),
     use.length ? 'برای ' + use.join(' و ') + ' پیشنهاد می‌شود.' : 'می‌توانید این ' + input.type + ' را با لباس‌های روزمره ست کنید.',
   ];
 }
