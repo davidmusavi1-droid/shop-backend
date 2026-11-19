@@ -6,7 +6,7 @@ const fail = (statusCode, message) => Object.assign(new Error(message), { status
 const router = express.Router();
 
 function restrictPreviewOrders(req, res, next) {
-  if (process.env.NODE_ENV !== 'test' && process.env.MOTIF_CHECKOUT_PREVIEW === 'true') {
+  if (process.env.NODE_ENV !== 'test') {
     return requireAdmin(req, res, next);
   }
   next();

@@ -174,3 +174,13 @@ test('isolated test gateway keeps its explicit test-only authentication bypass',
   assert.equal(reached, 1);
   assert.equal(admin.calls, undefined);
 });
+
+test('legacy order creation requires an administrator even when checkout preview is disabled', () => {
+  for (const preview of [undefined, 'false', 'true']) {
+    const { routes, admin } = load('orders', {}, { NODE_ENV: 'production', MOTIF_CHECKOUT_PREVIEW: preview });
+    let reached = false;
+    routes['post /'][0]({}, {}, () => { reached = true; });
+    assert.equal(admin.calls, 1);
+    assert.equal(reached, false);
+  }
+});
