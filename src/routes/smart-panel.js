@@ -363,6 +363,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       if (!uploaded?.url || !storage.canRead(uploaded.url)) throw V.fail(503, 'STORAGE_UNAVAILABLE', 'ذخیرهٔ تصویر تکمیل نشد.');
       links[item.id] = uploaded.url;
     }
+    if (isDeepStrictEqual(links, row.payload.imageLinks || {})) return res.json({ dossier: serialize(row) });
     const updated = await mutate(req, row.version, 'gallery_export_prepared', currentRow => ({
       data: { payload: { ...currentRow.payload, imageLinks: links } },
     }));
@@ -461,10 +462,8 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         payload.analysis = null;
         payload.labelObservations = [];
       }
-      const removed = allowed.filter(img => !gallery.gallery.some(item => item.id === img.id));
-      return { data: { payload, ...resetReview }, ...(store && removed.length && {
-        after: tx => tx.smartImage.updateMany({ where: { id: { in: removed.map(img => img.id) } }, data: { bytes: null } }),
-      }) };
+      // Removing a gallery reference hides it; original bytes remain for recovery/history.
+      return { data: { payload, ...resetReview } };
     });
     res.json(serialize(row));
   }));

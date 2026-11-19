@@ -116,6 +116,11 @@ async function main() {
   const duplicate=await request('/api/products','POST',{productCode:'MOTIF-013',title:'Duplicate',basePrice:0,isActive:false,
     inventoryMode:'SINGLE',variants:[{sku:'duplicate-971',size:'',color:'',stock:1}]});
   assert.equal(duplicate.status,409);assert.equal((await db.product.findUnique({where:{id:alias.id}})).productCode,'MOTIF-13');
+  const competing=await Promise.all(['MOTIF-972','MOTIF-0972'].map((productCode,i)=>request('/api/products','POST',{
+    productCode,title:'Concurrent synthetic code',basePrice:0,isActive:false,inventoryMode:'SINGLE',
+    variants:[{sku:'concurrent-'+i,size:'',color:'',stock:1}]})));
+  for(const r of competing)if(r.status===201)ids.push(r.data.id);
+  assert.deepEqual(competing.map(r=>r.status).sort(),[201,409]);
 
   if(process.env.MOTIF_DAILY_BROWSER==='1') {
     const {chromium}=require('playwright-core');
@@ -166,6 +171,11 @@ async function main() {
   const usage=await ok(base+'/ai/usage');assert.equal(usage.counts.analyze,1);assert.equal(usage.counts.research,1);
   assert.equal(usage.unknownCosts,0);assert.equal(paidCalls,2);
   const readback=await ok(path());assert.deepEqual(readback.content.map(item=>item.approved),[true,true,true]);
+  const removed=dossier.images.at(-1);
+  await update('/images','PATCH',{gallery:dossier.images.slice(0,-1).map(image=>({id:image.id,groups:image.groups})),mainImage:dossier.mainImage});
+  assert.deepEqual(Buffer.from((await db.smartImage.findUnique({where:{id:removed.id}})).bytes),photos[1]);
+  assert.equal((await fetch(origin+removed.url,{headers:auth})).status,404);
+  assert.equal((await db.product.findUnique({where:{id:product.id}})).images.length,3);
   console.log('PASS: daily draft → original JPG/PNG → fixture Gemini/Sonar → mapped approvals → gallery/text previews → saved readback → independent dossier approval; no external AI calls');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{

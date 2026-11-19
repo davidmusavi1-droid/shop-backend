@@ -50,7 +50,7 @@ test('final code format is shared and legacy aliases cannot create another numbe
   assert.equal(codeKey(' motif-۰۱۳ '), 'MOTIF-13');
   assert.equal(codeKey('MOTIF-13'), codeKey('MOTIF-013'));
   assert.ok(valid('MOTIF-013')); assert.ok(valid('MOTIF-1000'));
-  for (const code of ['MOTIF-13', 'MOTIF-000', 'C22-PUMA-558798']) assert.equal(valid(code), false);
+  for (const code of ['MOTIF-13', 'MOTIF-000', 'MOTIF-0013', 'C22-PUMA-558798']) assert.equal(valid(code), false);
   const queries = [];
   const tx = { $queryRaw: async (...args) => { queries.push(args); return queries.length % 2 === 0 ? [{ id: 'legacy' }] : []; },
     smartCode: { findMany: async () => [] } };

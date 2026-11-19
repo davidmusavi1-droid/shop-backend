@@ -108,7 +108,7 @@ test("server rejects explicit incomplete publication and incomplete draft activa
           ? readiness
           : n.includes("requireAdmin")
             ? () => {}
-            : n.includes("/prisma") ? prisma : loadProductDependency(n),
+            : n.includes("/prisma") ? require("./product-db-fixture.cjs")(prisma) : loadProductDependency(n),
   });
   async function call(key, body) {
     let err;
@@ -170,7 +170,7 @@ test("server stores a deliberately incomplete draft without inventing title, col
         ? { Router: () => router }
         : n.includes("requireAdmin")
           ? () => {}
-          : n.includes("/prisma") ? { product: { create: async ({ data }) => (saved = data) } } : loadProductDependency(n),
+          : n.includes("/prisma") ? require("./product-db-fixture.cjs")({ product: { create: async ({ data }) => (saved = data) } }) : loadProductDependency(n),
   });
   let err;
   await routes["post /"](

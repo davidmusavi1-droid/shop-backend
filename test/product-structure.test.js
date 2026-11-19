@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const catalog=require('../public/catalog'),view=require('../src/lib/storefront');
-function routes(prisma={}){const handlers={};const router=Object.fromEntries(['get','post','patch'].map(method=>[method,(url,...h)=>handlers[method+' '+url]=h.at(-1)]));vm.runInNewContext(fs.readFileSync(require.resolve('../src/routes/products'),'utf8'),{module:{exports:{}},require:n=>n==='express'?{Router:()=>router}:n.includes('requireAdmin')?()=>{}:n.includes('/prisma')?prisma:require('node:module').createRequire(require.resolve('../src/routes/products'))(n)});return handlers;}
+function routes(prisma={}){prisma=require('./product-db-fixture.cjs')(prisma);const handlers={};const router=Object.fromEntries(['get','post','patch'].map(method=>[method,(url,...h)=>handlers[method+' '+url]=h.at(-1)]));vm.runInNewContext(fs.readFileSync(require.resolve('../src/routes/products'),'utf8'),{module:{exports:{}},require:n=>n==='express'?{Router:()=>router}:n.includes('requireAdmin')?()=>{}:n.includes('/prisma')?prisma:require('node:module').createRequire(require.resolve('../src/routes/products'))(n)});return handlers;}
 async function call(fn,body){let error,result,status=200;await fn({body,params:{id:'p1'}},{status(n){status=n;return this;},set(){return this;},json(v){result=v;}},e=>error=e);return {status:error?.statusCode||status,error,result};}
-const base={title:'test',productType:'کاپشن',basePrice:2350000,variants:[{size:'M',color:'black',sku:'test',stock:1}]};
+const base={productCode:'MOTIF-960',title:'test',productType:'کاپشن',basePrice:2350000,variants:[{size:'M',color:'black',sku:'test',stock:1}]};
 test('all grades remain explicit, defects block publication with independent product and variant arrays',async()=>{
  let saved;const r=routes({product:{create:async({data})=>saved=data}});
  for(const grade of ['N','A_PLUS','A','B','C']){assert.equal((await call(r['post /'],{...base,qualityGrade:grade})).status,201);assert.equal(saved.qualityGrade,grade);}

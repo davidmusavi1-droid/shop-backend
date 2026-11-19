@@ -6,7 +6,8 @@ const codeKey = value => {
   const match = /^MOTIF-(\d{1,12})$/.exec(normalize(value));
   return match ? 'MOTIF-' + (match[1].replace(/^0+/, '') || '0') : null;
 };
-const valid = value => /^MOTIF-\d{3,9}$/.test(value || '') && codeKey(value) !== 'MOTIF-0';
+const valid = value => /^MOTIF-\d{3,9}$/.test(value || '') && codeKey(value) !== 'MOTIF-0' &&
+  value === 'MOTIF-' + codeKey(value).slice(6).padStart(3, '0');
 const error = (code, message, status = 409) => Object.assign(new Error(message), { code, status, statusCode: status });
 
 async function checkCode(tx, code, { productId = '', dossierId = '', final = false } = {}) {

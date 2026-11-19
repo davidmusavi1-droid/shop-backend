@@ -216,10 +216,10 @@ router.patch('/:id', requireAdmin, async (req, res, next) => {
       if (!current) throw Object.assign(new Error('محصول پیدا نشد'), { statusCode: 404 });
       if (req.body.updatedAt !== current.updatedAt.toISOString()) throw conflict();
       const { data, variants } = normalize(req.body, current);
-      if ((data.productCode !== undefined && data.productCode !== current.productCode) || (data.isActive && (!current.isActive || req.body.publicationIntent === true))) {
+      if ((data.productCode !== undefined && data.productCode !== current.productCode) || (data.isActive && (current.isActive === false || req.body.publicationIntent === true))) {
         const linked = await tx.smartDossier.findUnique({ where: { productId: current.id }, select: { id: true } });
         await checkCode(tx, data.productCode ?? current.productCode, { productId: current.id, dossierId: linked?.id,
-          final: data.isActive && (!current.isActive || req.body.publicationIntent === true) });
+          final: data.isActive && (current.isActive === false || req.body.publicationIntent === true) });
       }
       if (req.body.c22Transfer !== undefined) await checkTransfer(tx, current, data, req.body.c22Transfer);
       await resolveFabrics(tx, data, current, req.body);
