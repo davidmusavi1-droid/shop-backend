@@ -79,12 +79,24 @@ function renderDetail(p,preferredId){
  const identity=[['identityOrigin','خاستگاه'],['identityHistory','تاریخچه'],['identityPurpose','هدف طراحی'],['identityUseCases','کاربردها'],['identityDesign','جزئیات طراحی'],['identityTechnical','ویژگی‌های فنی'],['identitySources','منابع']].filter(([key])=>p[key]);
  if(identity.length){const details=el('details');details.append(el('summary','هویت و کاربرد محصول'));for(const [key,label]of identity)details.append(el('h3',label),el('p',p[key],'copy'));info.append(details);}
  const guide=el('details');guide.append(el('summary','چطور اندازه‌ها را مقایسه کنم؟'),el('p',help(currentFilter().kind==='pants')));info.append(guide);
- buy.type='button';buy.onclick=()=>{const line=cart.find(x=>x.variantId===selected.id),quantity=(line?.quantity||0)+1;status.hidden=false;if(quantity>selected.stock){status.textContent='بیش از موجودی این آیتم نمی‌توانی به سبد اضافه کنی.';return;}if(line)line.quantity=quantity;else cart.push({productId:p.id,variantId:selected.id,quantity});saveCart();status.textContent='به سبد انتخاب‌ها اضافه شد. پرداخت آنلاین هنوز فعال نشده است.';};const buyArea=el('div',null,'buy');buyArea.append(buy,status,el('p','افزودن به سبد، کالا را رزرو نمی‌کند.','hint'));info.append(buyArea);root.append(gallery,info);
+ buy.type='button';buy.onclick=()=>{const line=cart.find(x=>x.variantId===selected.id),quantity=(line?.quantity||0)+1;status.hidden=false;if(quantity>selected.stock){status.textContent='بیش از موجودی این آیتم نمی‌توانی به سبد اضافه کنی.';return;}if(line)line.quantity=quantity;else cart.push({productId:p.id,variantId:selected.id,quantity});saveCart();status.textContent='به سبد خرید اضافه شد.';};const buyArea=el('div',null,'buy');buyArea.append(buy,status,el('p','افزودن به سبد، کالا را رزرو نمی‌کند.','hint'));info.append(buyArea);root.append(gallery,info);
 }
-async function renderCart(){const ticket=++requestId;$('cartItems').textContent='در حال بررسی قیمت و موجودی…';let total=0;const rows=[];for(const line of cart){let p;try{const r=await fetch('/api/products/'+encodeURIComponent(line.productId),{cache:'no-store'});if(r.ok)p=await r.json();}catch{}
- const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p',money((p.basePrice+v.priceDelta)*line.quantity)));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
+async function renderCart(){const ticket=++requestId;$('cartItems').textContent='در حال بررسی قیمت و موجودی…';$('guestCheckout').hidden=true;let total=0;let confirmed=0;const rows=[];
+ const cartLines=cart.slice();
+ const productsById=new Map();
+ await Promise.all([...new Set(cartLines.map(line=>line.productId))].map(async id=>{
+   try {
+     const response=await fetch('/api/products/'+encodeURIComponent(id),{cache:'no-store'});
+     if(response.ok) productsById.set(id,await response.json());
+   } catch {}
+ }));
+ if(ticket!==requestId||location.pathname!=='/cart')return;
+ for(const line of cartLines){const p=productsById.get(line.productId);
+ const v=p?.variants.find(v=>v.id===line.variantId);const row=el('div',null,'cart-row');if(p&&v&&p.isActive&&v.stock>=line.quantity){row.append(picture(safeImages([...(v.itemImages||[]),...(p.images||[])])[0],p.title));const copy=el('div'),a=el('a',p.title);a.href='/products/'+encodeURIComponent(p.id)+'?variant='+encodeURIComponent(v.id);copy.append(a,el('p',v.size+' · '+fa(line.quantity)+' عدد'),el('p','گرید '+(MotifCatalog.gradeLetter(v.itemGrade||p.qualityGrade)||'ثبت نشده')),el('p',money(p.basePrice+v.priceDelta)+(line.quantity>1?' برای هر عدد':'')));row.append(copy);total+=(p.basePrice+v.priceDelta)*line.quantity;confirmed++;}else row.append(el('p',(p?.title||'محصول')+' — موجودی یا قیمت قابل تأیید نیست؛ این مورد را حذف یا دوباره بررسی کن.'));
  const remove=el('button','حذف');remove.onclick=()=>{cart=cart.filter(x=>x.variantId!==line.variantId);saveCart();renderCart();};row.append(remove);rows.push(row);}
- if(ticket!==requestId||location.pathname!=='/cart')return;$('cartItems').replaceChildren(...(rows.length?rows:[el('p','سبد انتخاب‌ها خالی است.')]));$('cartTotal').textContent='جمع اقلام قابل تأیید: '+money(total);}
+ if(ticket!==requestId||location.pathname!=='/cart')return;$('cartItems').replaceChildren(...(rows.length?rows:[el('p','سبد انتخاب‌ها خالی است.')]));$('cartTotal').textContent='جمع اقلام قابل تأیید: '+money(total);
+ if(confirmed>0&&confirmed===cartLines.length) await showCheckout(ticket,total);
+}
 function metadata(p) {
  const origin = 'https://motifdress.com';
  const collection = location.pathname === '/collection';
@@ -143,3 +155,185 @@ window.addEventListener('message',e=>{if(window.parent===window||e.source!==wind
 if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))window.parent.postMessage({type:'motif-preview-ready'},location.origin);
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
+
+async function checkoutWrite(url, options) {
+  const headers = new Headers(options.headers);
+  const session = await fetch('/api/admin/session', { cache: 'no-store', credentials: 'same-origin' });
+  if (session.ok) {
+    const state = await session.json();
+    if (typeof state.csrf === 'string') headers.set('X-Admin-CSRF', state.csrf);
+  }
+  return fetch(url, { ...options, headers, credentials: 'same-origin' });
+}
+
+async function showCheckout(ticket, total) {
+  try {
+    const response = await fetch('/api/checkout/shipping', { cache: 'no-store' });
+    if (!response.ok) return;
+    const { shippingFee } = await response.json();
+    if (ticket !== requestId || location.pathname !== '/cart') return;
+    if (!Number.isInteger(shippingFee)) {
+      $('checkoutMessage').textContent = 'تعرفه ارسال هنوز تنظیم نشده است.';
+      return;
+    }
+    $('checkoutShipping').textContent = 'ارسال ' + money(shippingFee) + ' · مبلغ نهایی ' + money(total + shippingFee);
+    $('guestCheckout').hidden = false;
+  } catch {}
+}
+
+let checkoutRequest;
+$('guestCheckout').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  if (button.disabled) return;
+  const items = cart.map(({ variantId, quantity }) => ({ variantId, quantity }));
+  const body = JSON.stringify({ items, customer: Object.fromEntries(new FormData(form)) });
+  if (checkoutRequest?.body !== body) checkoutRequest = { body, key: crypto.randomUUID() };
+  button.disabled = true;
+  try {
+    const response = await checkoutWrite('/api/checkout/orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': checkoutRequest.key }, body,
+    });
+    const order = await response.json();
+    if (!response.ok) throw new Error(order.error || 'ثبت سفارش ممکن نیست.');
+    const ordered = new Map(items.map(item => [item.variantId, item.quantity]));
+    cart = cart.map(item => ({
+      ...item, quantity: item.quantity - (ordered.get(item.variantId) || 0),
+    })).filter(item => item.quantity > 0);
+    saveCart();
+    form.reset();
+    const cardOrder = { number: order.orderNumber, key: checkoutRequest.key, total: order.totalPrice, expiry: order.expiresAt };
+    try { sessionStorage.setItem('motif-card-order', JSON.stringify(cardOrder)); } catch {}
+    void showCardReceipt(cardOrder);
+    void showOnlinePayment(cardOrder);
+    checkoutRequest = undefined;
+    $('checkoutMessage').textContent = 'شماره سفارش آزمایشی ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
+    if (location.pathname === '/cart') await renderCart();
+  } catch (error) {
+    $('checkoutMessage').textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+let activeCardOrder;
+async function showCardReceipt(order) {
+  if (!order || Date.parse(order.expiry) <= Date.now()) return;
+  try {
+    const response = await fetch('/api/checkout/card-transfer/account', { cache: 'no-store' });
+    if (!response.ok) return;
+    const account = await response.json();
+    if (!account) return;
+    activeCardOrder = order;
+    $('cardDestination').textContent = account.cardNumber + ' · ' + account.accountHolder + ' · مبلغ ' + money(order.total);
+    $('cardReceipt').hidden = false;
+  } catch {}
+}
+try { void showCardReceipt(JSON.parse(sessionStorage.getItem('motif-card-order'))); } catch {}
+$('cardReceipt').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (!activeCardOrder) return;
+  const form = event.currentTarget;
+  const button = form.querySelector('button');
+  button.disabled = true;
+  try {
+    const url = '/api/checkout/card-transfer/orders/' + encodeURIComponent(activeCardOrder.number) + '/receipt';
+    const response = await checkoutWrite(url, { method: 'POST', headers: { 'Idempotency-Key': activeCardOrder.key }, body: new FormData(form) });
+    const result = await response.json();
+    if (!response.ok) throw Error(result.error);
+    form.reset();
+    try { sessionStorage.removeItem('motif-card-order'); } catch {}
+    $('cardReceiptStatus').textContent = 'رسید ثبت شد و در انتظار بررسی مدیر است.';
+    activeCardOrder = undefined;
+  } catch (error) {
+    $('cardReceiptStatus').textContent = error.message || 'ارسال رسید ممکن نیست.';
+  } finally { button.disabled = !activeCardOrder; }
+});
+
+let trackingChallengeId;
+const trackingLabels = {
+  PENDING: 'در انتظار پرداخت', PAID: 'پرداخت‌شده', PROCESSING: 'در حال آماده‌سازی',
+  SHIPPED: 'ارسال‌شده', DELIVERED: 'تحویل‌شده', CANCELED: 'لغوشده',
+};
+const trackingDigits = value => value.trim().replace(/[۰-۹٠-٩]/g, digit =>
+  String(digit.charCodeAt(0) - (digit >= '۰' ? 0x6f0 : 0x660)));
+
+function submitTracking(id, path, payload, display) {
+  $(id).addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector('button');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/checkout/tracking/' + path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload(form.elements)),
+      });
+      if (response.status === 404) throw Error('پیگیری پیامکی هنوز فعال نشده است.');
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error);
+      display(data, form);
+    } catch (error) { $('trackingResult').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+}
+
+submitTracking('trackingChallenge', 'challenge', fields => ({
+  orderNumber: fields.orderNumber.value.trim(), phone: trackingDigits(fields.phone.value),
+}), data => {
+  trackingChallengeId = data.challengeId;
+  $('trackingVerify').hidden = false;
+  $('trackingVerify').reset();
+  $('trackingResult').textContent = 'درخواست آزمایشی دریافت شد.';
+});
+
+submitTracking('trackingVerify', 'verify', fields => ({
+  challengeId: trackingChallengeId, code: trackingDigits(fields.code.value),
+}), (order, form) => {
+  $('trackingResult').textContent = [
+    trackingLabels[order.status], order.paid ? 'پرداخت تأیید شده' : 'پرداخت تأیید نشده',
+    money(order.totalPrice), order.shipmentTrackingCode && 'کد مرسوله ' + order.shipmentTrackingCode,
+  ].filter(Boolean).join(' · ');
+  form.hidden = true;
+  form.reset();
+  trackingChallengeId = undefined;
+});
+
+async function showOnlinePayment(order) {
+  if (!order || Date.parse(order.expiry) <= Date.now()) return;
+  try {
+    const response = await fetch('/api/payment/availability?orderId=' + encodeURIComponent(order.number), {
+      cache: 'no-store', headers: { 'Idempotency-Key': order.key },
+    });
+    if (!response.ok) return;
+    const mode = await response.json();
+    if (!mode.mock && !mode.live && !mode.sandbox) return;
+    const button = $('onlinePayment');
+    button.hidden = false;
+    if (mode.live) button.textContent = 'پرداخت آنلاین با زیبال';
+    if (mode.sandbox) button.textContent = 'ورود به درگاه آزمایشی زیبال';
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const response = await checkoutWrite('/api/payment/request/' + encodeURIComponent(order.number), {
+          method: 'POST', headers: { 'Idempotency-Key': order.key },
+        });
+        const result = await response.json();
+        if (!response.ok) throw Error(result.error || 'پرداخت آغاز نشد.');
+        if ((mode.live || mode.sandbox) && result.status === 'OPEN' &&
+            /^https:\/\/gateway\.zibal\.ir\/start\/[1-9]\d{0,15}$/.test(result.url)) {
+          location.assign(result.url);
+          return;
+        }
+        if (mode.mock && result.status === 'OPEN' && /^\/api\/payment\/verify\?trackId=\d+$/.test(result.url)) {
+          location.assign(result.url);
+          return;
+        }
+        $('onlinePaymentStatus').textContent = 'نتیجه درخواست پرداخت نیاز به بررسی دارد.';
+      } catch (error) { $('onlinePaymentStatus').textContent = error.message; }
+      finally { button.disabled = false; }
+    };
+  } catch {}
+}
+try { void showOnlinePayment(JSON.parse(sessionStorage.getItem('motif-card-order'))); } catch {}

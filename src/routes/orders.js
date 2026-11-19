@@ -5,7 +5,14 @@ const fail = (statusCode, message) => Object.assign(new Error(message), { status
 
 const router = express.Router();
 
-router.post('/', async (req, res, next) => {
+function restrictPreviewOrders(req, res, next) {
+  if (process.env.NODE_ENV !== 'test' && process.env.MOTIF_CHECKOUT_PREVIEW === 'true') {
+    return requireAdmin(req, res, next);
+  }
+  next();
+}
+
+router.post('/', restrictPreviewOrders, async (req, res, next) => {
   const { customer, source, items } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -114,11 +121,14 @@ router.patch('/:id/status', requireAdmin, async (req, res, next) => {
       if (current.status === status) return current;
       if (!(transitions[current.status] || []).includes(status)) throw fail(409, 'تغییر وضعیت مجاز نیست');
       const changed = await tx.order.updateMany({
-        where: { id: current.id, status: current.status }, data: { status },
+        where: { id: current.id, status: current.status, ...(status === 'CANCELED' && { payment: null }) }, data: { status },
       });
       if (changed.count !== 1) throw fail(409, 'وضعیت سفارش تغییر کرده است؛ دوباره تلاش کنید');
       if (status === 'CANCELED') {
-        for (const item of current.items) {
+        if (await tx.payment.findUnique({ where: { orderId: current.id } })) {
+          throw fail(409, 'پرداخت در حال بررسی است');
+        }
+        for (const item of current.items.sort((a, b) => a.variantId.localeCompare(b.variantId))) {
           await tx.variant.update({ where: { id: item.variantId }, data: { stock: { increment: item.quantity } } });
         }
       }
