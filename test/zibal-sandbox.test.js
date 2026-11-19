@@ -182,13 +182,22 @@ test('failed or unreachable sandbox verification cannot turn callback success in
 
 test('sandbox frontend follows only the official payment page URL', async () => {
   const source = fs.readFileSync(path.join(__dirname, '../public/store.js'), 'utf8');
+  const writeSource = source.slice(source.indexOf('async function checkoutWrite('), source.indexOf('async function showCheckout('));
   const functionSource = source.slice(source.indexOf('async function showOnlinePayment(order)'), source.lastIndexOf('try { void showOnlinePayment'));
   for (const url of ['https://gateway.zibal.ir/start/123', 'https://gateway.zibal.ir.attacker.test/start/123', 'javascript:alert(1)']) {
     const button = {}, status = {}, destinations = [];
-    const context = { Date, $, location: { assign: value => destinations.push(value) },
-      fetch: async path => ({ ok: true, json: async () => path.includes('availability') ? { sandbox: true } : { status: 'OPEN', url } }) };
+    const context = { Date, Headers, $, location: { assign: value => destinations.push(value) },
+      fetch: async (path, options) => {
+        if (path === '/api/admin/session') return { ok: true, json: async () => ({ csrf: 'fixture-csrf' }) };
+        if (path.includes('/request/')) {
+          assert.equal(options.headers.get('X-Admin-CSRF'), 'fixture-csrf');
+          assert.equal(options.headers.get('Idempotency-Key'), requestKey);
+          assert.equal(options.credentials, 'same-origin');
+        }
+        return { ok: true, json: async () => path.includes('availability') ? { sandbox: true } : { status: 'OPEN', url } };
+      } };
     function $(id) { return id === 'onlinePayment' ? button : status; }
-    vm.runInNewContext(functionSource + '\nthis.show = showOnlinePayment;', context);
+    vm.runInNewContext(writeSource + functionSource + '\nthis.show = showOnlinePayment;', context);
     await context.show({ number: orderId, key: requestKey, expiry: new Date(Date.now() + 60000).toISOString() });
     assert.equal(button.hidden, false);
     await button.onclick();
