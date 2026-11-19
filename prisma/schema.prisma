@@ -227,6 +227,7 @@ model Order {
   payment Payment?
   checkout CheckoutReservation?
   shipmentTrackingCode String?
+  zibalRetryGate ZibalRetryGate?
 }
 
 model OrderItem {
@@ -251,7 +252,38 @@ model Payment {
   isSuccessful Boolean  @default(false)
   cardTransfer CardTransfer?
   zibalAttempt ZibalAttempt?
+  zibalAttempts ZibalPaymentAttempt[]
   createdAt    DateTime @default(now())
+}
+
+model ZibalRetryGate {
+  orderId String @id
+  order Order @relation(fields: [orderId], references: [id])
+  busyToken String?
+  blocked Boolean @default(false)
+}
+
+model ZibalPaymentAttempt {
+  id String @id @default(uuid())
+  paymentId String
+  payment Payment @relation(fields: [paymentId], references: [id])
+  sequence Int
+  trackId String? @unique
+  state String
+  issuedAt DateTime?
+  createdAt DateTime @default(now())
+  events ZibalAttemptEvent[]
+  @@unique([paymentId, sequence])
+}
+
+model ZibalAttemptEvent {
+  id String @id @default(uuid())
+  attemptId String
+  attempt ZibalPaymentAttempt @relation(fields: [attemptId], references: [id])
+  operation String
+  response Json
+  createdAt DateTime @default(now())
+  @@index([attemptId, createdAt])
 }
 
 model SiteContent {
