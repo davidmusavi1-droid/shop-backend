@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 function load(name, prisma = {}, env = {}) {
   const routes = {};
-  const admin = () => {};
+  const admin = () => { admin.calls = (admin.calls || 0) + 1; };
   const router = Object.fromEntries(['get', 'post', 'patch'].map(method => [method, (url, ...handlers) => { routes[method + ' ' + url] = handlers; }]));
   const middleware = [];
   router.use = handler => middleware.push(handler);
@@ -155,4 +155,22 @@ test('legacy editors preserve product codes when omitted from updates',async()=>
   assert.equal(Object.hasOwn(changed,'productCode'),false);
   assert.equal((await call(routes['patch /:id'],{...productBody,productCode:null,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
   assert.equal(Object.hasOwn(changed,'productCode'),false);
+});
+
+test('payment initiation and availability enforce the administrator session in production', () => {
+  const { routes, admin } = load('payment', {}, { NODE_ENV: 'production' });
+  let reached = 0;
+  for (const key of ['post /request/:orderId', 'get /availability']) {
+    routes[key][0]({}, {}, () => { reached++; });
+  }
+  assert.equal(admin.calls, 2);
+  assert.equal(reached, 0);
+  assert.equal(routes['get /verify'].length, 1, 'gateway callback must not require a browser session');
+});
+test('isolated test gateway keeps its explicit test-only authentication bypass', () => {
+  const { routes, admin } = load('payment', {}, { NODE_ENV: 'test' });
+  let reached = 0;
+  routes['post /request/:orderId'][0]({}, {}, () => { reached++; });
+  assert.equal(reached, 1);
+  assert.equal(admin.calls, undefined);
 });

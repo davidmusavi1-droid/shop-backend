@@ -6,6 +6,9 @@ const { configureLiveZibal } = require('../lib/zibal-live');
 const { configureSandboxZibal } = require('../lib/zibal-sandbox');
 const { trackId, createZibalGateway } = require('../lib/zibal');
 const router = express.Router();
+const requireAdmin = require('../middleware/requireAdmin');
+const previewAdmin = (req, res, next) => process.env.NODE_ENV === 'test'
+  ? next() : requireAdmin(req, res, next);
 
 const gateway = createZibalGateway({
   merchant: 'mock',
@@ -44,7 +47,7 @@ const handle = action => async (req, res) => {
     res.status(error.statusCode || 503).json({ error: error.statusCode ? error.message : 'پرداخت نیاز به بررسی دارد' });
   }
 };
-router.post('/request/:orderId', handle(async (req, res) => {
+router.post('/request/:orderId', previewAdmin, handle(async (req, res) => {
   const key = req.get('Idempotency-Key');
   if (!key || !/^[0-9a-f-]{36}$/.test(key)) return res.sendStatus(404);
   const pilot = res.locals.live || res.locals.sandbox;
@@ -80,7 +83,7 @@ async function pilotOrder(orderId, key, live) {
   return Boolean(order);
 }
 
-router.get('/availability', handle(async (req, res) => {
+router.get('/availability', previewAdmin, handle(async (req, res) => {
   const live = res.locals.live;
   if (res.locals.sandbox) {
     return res.json({ sandbox: await pilotOrder(req.query.orderId, req.get('Idempotency-Key'), res.locals.sandbox) });

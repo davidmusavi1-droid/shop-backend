@@ -156,6 +156,16 @@ if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))w
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
 
+async function checkoutWrite(url, options) {
+  const headers = new Headers(options.headers);
+  const session = await fetch('/api/admin/session', { cache: 'no-store', credentials: 'same-origin' });
+  if (session.ok) {
+    const state = await session.json();
+    if (typeof state.csrf === 'string') headers.set('X-Admin-CSRF', state.csrf);
+  }
+  return fetch(url, { ...options, headers, credentials: 'same-origin' });
+}
+
 async function showCheckout(ticket, total) {
   try {
     const response = await fetch('/api/checkout/shipping', { cache: 'no-store' });
@@ -182,7 +192,7 @@ $('guestCheckout').addEventListener('submit', async event => {
   if (checkoutRequest?.body !== body) checkoutRequest = { body, key: crypto.randomUUID() };
   button.disabled = true;
   try {
-    const response = await fetch('/api/checkout/orders', {
+    const response = await checkoutWrite('/api/checkout/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': checkoutRequest.key }, body,
     });
     const order = await response.json();
@@ -229,7 +239,7 @@ $('cardReceipt').addEventListener('submit', async event => {
   button.disabled = true;
   try {
     const url = '/api/checkout/card-transfer/orders/' + encodeURIComponent(activeCardOrder.number) + '/receipt';
-    const response = await fetch(url, { method: 'POST', headers: { 'Idempotency-Key': activeCardOrder.key }, body: new FormData(form) });
+    const response = await checkoutWrite(url, { method: 'POST', headers: { 'Idempotency-Key': activeCardOrder.key }, body: new FormData(form) });
     const result = await response.json();
     if (!response.ok) throw Error(result.error);
     form.reset();
@@ -306,7 +316,7 @@ async function showOnlinePayment(order) {
     button.onclick = async () => {
       button.disabled = true;
       try {
-        const response = await fetch('/api/payment/request/' + encodeURIComponent(order.number), {
+        const response = await checkoutWrite('/api/payment/request/' + encodeURIComponent(order.number), {
           method: 'POST', headers: { 'Idempotency-Key': order.key },
         });
         const result = await response.json();
