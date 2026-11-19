@@ -1,6 +1,6 @@
 # MOTIF daily panel: controlled release
 
-Base: production v25, commit `13e8be05b6c55a400be1816c82b9f1ec072cbbc3`.
+Integration base: production v27, commit `c503c516bf12ca908d1082d6820663ab14c5a14a` (PR25 checkout plus PR28 administrator-only legacy order creation). Originally developed against v25 / `13e8be0`; v25 is no longer the default rollback target. The PR branch includes main; this is not permission to merge the PR into main.
 This PR changes no Prisma schema or migrations. No production settings, records or AI calls are changed by preparing it.
 
 ## Manager workflow
@@ -17,7 +17,7 @@ This PR changes no Prisma schema or migrations. No production settings, records 
 
 Keep the current `MOTIF_C22_VISION=off`, `MOTIF_C22_RESEARCH=off`, `MOTIF_C22_DAILY_LIMIT=2` until separate owner approval.
 
-For 20–50 products/day at one Gemini + one Sonar call each, propose 40–100 combined requests/day. Start at 40; increase to 80/100 only with the owner's agreed budget. This count includes failed/uncertain reservations and is shared across all admins, using a UTC day. One operation per current dossier/image or research-subject scope is durable and cannot automatically retry.
+For the first stage of 10 products/day at one Gemini + one Sonar call each, propose 20 combined requests/day. This remains a proposal: keep the current limit of 2 and both flags off. Expand to 40–100 requests/day only after reviewing actual cost and obtaining the owner's agreed budget. This count includes failed/uncertain reservations and is shared across all admins, using a UTC day. One operation per current dossier/image or research-subject scope is durable and cannot automatically retry.
 
 Before enabling, set these additional **non-secret pricing estimates** in Liara after reviewing the current account tariff and typical image/token sizes:
 
@@ -43,10 +43,12 @@ The key/base URL stay in existing secure Liara environment settings. They are ne
 
 1. Confirm this PR's final commit and required CI results. Recheck current main/release for parallel payment work; do not merge stale assumptions about v25.
 2. Verify a current recoverable production DB backup and media coverage using the payment/backup task's latest result; do not repeat an already successful restore rehearsal. Stop if backup/rollback coverage is unavailable. This PR needs no migration.
-3. Record the then-active Liara release ID, commit and AI flags. Owner approves merge/deployment separately.
+3. Record the then-active Liara release ID, commit and AI/payment flags. On 19 November the observed healthy baseline is v27 / `c503c51`, deployed at 11:32:45 Tehran. Preserve PR25 and PR28 in both the release and rollback. Owner approves the new PR head and deployment separately.
 4. Merge and deploy with AI flags off. Check only health, admin sign-in, one existing product/order read, and the new draft transfer path. Do not publish PUMA automatically.
-5. After a separate budget/activation approval, configure estimates and enable a low-volume first stage for the manager; inspect usage before increasing the count to 40–100. No new paid verification is authorized by this PR.
-6. If storefront/data behavior regresses, disable AI, stop further writes and roll back to the recorded healthy release. Product schema is unchanged and existing image URLs remain compatible. Newly saved originals use JPG/PNG URLs supported by both v25's public gallery and this release. The v25 AI image importer still rejects new JPG/PNG URLs after rollback; management can continue while this importer limitation is resolved. Newly added JSON payload properties are additive. Existing records and originals must not be reset or deleted.
+5. After a separate budget/activation approval, configure estimates and enable a low-volume first stage for the manager; inspect usage before enabling the initial 20-request stage and later increasing it to 40–100. No new paid verification is authorized by this PR.
+6. If storefront/data behavior regresses, stop further draft writes and leave both AI flags off. Roll back application code to the recorded v27 / `c503c51` baseline, preserving the checkout tables, payment settings and administrator-only legacy order guard. Never restore the entire v25 application as the default response: it predates PR25/PR28. The current production database is not restored or migrated backwards as part of an application rollback.
+7. Product arrays continue to hold absolute image URLs. New JPG/PNG objects remain in object storage; the baseline public gallery renders their URLs without requiring WebP. Dossier JSON additions are additive and the original bytes remain in SmartImage. Baseline C2.2 cannot import new JPG/PNG storage URLs and does not correctly label newly imported legacy WebP originals. Therefore suspend the smart-panel interface (`MOTIF_SMART_PANEL=off`, only under approved rollback authority) while rolling back if these newly created dossier images exist; ordinary product management and public product galleries remain available. Do not delete new originals, receipts, orders, dossiers or tables. This is a controlled fallback with the intelligent workflow paused, not a claim that the older panel supports every new operation.
+8. Confirm media coverage before requesting deployment approval: inventory product/variant/defect/site image references, retain original objects and their URL mapping, and verify a private recoverable media copy or independently verified retention mechanism. A PostgreSQL dump covers SmartImage bytes and media references, but not external object-storage image bytes. Do not claim that a successful SQL restore alone proves media coverage. Reuse the already verified SQL restore result; no new cloud restore service is required.
 
 ## Daily use limitations
 

@@ -129,6 +129,66 @@ model Variant {
   @@unique([productId, size, color])
 }
 
+model CheckoutReservation {
+  orderId String @id
+  order Order @relation(fields: [orderId], references: [id])
+  requestKey String @unique
+  requestHash String
+  fullName String
+  phone String
+  address String
+  province String
+  city String
+  postalCode String
+  shippingFee Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model ShippingSettings {
+  id String @id
+  fee Int
+}
+
+
+model CardTransfer {
+  paymentId String @id
+  payment Payment @relation(fields: [paymentId], references: [id])
+  receipt Bytes
+  reviewedAt DateTime?
+  rejected Boolean @default(false)
+}
+
+model CardTransferSettings {
+  id String @id
+  cardNumber String
+  accountHolder String
+  enabled Boolean @default(false)
+}
+
+model OrderTrackingChallenge {
+  id String @id
+  orderId String
+  phone String
+  tokenHash String
+  expiresAt DateTime
+  consumedAt DateTime?
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([phone, createdAt])
+}
+
+model ZibalAttempt {
+  paymentId String @id
+  payment Payment @relation(fields: [paymentId], references: [id])
+  trackId String? @unique
+  state String @default("STARTING")
+  trackIssuedAt DateTime?
+}
+
 model Customer {
   id        String   @id @default(uuid())
   fullName  String
@@ -165,6 +225,8 @@ model Order {
 
   items   OrderItem[]
   payment Payment?
+  checkout CheckoutReservation?
+  shipmentTrackingCode String?
 }
 
 model OrderItem {
@@ -187,6 +249,8 @@ model Payment {
   refId        String?
   amount       Int
   isSuccessful Boolean  @default(false)
+  cardTransfer CardTransfer?
+  zibalAttempt ZibalAttempt?
   createdAt    DateTime @default(now())
 }
 

@@ -3,21 +3,24 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-function load(name, prisma = {}) {
+function load(name, prisma = {}, env = {}) {
   if (name === 'products') prisma = require('./product-db-fixture.cjs')(prisma);
   const routes = {};
-  const admin = () => {};
+  const admin = () => { admin.calls = (admin.calls || 0) + 1; };
   const router = Object.fromEntries(['get', 'post', 'patch'].map(method => [method, (url, ...handlers) => { routes[method + ' ' + url] = handlers; }]));
+  const middleware = [];
+  router.use = handler => middleware.push(handler);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/routes', name + '.js'), 'utf8'), {
     require: name => name === 'express' ? { Router: () => router } : name.includes('requireAdmin') ? admin : name.includes('/prisma') ? prisma : require('node:module').createRequire(require.resolve('../src/routes/products'))(name),
     module: { exports: {} },
+    process: { env },
   });
-  return { routes, admin };
+  return { routes, admin, middleware };
 }
 async function call(handlers, body, params = {}) {
   let code = 200, data, error;
   await handlers.at(-1)({ body, params, query: { Authority: 'fake', Status: 'OK' } }, {
-    status(n) { code = n; return this; }, json(d) { data = d; return this; },
+    set() {}, status(n) { code = n; return this; }, json(d) { data = d; return this; },
   }, e => { error = e; });
   return { code: error?.statusCode || code, data, error };
 }
@@ -54,17 +57,20 @@ test('cancellation returns reserved stock once, repeated cancellation is harmles
   const tx = { order: {
     findUnique: async () => current,
     updateMany: async ({ data }) => { current.status = data.status; return { count: 1 }; },
-  }, variant: { update: async ({ data }) => { restored += data.stock.increment; } } };
+  }, payment: { findUnique: async () => null }, variant: { update: async ({ data }) => { restored += data.stock.increment; } } };
   const { routes } = load('orders', { $transaction: fn => fn(tx) });
   for (let i = 0; i < 2; i++) assert.equal((await call(routes['patch /:id/status'], { status: 'CANCELED' }, { id: 'o1' })).code, 200);
   assert.equal(restored, 2);
   assert.equal((await call(routes['patch /:id/status'], { status: 'PAID' }, { id: 'o1' })).code, 400);
 });
 test('fake gateway requests and callbacks fail closed without database writes', async () => {
-  const { routes } = load('payment');
-  for (const key of ['post /request/:orderId', 'get /verify']) {
-    assert.equal((await call(routes[key], {}, { orderId: 'o1' })).code, 503);
-  }
+  const prisma = new Proxy({}, { get() { assert.fail('disabled gateway accessed Prisma'); } });
+  const { middleware } = load('payment', prisma, {
+    NODE_ENV: 'production', MOTIF_CHECKOUT_PREVIEW: 'true', MOTIF_ZIBAL_PROVIDER: 'mock',
+  });
+  const result = await call(middleware, {}, { orderId: 'o1' });
+  assert.equal(result.code, 503);
+  assert.equal(result.data.code, 'PAYMENT_NOT_CONFIGURED');
 });
 test('blank measurements remain null and public listing filters stock', async () => {
   let created, query;
@@ -151,4 +157,32 @@ test('legacy editors preserve product codes when omitted from updates',async()=>
   assert.equal(Object.hasOwn(changed,'productCode'),false);
   assert.equal((await call(routes['patch /:id'],{...legacyBody,productCode:null,updatedAt:updatedAt.toISOString(),variants:[{...productBody.variants[0],id:'v1',expectedStock:1}]},{id:'p1'})).code,200);
   assert.equal(Object.hasOwn(changed,'productCode'),false);
+});
+
+test('payment initiation and availability enforce the administrator session in production', () => {
+  const { routes, admin } = load('payment', {}, { NODE_ENV: 'production' });
+  let reached = 0;
+  for (const key of ['post /request/:orderId', 'get /availability']) {
+    routes[key][0]({}, {}, () => { reached++; });
+  }
+  assert.equal(admin.calls, 2);
+  assert.equal(reached, 0);
+  assert.equal(routes['get /verify'].length, 1, 'gateway callback must not require a browser session');
+});
+test('isolated test gateway keeps its explicit test-only authentication bypass', () => {
+  const { routes, admin } = load('payment', {}, { NODE_ENV: 'test' });
+  let reached = 0;
+  routes['post /request/:orderId'][0]({}, {}, () => { reached++; });
+  assert.equal(reached, 1);
+  assert.equal(admin.calls, undefined);
+});
+
+test('legacy order creation requires an administrator even when checkout preview is disabled', () => {
+  for (const preview of [undefined, 'false', 'true']) {
+    const { routes, admin } = load('orders', {}, { NODE_ENV: 'production', MOTIF_CHECKOUT_PREVIEW: preview });
+    let reached = false;
+    routes['post /'][0]({}, {}, () => { reached = true; });
+    assert.equal(admin.calls, 1);
+    assert.equal(reached, false);
+  }
 });

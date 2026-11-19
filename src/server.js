@@ -1,3 +1,4 @@
+require('./lib/zibal-sandbox').assertSandboxEnvironment(process.env);
 const smartStore = process.env.MOTIF_SMART_PANEL === 'store';
 const smartTest = process.env.MOTIF_SMART_PANEL === 'test'
   ? require('./lib/smart-panel/test-environment').assertTestEnvironment()
@@ -46,6 +47,7 @@ app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/site', require('./routes/site-content'));
 app.use('/api/products', productsRouter);
 app.use('/api/orders', ordersRouter);
+app.use('/api/checkout', require('./routes/checkout'));
 app.use('/api/payment', paymentRouter);
 
 app.use((req, res) => res.status(404).type('html').send(require('./lib/storefront').errorPage('صفحه پیدا نشد')));
@@ -72,6 +74,19 @@ const PORT = process.env.PORT || 4000;
   await contentSchema.prepare(prisma);
   require('./lib/admin-session').settings(process.env);
   await prisma.adminSession.findFirst({ select: { tokenHash: true } });
+  if (process.env.MOTIF_CHECKOUT_PREVIEW === 'true') {
+    const { releaseExpired } = require('./lib/checkout');
+    let releasing = false;
+    const release = async () => {
+      if (releasing) return;
+      releasing = true;
+      try { await releaseExpired(prisma); }
+      catch (error) { console.error('Reservation cleanup failed', error.code || 'UNKNOWN'); }
+      finally { releasing = false; }
+    };
+    setInterval(release, 15000).unref();
+    void release();
+  }
   console.log('Content schema readiness verified');
   const listening = () => console.log(`سرور روی پورت ${PORT} اجرا شد`);
   if (smartTest) app.listen(smartTest.port, '127.0.0.1', listening);

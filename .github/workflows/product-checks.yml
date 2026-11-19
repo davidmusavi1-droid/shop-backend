@@ -39,11 +39,41 @@ jobs:
       - run: npx prisma migrate deploy
       - run: npx prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-site-content.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-guest-checkout.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-card-transfer.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-order-tracking.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-zibal-attempt.sql --schema prisma/schema.prisma
       - run: node --test test/*.test.js
       - run: MOTIF_SESSION_TEST_DB=1 node --test test/admin-session.test.js
       - name: Daily smart-panel workflow (synthetic providers only)
         run: MOTIF_SMART_PANEL=store ADMIN_TOKEN=smart-test-daily-ci-only MOTIF_DAILY_BROWSER=1 node test/daily-readiness-integration.cjs
       - run: node scripts/verify-admin-release.cjs --skip-storage
       - run: node test/product-integration.cjs
+      - run: node test/zibal-reconciliation.cjs
       - run: node test/structure-integration.cjs
       - run: PATH=/usr/lib/postgresql/16/bin:$PATH bash test/migration-restore.sh
+
+  checkout-schema-18:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    services:
+      postgres18:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: motif_schema_test
+          POSTGRES_PASSWORD: local_schema_fixture_only
+          POSTGRES_DB: motif_schema_test
+        options: >-
+          --health-cmd "pg_isready -U motif_schema_test -d motif_schema_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify checkout DDL and backup restore on PostgreSQL 18.4
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres18.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER" mkdir -p /tmp/motif-schema-source
+          docker cp prisma "$POSTGRES_CONTAINER:/tmp/motif-schema-source/prisma"
+          docker cp db "$POSTGRES_CONTAINER:/tmp/motif-schema-source/db"
+          docker cp test/checkout-schema-restore.sh "$POSTGRES_CONTAINER:/tmp/checkout-schema-restore.sh"
+          docker exec -e PGHOST=127.0.0.1 -e PGUSER=motif_schema_test -e PGPASSWORD=local_schema_fixture_only -e PGDATABASE=motif_schema_test "$POSTGRES_CONTAINER" bash /tmp/checkout-schema-restore.sh
