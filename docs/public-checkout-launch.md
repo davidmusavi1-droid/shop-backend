@@ -15,6 +15,11 @@ Card transfer is disabled with no destination account. Shipping currently zero.
 
 ## This Draft builds on PR31; no production activation
 
+Destination-shipping update: see [destination-shipping-readiness.md](destination-shipping-readiness.md).
+Production quotes now require approved destination tariffs; the old zero fee is
+not a public rate. This update requires separately approved additive SQL before
+production deployment. No DDL is authorized by preparing this PR.
+
 - Separate public customer-access switch, absent/off by default. Admin endpoints
   stay authenticated. Pilot configuration remains the default.
 - Public provider configuration requires explicit public mode and the retry
@@ -41,9 +46,9 @@ Card transfer is disabled with no destination account. Shipping currently zero.
 3. Review real SMS ownership tracking separately. Current tracking provider is
    test-only Mock and production tracking is disabled; do not advertise working
    SMS tracking or send real SMS without separate service/cost authorization.
-4. Verify the live merchant's allowed egress IP from the current Zibal panel
-   before activation. A prior successful transaction is evidence for that earlier
-   time, not a new panel verification.
+4. Read-only verification on 2026-11-20 matched Liara egress 185.142.159.123
+   to the MOTIF Zibal gateway's Allowed IP addresses 185.142.159.123. No change
+   was made. Recheck only if egress configuration changes before activation.
 5. Review the isolated cross-method concurrency and mobile/desktop browser CI
    evidence before enabling both methods. Configure card destination only via
    the authenticated panel; no destination means the method stays unavailable.
@@ -51,7 +56,10 @@ Card transfer is disabled with no destination account. Shipping currently zero.
 ## Activation proposal — only after explicit final owner approval
 
 Deploy reviewed code with MOTIF_CHECKOUT_PUBLIC absent/false and provider disabled.
-No schema migration is needed. Confirm the release hash, HTTPS, DB and admin gates.
+After a fresh recoverable backup and live catalog comparison, obtain separate
+owner approval for db/add-destination-shipping.sql (three new history/config
+and snapshot tables). Apply the tested SQL before deploying destination-shipping
+code. Confirm the release hash, HTTPS, DB and admin gates.
 Retain current merchant/callback secrets and known egress IP; never hardcode them.
 After the owner approves public activation and the tariff, set
 MOTIF_ZIBAL_MODE=public, MOTIF_ZIBAL_RETRY_ENABLED=true,
