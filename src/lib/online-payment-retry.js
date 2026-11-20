@@ -79,7 +79,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
     });
   }
 
-  async function inspect(payment, attempt) {
+  async function inspect(payment, attempt, verifyUnverified = false) {
     if (!attempt.trackId) return 'UNKNOWN';
     const response = await invoke(attempt, 'inquiry');
     const state = evidence(response, toRials(payment.amount), attempt.issuedAt, now());
@@ -91,6 +91,14 @@ function createRetryPayment(prisma, gateway, options = {}) {
     if (state === 'REVIEW') {
       // Paid/unverified is never treated as a failed payment.
       await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });
+      if (verifyUnverified && response.status === 2) {
+        // Only a valid inquiry with the exact rial amount reaches this branch.
+        // Verify the existing track under the callback lock, then require a
+        // fresh status-1 inquiry. Neither status 2 nor verify 100/201 is success
+        // by itself. Also reconcile a lost verify response without charging again.
+        await invoke(attempt, 'verify');
+        return inspect(payment, attempt);
+      }
       return state;
     }
     if (state === 'UNPAID') {
@@ -178,7 +186,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
       if (!attempt) return { status: 'UNKNOWN' };
       if (attempt.state === 'PAID' && current.isSuccessful) return { status: 'PAID' };
       // A delayed callback for an old attempt must still be reconciled server-side.
-      const state = await inspect(current, attempt);
+      const state = await inspect(current, attempt, true);
       if (state === 'PAID') return { status: 'PAID' };
       if (state === 'REVIEW' || state === 'UNKNOWN') return pending('PAYMENT_REVIEW');
       if (state === 'OPEN') {
