@@ -97,3 +97,10 @@ test('crashed pre-dispatch reservation can be reclaimed, but suspended worker ca
   const error=await failure(()=>p.analyze(images,undefined,{beforeSend:track.beforeSend}));
   assert.equal(error.requestSent,false);assert.equal(calls,0);assert.equal(budget.summarize([row],cfg).used,0);
 });
+
+test('an unreported currency is distinct from an explicitly reported zero cost',()=>{
+  const unknown=budget.summarize([{operation:'analyze',status:'unknown',usage:{estimateToman:1000}}],cfg);
+  assert.deepEqual(unknown.reportedCostCounts,{usd:0,toman:0});assert.equal(unknown.unknownCosts,1);
+  const zero=budget.summarize([{operation:'analyze',status:'completed',usage:{estimateToman:1000,costUsd:0}}],cfg);
+  assert.deepEqual(zero.reportedCostCounts,{usd:1,toman:0});assert.equal(zero.reportedUsd,0);assert.equal(zero.reservedToman,1000);
+});

@@ -322,7 +322,7 @@ function usagePreview(u) {
   return '<p>امروز (UTC): سهمیهٔ درگیر '+number(u.used)+' از '+number(u.dailyLimit)+'؛ باقی‌مانده: '+number(u.remaining)+
     '</p><p>آغازشده: '+number(c.started??u.used)+'؛ موفق: '+number(c.successful||0)+'؛ ناموفق قطعی: '+number(c.failed||0)+
     '؛ نتیجهٔ نامشخص: '+number(c.unknown||0)+'؛ رزرو پیش از ارسال: '+number(c.reserved||0)+'؛ آزادشده پیش از ارسال: '+number(c.released||0)+
-    '</p><p>هزینهٔ واقعی گزارش‌شده: '+esc(u.reportedUsd)+' دلار / '+number(u.reportedToman)+' تومان؛ تعداد هزینه‌های نامشخص: '+number(u.unknownCosts)+
+    '</p><p>هزینهٔ واقعی گزارش‌شده: '+(u.reportedCostCounts?.usd?esc(u.reportedUsd):'نامشخص')+' دلار / '+(u.reportedCostCounts?.toman?number(u.reportedToman):'نامشخص')+' تومان؛ تعداد هزینه‌های نامشخص: '+number(u.unknownCosts)+
     '</p><p>جمع برآورد درخواست‌های درگیر: '+number(u.estimatedToman||0)+' تومان / '+esc(u.estimatedUsd||0)+' دلار.'+
     '</p><p>بودجهٔ درگیر (بیشترِ هزینهٔ گزارش‌شده یا برآورد): '+number(u.reservedToman||0)+' از '+number(u.dailyBudgetToman||0)+' تومان'+
     (u.dailyBudgetUsd?'؛ '+esc(u.reservedUsd)+' از '+esc(u.dailyBudgetUsd)+' دلار':'')+

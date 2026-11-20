@@ -12,6 +12,7 @@ function budgetConfig(env) {
 function summarize(runs, config) {
   let reservedUsd = 0, reservedToman = 0, reportedUsd = 0, reportedToman = 0, unknownCosts = 0, estimatedUsd = 0, estimatedToman = 0;
   const counts = { analyze: 0, research: 0 };
+  const reportedCostCounts = { usd: 0, toman: 0 };
   const statusCounts = { started: runs.length, sent: 0, successful: 0, failed: 0, unknown: 0, reserved: 0, released: 0 };
   let used = 0;
   for (const run of runs) {
@@ -32,12 +33,12 @@ function summarize(runs, config) {
     estimatedUsd += estimate || 0; estimatedToman += estimateToman || 0;
     reservedUsd += Math.max(known ? usage.costUsd : 0, estimate || 0);
     reservedToman += Math.max(knownToman ? usage.costToman : 0, estimateToman || 0);
-    if (known) reportedUsd += usage.costUsd;
-    if (knownToman) reportedToman += usage.costToman;
+    if (known) { reportedUsd += usage.costUsd; reportedCostCounts.usd++; }
+    if (knownToman) { reportedToman += usage.costToman; reportedCostCounts.toman++; }
     if (!known && !knownToman) unknownCosts++;
   }
   return { day: utcDay().toISOString().slice(0, 10), used, counts, statusCounts, reservedUsd, reservedToman,
-    reportedUsd, reportedToman, estimatedUsd, estimatedToman, unknownCosts, dailyLimit: config?.dailyLimit || 0,
+    reportedUsd, reportedToman, reportedCostCounts, estimatedUsd, estimatedToman, unknownCosts, dailyLimit: config?.dailyLimit || 0,
     remaining: Math.max(0, (config?.dailyLimit || 0) - used),
     dailyBudgetUsd: config?.dailyBudgetUsd || null, dailyBudgetToman: config?.dailyBudgetToman || null };
 }
