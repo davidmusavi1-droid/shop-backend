@@ -30,7 +30,7 @@ router.use('/card-transfer', require('./card-transfer'));
 
 router.get('/shipping', handle(async (req, res) => {
   const settings = await prisma.shippingSettings.findUnique({ where: { id: checkout.SHIPPING_ID } });
-  res.json({ shippingFee: settings?.fee ?? null });
+  res.json({ shippingFee: settings?.fee ?? null, public: publicCheckout(), trackingAvailable: false });
 }));
 
 router.put('/shipping', requireAdmin, handle(async (req, res) => {

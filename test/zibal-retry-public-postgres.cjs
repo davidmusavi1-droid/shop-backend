@@ -17,7 +17,7 @@ const gateway = { async request(amount) { requests++; assert.equal(amount, 12500
   redirect: id => 'https://gateway.zibal.ir/start/' + id };
 // Factory injection is test-only. No HTTP request reaches Zibal or a bank.
 const zibal = require('../src/lib/zibal'), factory = zibal.createZibalGateway;
-zibal.createZibalGateway = () => gateway;
+zibal.createZibalGateway = () => ({ ...gateway });
 const checkoutRouter = require('../src/routes/checkout');
 const paymentRouter = require('../src/routes/payment');
 const { publicCheckout } = require('../src/lib/checkout-access');
@@ -35,6 +35,10 @@ async function run() {
   const product = await p.product.create({ data: { title: 'Public fixture only', basePrice: 10000,
     images: [], customerNeeds: [], styles: [], variants: { create: { size: 'T', color: 'test', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
   const app = express(); app.use(express.json()); app.use('/api/checkout', checkoutRouter); app.use('/api/payment', paymentRouter);
+  app.get('/api/products', async (_req, res) => res.json(await p.product.findMany({ include: { variants: true } })));
+  app.get('/api/products/:id', async (req, res) => res.json(await p.product.findUnique({ where: { id: req.params.id }, include: { variants: true } })));
+  app.get('/cart', (_req, res) => res.sendFile(require('node:path').resolve('public/index.html')));
+  app.use(express.static('public'));
   server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   assert.equal((await request('/api/checkout/shipping')).status, 200);
   assert.equal((await request('/api/checkout/shipping', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{"shippingFee":0}' })).status, 401);
@@ -79,6 +83,24 @@ async function run() {
   assert.ok(!(await r.text()).includes('<h1>پرداخت تأیید شد'));
   assert.equal((await p.payment.findUniqueOrThrow({ where: { orderId: secondOrder.orderNumber } })).isSuccessful, false);
   console.log('PASS even OPEN inquiry plus successful verify cannot settle without a fresh paid inquiry');
+  const fixtureProduct = title => p.product.create({ data: { title, basePrice: 10000, images: [], customerNeeds: [], styles: [],
+    variants: { create: { size: 'T', color: 'fixture', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
+  const raceProduct = await fixtureProduct('Synthetic cross-method race'); const raceKey = randomUUID();
+  r = await request('/api/checkout/orders', { ...options, headers: { ...options.headers, 'Idempotency-Key': raceKey },
+    body: payload.replace(product.variants[0].id, raceProduct.variants[0].id) });
+  const raceOrder = await r.json();
+  await p.cardTransferSettings.upsert({ where: { id: 'default' }, create: { id: 'default', enabled: true, cardNumber: '0000000000000000', accountHolder: 'Synthetic fixture' }, update: { enabled: true } });
+  const jpg = await require('sharp')({ create: { width: 8, height: 8, channels: 3, background: '#ffffff' } }).jpeg().toBuffer();
+  const form = new FormData(); form.append('receipt', new Blob([jpg], { type: 'image/jpeg' }), 'synthetic.jpg');
+  await Promise.all([request('/api/payment/request/' + raceOrder.orderNumber, { method: 'POST', headers: { 'Idempotency-Key': raceKey } }),
+    request('/api/checkout/card-transfer/orders/' + raceOrder.orderNumber + '/receipt', { method: 'POST', headers: { 'Idempotency-Key': raceKey }, body: form })]);
+  const method = await p.payment.findUniqueOrThrow({ where: { orderId: raceOrder.orderNumber }, include: { zibalAttempt: true, cardTransfer: true } });
+  assert.equal(await p.payment.count({ where: { orderId: raceOrder.orderNumber } }), 1);
+  assert.notEqual(Boolean(method.zibalAttempt), Boolean(method.cardTransfer));
+  assert.equal(method.isSuccessful, false);
+  assert.equal((await p.variant.findUniqueOrThrow({ where: { id: raceProduct.variants[0].id } })).stock, 0);
+  await p.cardTransferSettings.update({ where: { id: 'default' }, data: { enabled: false } });
+  console.log('PASS simultaneous online and card-transfer claim selects exactly one method and one reservation');
   const { paymentResult } = require('../src/lib/payment-result');
   html = paymentResult({ status: 'PENDING', code: 'PAYMENT_REVIEW' }, { orderNumber: '<script>bad</script>' });
   assert.ok(html.includes('دوباره پرداخت نکنید')); assert.ok(!html.includes('<script>')); assert.ok(!html.includes('<h1>پرداخت تأیید شد'));
@@ -92,6 +114,39 @@ async function run() {
   await assert.rejects(state.request(payload, { getItem() {}, setItem() { throw Error('storage blocked'); } }));
   state.complete(storage); assert.equal(values.size, 0);
   console.log('PASS pending checkout survives reload without storing customer data; blocked persistence stops submission');
+  if (process.env.MOTIF_PUBLIC_BROWSER_TEST === 'true') {
+    const { chromium } = require('playwright');
+    const fs = require('node:fs/promises'); await fs.mkdir('artifacts', { recursive: true });
+    const browser = await chromium.launch({ executablePath: process.env.CHROME_BIN, headless: true, args: ['--no-sandbox'] });
+    try {
+      for (const [label, width] of [['desktop', 1280], ['mobile', 320]]) {
+        const item = await fixtureProduct('Synthetic browser ' + label);
+        const context = await browser.newContext({ viewport: { width, height: 900 } });
+        const page = await context.newPage(); const origin = 'http://127.0.0.1:' + server.address().port;
+        // Fail closed on every outside request, including payment redirects.
+        await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
+        await page.goto(origin + '/cart');
+        await page.evaluate(value => localStorage.setItem('motif-cart', JSON.stringify(value)), [{ productId: item.id, variantId: item.variants[0].id, quantity: 1 }]);
+        await page.reload(); await page.locator('#guestCheckout').waitFor({ state: 'visible' });
+        assert.ok((await page.locator('#checkoutShipping').innerText()).includes('۱۲٬۵۰۰'));
+        for (const [name, value] of Object.entries({ fullName: 'Synthetic browser', phone: '09000000002', province: 'Fixture', city: 'Fixture', address: 'Not a shipping address', postalCode: '0000000000' })) {
+          await page.locator('#guestCheckout [name="' + name + '"]').fill(value);
+        }
+        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+        await page.screenshot({ path: 'artifacts/public-checkout-' + label + '-form.png', fullPage: true });
+        await page.locator('#guestCheckout button').click();
+        await page.waitForFunction(() => document.getElementById('checkoutMessage').textContent.includes('شماره سفارش '));
+        await page.locator('#onlinePayment').waitFor({ state: 'visible' });
+        assert.ok(!(await page.locator('#checkoutMessage').innerText()).includes('آزمایشی'));
+        const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem('motif-card-order')));
+        assert.equal(saved.total, 12500); assert.ok(saved.number);
+        assert.equal((await p.variant.findUniqueOrThrow({ where: { id: item.variants[0].id } })).stock, 0);
+        await page.screenshot({ path: 'artifacts/public-checkout-' + label + '-order.png', fullPage: true });
+        await context.close();
+        console.log('PASS ' + label + ' customer browser checkout, shipping, order number, online action and no horizontal overflow');
+      }
+    } finally { await browser.close(); }
+  }
 }
 run().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => {
   if (server) await new Promise(resolve => server.close(resolve)); await p.$disconnect();

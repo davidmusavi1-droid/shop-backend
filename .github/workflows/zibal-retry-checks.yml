@@ -42,5 +42,17 @@ jobs:
       - name: Status-2 callback regression (Express and isolated PostgreSQL)
         run: node test/zibal-retry-status2-postgres.cjs
 
+      - run: npm install --no-save --no-package-lock playwright@1.56.1
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
       - name: Public checkout access and final inquiry (isolated only)
         run: node test/zibal-retry-public-postgres.cjs
+        env:
+          MOTIF_PUBLIC_BROWSER_TEST: 'true'
+          CHROME_BIN: /usr/bin/google-chrome
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-public-checkout-evidence
+          path: artifacts/public-checkout-*.png
+          if-no-files-found: ignore

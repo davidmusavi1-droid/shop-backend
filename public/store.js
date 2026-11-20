@@ -170,13 +170,22 @@ async function showCheckout(ticket, total) {
   try {
     const response = await fetch('/api/checkout/shipping', { cache: 'no-store' });
     if (!response.ok) return;
-    const { shippingFee } = await response.json();
+    const { shippingFee, public: customerCheckout, trackingAvailable } = await response.json();
     if (ticket !== requestId || location.pathname !== '/cart') return;
     if (!Number.isInteger(shippingFee)) {
       $('checkoutMessage').textContent = 'تعرفه ارسال هنوز تنظیم نشده است.';
       return;
     }
     $('checkoutShipping').textContent = 'ارسال ' + money(shippingFee) + ' · مبلغ نهایی ' + money(total + shippingFee);
+    if (customerCheckout) {
+      $('guestCheckout').querySelector('button').textContent = 'ثبت سفارش';
+      document.querySelector('#cart .notice').textContent = 'افزودن به سبد کالا را رزرو نمی‌کند؛ رزرو موجودی هنگام ثبت سفارش انجام می‌شود.';
+      if (!trackingAvailable) {
+        $('trackingChallenge').hidden = true;
+        $('trackingVerify').hidden = true;
+        $('trackingResult').textContent = 'پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید.';
+      }
+    }
     $('guestCheckout').hidden = false;
   } catch {}
 }

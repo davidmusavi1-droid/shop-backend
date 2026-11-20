@@ -44,8 +44,9 @@ Card transfer is disabled with no destination account. Shipping currently zero.
 4. Verify the live merchant's allowed egress IP from the current Zibal panel
    before activation. A prior successful transaction is evidence for that earlier
    time, not a new panel verification.
-5. Verify reservation/payment reconciliation operations and the cross-method
-   concurrency case before enabling both online and card-transfer methods.
+5. Review the isolated cross-method concurrency and mobile/desktop browser CI
+   evidence before enabling both methods. Configure card destination only via
+   the authenticated panel; no destination means the method stays unavailable.
 
 ## Activation proposal — only after explicit final owner approval
 
