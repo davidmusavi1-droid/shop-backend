@@ -208,15 +208,15 @@ async function main() {
   await cancelStarted.promise;controller.abort();await cancelled;await cancelGate.promise;
   // Wait on server-side durable evidence, not another operation or provider retry.
   let released;
-  for(let n=0;n<100;n++){released=await db.smartAiRun.findFirst({where:{dossierId:target.id,status:'released'}});if(released)break;await new Promise(r=>setTimeout(r,10));}
+  for(let n=0;n<100;n++){released=await db.smartAiRun.findFirst({where:{dossierId:target.id,status:'failed',errorCode:'AI_CANCELLED_BEFORE_SEND'}});if(released)break;await new Promise(r=>setTimeout(r,10));}
   assert.ok(released,'client cancellation is released before fetch');assert.equal(paidCalls,2);
   assert.equal((await ok(base+'/ai/usage')).used,2);
   fault='timeout';q=await ok(targetPath+'/ai/quote?operation=analyze');
   assert.equal((await request(targetPath+'/ai/c2/analyze','POST',{version:target.version,quote:q.token})).status,504);
-  assert.equal((await db.smartAiRun.findFirst({where:{dossierId:target.id,status:'unknown'}})).usage.lifecycle.phase,'unknown');
+  assert.equal((await db.smartAiRun.findFirst({where:{dossierId:target.id,status:'failed',errorCode:'AI_TIMEOUT'}})).usage.lifecycle.phase,'unknown');
   assert.equal((await request(targetPath+'/ai/c2/analyze','POST',{version:target.version,quote:q.token})).status,409);assert.equal(paidCalls,3);
   const left=await quotaFixture('MOTIF-976'),right=await quotaFixture('MOTIF-977');
-  await db.smartAiRun.createMany({data:Array.from({length:16},()=>({id:randomUUID(),operation:'analyze',scope:'quota-fixture-'+randomUUID(),dossierId:target.id,version:target.version,status:'unknown',model:cfg.model,usage:{estimateToman:1000,estimateUsd:0.02}}))});
+  await db.smartAiRun.createMany({data:Array.from({length:16},()=>({id:randomUUID(),operation:'analyze',scope:'quota-fixture-'+randomUUID(),dossierId:target.id,version:target.version,status:'failed',model:cfg.model,usage:{estimateToman:1000,estimateUsd:0.02}}))});
   const [lq,rq]=await Promise.all([left,right].map(d=>ok(base+'/dossiers/'+d.id+'/ai/quote?operation=analyze')));fault=null;
   const race=await Promise.all([left,right].map((d,i)=>request(base+'/dossiers/'+d.id+'/ai/c2/analyze','POST',{version:d.version,quote:[lq,rq][i].token})));
   assert.deepEqual(race.map(r=>r.status).sort(),[200,429]);assert.equal(paidCalls,4);

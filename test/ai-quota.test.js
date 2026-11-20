@@ -23,7 +23,7 @@ test('cancellation before dispatch releases count/budget, keeps history, and nev
   const p=liaraProvider(cfg,{fetcher:async()=>{calls++;throw Error('never');}});
   const err=await failure(()=>p.analyze(images,undefined,{beforeSend:track.beforeSend,isCancelled:()=>true}));
   assert.equal(err.requestSent,false);await track.failed(err,{providerInvoked:true});
-  assert.equal(calls,0);assert.equal(row.status,'released');assert.match(row.scope,/:released:run$/);
+  assert.equal(calls,0);assert.equal(row.status,'failed');assert.match(row.scope,/:released:run$/);
   const u=budget.summarize([row],cfg);assert.equal(u.used,0);assert.equal(u.remaining,20);assert.equal(u.reservedToman,0);
   assert.deepEqual(u.statusCounts,{started:1,sent:0,successful:0,failed:1,unknown:0,reserved:0,released:1});
 });
@@ -32,20 +32,20 @@ test('cancellation after durable marker but before fetch is proven unsent and re
   const {row,track}=fixture();let cancelled=false,calls=0;
   const p=liaraProvider(cfg,{fetcher:async()=>{calls++;}});
   const err=await failure(()=>p.analyze(images,undefined,{beforeSend:async()=>{await track.beforeSend();cancelled=true;},isCancelled:()=>cancelled}));
-  await track.failed(err,{providerInvoked:true});assert.equal(calls,0);assert.equal(row.status,'released');assert.equal(budget.summarize([row],cfg).used,0);
+  await track.failed(err,{providerInvoked:true});assert.equal(calls,0);assert.equal(row.status,'failed');assert.equal(budget.summarize([row],cfg).used,0);
 });
 
 test('failed durable dispatch lock blocks fetch; pre-provider blocking also frees reservation',async()=>{
   let calls=0;const p=liaraProvider(cfg,{fetcher:async()=>{calls++;}});
   const err=await failure(()=>p.analyze(images,undefined,{beforeSend:async()=>{throw Error('db failed before fetch');}}));
   assert.equal(err.requestSent,false);assert.equal(calls,0);
-  const {row,track}=fixture();await track.failed(Error('window closed'),{providerInvoked:false});assert.equal(row.status,'released');
+  const {row,track}=fixture();await track.failed(Error('window closed'),{providerInvoked:false});assert.equal(row.status,'failed');
 });
 
 for(const kind of ['timeout','disconnect','http','invalid'])test('sent '+kind+' is retained, classified and never automatically retried',async()=>{
   const {row,track}=fixture();let calls=0;
   const p=liaraProvider(cfg,{fetcher:async()=>{
-    calls++;assert.equal(row.status,'dispatching');
+    calls++;assert.equal(row.status,'pending');
     if(kind==='timeout')throw new DOMException('timeout','TimeoutError');
     if(kind==='disconnect')throw new TypeError('network disconnected');
     if(kind==='http')return new Response('private failure',{status:429});
@@ -53,7 +53,7 @@ for(const kind of ['timeout','disconnect','http','invalid'])test('sent '+kind+' 
   }});
   const err=await failure(()=>p.analyze(images,undefined,{beforeSend:track.beforeSend}));
   assert.equal(err.requestSent,true);await track.failed(err,{providerInvoked:true});assert.equal(calls,1);
-  assert.equal(row.status,['timeout','disconnect'].includes(kind)?'unknown':'failed');assert.equal(row.scope,'same-scope');
+  assert.equal(row.status,'failed');assert.equal(row.scope,'same-scope');
   const u=budget.summarize([row],cfg);assert.equal(u.used,1);assert.equal(u.remaining,19);assert.ok(u.reservedToman>=1000);
   assert.equal(u.statusCounts.unknown,['timeout','disconnect'].includes(kind)?1:0);
   if(kind==='invalid'){assert.equal(u.reportedToman,2400);assert.equal(u.reservedToman,2400);}
@@ -92,7 +92,7 @@ test('crashed pre-dispatch reservation can be reclaimed, but suspended worker ca
   const db={smartAiRun:{findMany:async()=>[structuredClone(row),{id:'legacy',scope:'legacy',usage:null}],updateMany:async({where,data})=>{
     if(where.id!==row.id||row.status!==where.status)return {count:0};Object.assign(row,data);return {count:1};
   }}};
-  await releaseStaleUnsent(db);assert.equal(row.status,'released');
+  await releaseStaleUnsent(db);assert.equal(row.status,'failed');
   let calls=0;const p=liaraProvider(cfg,{fetcher:async()=>{calls++;}});
   const error=await failure(()=>p.analyze(images,undefined,{beforeSend:track.beforeSend}));
   assert.equal(error.requestSent,false);assert.equal(calls,0);assert.equal(budget.summarize([row],cfg).used,0);

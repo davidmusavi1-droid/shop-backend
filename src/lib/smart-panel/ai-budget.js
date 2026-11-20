@@ -17,7 +17,7 @@ function summarize(runs, config) {
   let used = 0;
   for (const run of runs) {
     const usage = run.usage || {}, phase = usage.lifecycle?.phase;
-    const released = run.status === 'released' && phase === 'released' && usage.lifecycle?.proof === 'local_before_fetch';
+    const released = run.status === 'failed' && phase === 'released' && usage.lifecycle?.proof === 'local_before_fetch';
     if (released) { statusCounts.released++; statusCounts.failed++; continue; }
     used++;
     counts[run.operation] = (counts[run.operation] || 0) + 1;

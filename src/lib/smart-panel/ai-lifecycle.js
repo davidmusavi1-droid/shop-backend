@@ -5,9 +5,10 @@ function lifecycle(db, id, scope, reservationUsage = {}) {
   const usage = extra => ({ ...reservationUsage, ...extra, lifecycle: { ...state } });
   return {
     async beforeSend() {
+      const reservationUsageWithPhase = usage();
       state = { ...state, phase: 'dispatching', dispatchedAt: new Date().toISOString() };
-      const changed = await db.smartAiRun.updateMany({ where: { id, status: 'pending' },
-        data: { status: 'dispatching', usage: usage() } });
+      const changed = await db.smartAiRun.updateMany({ where: { id, status: 'pending', usage: { equals: reservationUsageWithPhase } },
+        data: { usage: usage() } });
       if (changed.count !== 1) throw new Error('AI dispatch reservation is no longer available');
     },
     completed(providerUsage) {
@@ -19,8 +20,8 @@ function lifecycle(db, id, scope, reservationUsage = {}) {
       const unsent = !providerInvoked || error.requestSent === false;
       state = { ...state, phase: unsent ? 'released' : error.responseReceived || outcome ? 'responded' : 'unknown',
         endedAt: new Date().toISOString(), ...(unsent ? { proof: 'local_before_fetch' } : {}) };
-      const status = unsent ? 'released' : state.phase === 'responded' ? 'failed' : 'unknown';
-      await db.smartAiRun.updateMany({ where: { id, status: { in: ['pending', 'dispatching'] } }, data: {
+      const status = 'failed'; // DB status stays compatible; lifecycle carries precise outcome.
+      await db.smartAiRun.updateMany({ where: { id, status: 'pending' }, data: {
         status, errorCode: error.code || 'AI_UNKNOWN', usage: usage(outcome?.usage || error.usage),
         ...(outcome?.result && { result: outcome.result }),
         // Keep attempt history while allowing a NEW, explicitly confirmed unsent attempt.
@@ -39,7 +40,7 @@ async function releaseStaleUnsent(db, now = new Date()) {
     const phase = row.usage?.lifecycle;
     if (phase?.version !== 1 || phase.phase !== 'reserved') continue;
     await db.smartAiRun.updateMany({ where: { id: row.id, status: 'pending', usage: { equals: row.usage } }, data: {
-      status: 'released', scope: row.scope + ':released:' + row.id, errorCode: 'AI_UNSENT_RESERVATION_EXPIRED',
+      status: 'failed', scope: row.scope + ':released:' + row.id, errorCode: 'AI_UNSENT_RESERVATION_EXPIRED',
       usage: { ...row.usage, lifecycle: { ...phase, phase: 'released', proof: 'local_before_fetch', endedAt: now.toISOString() } },
     } });
   }
