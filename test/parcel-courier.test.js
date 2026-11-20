@@ -1,0 +1,47 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const p=require('../src/lib/parcel-shipping');
+const shipping=require('../src/lib/destination-shipping');
+test('courier matches city and province, not neighbouring cities',()=>{
+ assert(p.eligible({province:'البرز',city:'کرج'}));assert(p.eligible({province:'تهران',city:'تهران'}));
+ for(const c of [{province:'تهران',city:'پردیس'},{province:'البرز',city:'فردیس'},{province:'فارس',city:'تهران'}])assert(!p.eligible(c));
+});
+test('settings permit owner durations but no unbounded reservation',()=>{
+ assert.equal(p.settingsInput({...p.defaults,supportPhone:'02112345678',courierEnabled:true}).requestMinutes,120);
+ for(const reservationMinutes of [0,31,1.5])assert.throws(()=>p.settingsInput({...p.defaults,reservationMinutes}),/نامعتبر/);
+ assert.throws(()=>p.settingsInput({...p.defaults,courierEnabled:true}),/پشتیبانی/);
+});
+test('measurements require explicit approval and exact integers',()=>{
+ assert.throws(()=>p.weightInput({grams:200,approved:false}));
+ assert.throws(()=>p.weightInput({grams:20.2,approved:true}));
+ assert.equal(p.weightInput({grams:200,approved:true}).grams,200);
+});
+test('packing identity is independent of item order and rejects duplicate variants',()=>{
+ assert.equal(p.signature([{variantId:'a',quantity:1},{variantId:'b',quantity:2}]),p.signature([{variantId:'b',quantity:2},{variantId:'a',quantity:1}]));
+ assert.throws(()=>p.planInput({approved:true,items:[{variantId:'a',quantity:1},{variantId:'a',quantity:1}]}));
+});
+test('actual multi-item parcel adds tare and requires exact approved packing',async()=>{
+ const items=[{variantId:'a',quantity:2},{variantId:'b',quantity:1}];
+ const db={shippingPackingPlan:{findUnique:async()=>({tareGrams:60,lengthMm:300,widthMm:250,heightMm:100,approvedAt:new Date()})},
+ shippingMeasurement:{findMany:async()=>[{variantId:'a',grams:250,approvedAt:new Date()},{variantId:'b',grams:500,approvedAt:new Date()}]}};
+ assert.equal((await p.parcel(db,items)).grams,1060);
+ db.shippingPackingPlan.findUnique=async()=>null;
+ await assert.rejects(p.parcel(db,items),/بسته‌بندی/);
+});
+test('weight bands respect exact boundary, dimensions and integer amounts',()=>{
+ const row={minGrams:1,maxGrams:500,maxLengthMm:300,maxWidthMm:250,maxHeightMm:100};
+ assert(p.fits(row,{grams:500,lengthMm:300,widthMm:250,heightMm:100}));
+ assert(!p.fits(row,{grams:501,lengthMm:300,widthMm:250,heightMm:100}));
+ assert(!p.fits(row,{grams:250,lengthMm:301,widthMm:250,heightMm:100}));
+ assert.throws(()=>p.bounds({...row,minGrams:501}));
+});
+test('production shipping refuses unmeasured or missing weight coverage, no zero fallback',()=>{
+ const old=process.env.MOTIF_PARCEL_SHIPPING;process.env.MOTIF_PARCEL_SHIPPING='true';
+ try{
+ const tariff={id:'test',carrier:'POST_PISHTAZ',source:'synthetic only',originProvince:'البرز',originCity:'کرج',validFrom:new Date(),validUntil:new Date(Date.now()+60000),rules:[{province:'تهران',city:'*',fee:100,maxItems:10,maxGoodsTomans:100000,minGrams:1,maxGrams:500,maxLengthMm:300,maxWidthMm:300,maxHeightMm:300}]};
+ const customer={province:'تهران',city:'تهران',postalCode:'1111111111'},items=[{quantity:1,unitPrice:1000}];
+ assert.throws(()=>shipping.calculate(tariff,customer,items),/مرسوله/);
+ assert.throws(()=>shipping.calculate(tariff,customer,items,{grams:501,lengthMm:100,widthMm:100,heightMm:100}),/قابل محاسبه/);
+ const q=shipping.calculate(tariff,customer,items,{grams:500,lengthMm:100,widthMm:100,heightMm:100});assert.equal(q.totalPrice,1100);assert.equal(q.details.parcel.grams,500);
+ }finally{if(old===undefined)delete process.env.MOTIF_PARCEL_SHIPPING;else process.env.MOTIF_PARCEL_SHIPPING=old;}
+});

@@ -10,6 +10,14 @@ delete process.env.MOTIF_ZIBAL_REQUESTS_DISABLED;
 delete process.env.MOTIF_ZIBAL_PILOT_ORDER_ID;
 delete process.env.MOTIF_ZIBAL_PILOT_MAX_TOMANS;
 const p = require('../src/lib/prisma');
+async function measuredProduct(args) {
+ const product=await p.product.create(args);
+ const parcel=require('../src/lib/parcel-shipping');
+ const v=product.variants[0],items=[{variantId:v.id,quantity:1}];
+ await p.shippingMeasurement.create({data:{variantId:v.id,...parcel.weightInput({grams:250,approved:true})}});
+ await p.shippingPackingPlan.create({data:parcel.planInput({items,tareGrams:50,lengthMm:300,widthMm:250,heightMm:50,approved:true})});
+ return product;
+}
 let server, requests = 0, verifies = 0, inquiryStatus = -1, verificationStatus = 1;
 const gateway = { async request(amount) { requests++; assert.equal(amount, 125000); return { result: 100, trackId: 8200000000 + requests }; },
   async inquiry() { return { result: 100, status: inquiryStatus, amount: 125000 }; },
@@ -33,11 +41,11 @@ async function run() {
   assert.equal(configureLiveZibal({ ...process.env, MOTIF_ZIBAL_RETRY_ENABLED: 'false' }), null);
   const shipping = require('../src/lib/destination-shipping');
   const tariff = await shipping.publish(p, { expectedTariffId: (await p.shippingTariffState.findUnique({where:{id:'default'}}))?.activeTariffId || null,
-    source:'Synthetic fixture only; not a real carrier tariff',carrier:'Synthetic',originProvince:'تهران',originCity:'تهران',
+    source:'Synthetic fixture only; not a real carrier tariff',carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج',
     validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),allInclusive:true,merchantCoversDifference:true,
-    rules:shipping.provinces.map(province=>({province,city:'*',fee:2500,maxItems:100,maxGoodsTomans:2147483647})) });
+    rules:shipping.provinces.map(province=>({province,city:'*',fee:2500,maxItems:100,maxGoodsTomans:2147483647,minGrams:1,maxGrams:1000,maxLengthMm:500,maxWidthMm:500,maxHeightMm:500})) });
   await p.shippingSettings.upsert({ where: { id: 'default' }, create: { id: 'default', fee: 2500 }, update: { fee: 2500 } });
-  const product = await p.product.create({ data: { title: 'Public fixture only', basePrice: 10000,
+  const product = await measuredProduct({ data: { title: 'Public fixture only', basePrice: 10000,
     images: [], customerNeeds: [], styles: [], variants: { create: { size: 'T', color: 'test', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
   const app = express(); app.use(express.json()); app.use('/api/checkout', checkoutRouter); app.use('/api/payment', paymentRouter);
   app.get('/api/products', async (_req, res) => res.json(await p.product.findMany({ include: { variants: true } })));
@@ -75,7 +83,7 @@ async function run() {
   assert.equal((await p.variant.findUniqueOrThrow({ where: { id: product.variants[0].id } })).stock, 0);
   console.log('PASS emergency request shutdown retains status-2 callbacks, result order number and exactly-once settlement');
   process.env.MOTIF_CHECKOUT_PUBLIC = 'true'; delete process.env.MOTIF_ZIBAL_REQUESTS_DISABLED;
-  const secondProduct = await p.product.create({ data: { title: 'Second synthetic public fixture', basePrice: 10000,
+  const secondProduct = await measuredProduct({ data: { title: 'Second synthetic public fixture', basePrice: 10000,
     images: [], customerNeeds: [], styles: [], variants: { create: { size: 'T', color: 'test', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
   const secondKey = randomUUID();
   r = await request('/api/checkout/orders', { ...options, headers: { ...options.headers, 'Idempotency-Key': secondKey },
@@ -88,7 +96,7 @@ async function run() {
   assert.ok(!(await r.text()).includes('<h1>پرداخت تأیید شد'));
   assert.equal((await p.payment.findUniqueOrThrow({ where: { orderId: secondOrder.orderNumber } })).isSuccessful, false);
   console.log('PASS even OPEN inquiry plus successful verify cannot settle without a fresh paid inquiry');
-  const fixtureProduct = title => p.product.create({ data: { title, basePrice: 10000, images: [], customerNeeds: [], styles: [],
+  const fixtureProduct = title => measuredProduct({ data: { title, basePrice: 10000, images: [], customerNeeds: [], styles: [],
     variants: { create: { size: 'T', color: 'fixture', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
   const raceProduct = await fixtureProduct('Synthetic cross-method race'); const raceKey = randomUUID();
   r = await request('/api/checkout/orders', { ...options, headers: { ...options.headers, 'Idempotency-Key': raceKey },

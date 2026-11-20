@@ -1,3 +1,4 @@
+const parcelShipping = require('./parcel-shipping');
 const { randomUUID } = require('node:crypto');
 const MAX = 2147483647;
 const provinces = ['آذربایجان شرقی','آذربایجان غربی','اردبیل','اصفهان','البرز','ایلام','بوشهر','تهران','چهارمحال و بختیاری','خراسان جنوبی','خراسان رضوی','خراسان شمالی','خوزستان','زنجان','سمنان','سیستان و بلوچستان','فارس','قزوین','قم','کردستان','کرمان','کرمانشاه','کهگیلویه و بویراحمد','گلستان','گیلان','لرستان','مازندران','مرکزی','هرمزگان','همدان','یزد'];
@@ -28,11 +29,14 @@ function tariffInput(body) {
     const key = province + ':' + city;
     if (!provinces.includes(province) || !(city === '*' || /^[\p{Script=Arabic}\d -]{2,80}$/u.test(city)) ||
         !Number.isInteger(fee) || fee < 1 || fee > MAX || !Number.isInteger(maxItems) || maxItems < 1 || maxItems > 100 ||
-        !Number.isInteger(maxGoodsTomans) || maxGoodsTomans < 1 || maxGoodsTomans > MAX || seen.has(key)) throw fail(400,'تعرفه تکراری، صفر یا نامعتبر است');
+        !Number.isInteger(maxGoodsTomans) || maxGoodsTomans < 1 || maxGoodsTomans > MAX || (!parcelShipping.required() && seen.has(key))) throw fail(400,'تعرفه تکراری، صفر یا نامعتبر است');
+    const limits=parcelShipping.required()?parcelShipping.bounds(row):{};
+    if(parcelShipping.required() && rulesOverlap(body.rules,row))throw fail(400,'بازه‌های تعرفه یک مقصد هم‌پوشانی دارند');
     seen.add(key);
-    return { province, city, fee, maxItems, maxGoodsTomans };
+    return { province, city, fee, maxItems, maxGoodsTomans, ...limits };
   });
   if (provinces.some(p => !seen.has(p + ':*'))) throw fail(400,'برای پوشش سراسر ایران، تعرفه پایه تمام ۳۱ استان لازم است');
+  if(parcelShipping.required() && (originProvince!=='البرز'||originCity!=='کرج'||carrier!=='POST_PISHTAZ'))throw fail(400,'مبدأ کرج و روش پست پیشتاز لازم است');
   return { source, carrier, originProvince, originCity, validFrom, validUntil, rules };
 }
 async function active(prisma, now = new Date()) {
@@ -43,22 +47,24 @@ async function active(prisma, now = new Date()) {
   if (!tariff || +tariff.validFrom > +now || +tariff.validUntil <= +now) throw fail(503,'تعرفه معتبر ارسال هنوز تأیید نشده است؛ پرداخت ممکن نیست');
   return tariff;
 }
-function calculate(tariff, customer, items) {
+function rulesOverlap(rows,row){return rows.some(r=>r!==row&&normalize(r.province)===normalize(row.province)&&normalize(r.city)===normalize(row.city)&&r.minGrams<=row.maxGrams&&row.minGrams<=r.maxGrams);}
+function calculate(tariff, customer, items, parcel) {
   const dest = destination(customer);
   const count = items.reduce((n,x)=>n+x.quantity,0);
   const goodsTotal = items.reduce((n,x)=>n+x.unitPrice*x.quantity,0);
   if (!Number.isSafeInteger(goodsTotal) || goodsTotal < 0 || goodsTotal > MAX) throw fail(400,'مبلغ کالا نامعتبر است');
-  const row = tariff.rules.find(r=>r.province===dest.province&&r.city===dest.city) ||
-    tariff.rules.find(r=>r.province===dest.province&&r.city==='*');
+  if(parcelShipping.required() && (!parcel || tariff.carrier!=='POST_PISHTAZ'||tariff.originCity!=='کرج'||tariff.originProvince!=='البرز'))throw fail(409,'نرخ معتبر برای مرسوله تأیید نشده است');
+  const candidates=tariff.rules.filter(r=>r.province===dest.province&&(!parcelShipping.required()||parcelShipping.fits(r,parcel)));
+  const row = candidates.find(r=>r.city===dest.city) || candidates.find(r=>r.city==='*');
   if (!row || count > row.maxItems || goodsTotal > row.maxGoodsTomans) throw fail(409,'هزینه ارسال این مقصد یا اندازه سفارش قابل محاسبه نیست؛ با فروشگاه تماس بگیرید');
   const totalPrice = goodsTotal + row.fee;
   if (!Number.isSafeInteger(totalPrice) || totalPrice > MAX || row.fee < 1) throw fail(400,'مبلغ نهایی سفارش نامعتبر است');
   return { tariffId: tariff.id, shippingFee: row.fee, goodsTotal, totalPrice,
     details: { tariffId: tariff.id, goodsTotal, totalPrice, shippingFee: row.fee, carrier: tariff.carrier, source: tariff.source, originProvince: tariff.originProvince, originCity: tariff.originCity,
       destination: dest, rule: row, validFrom: tariff.validFrom.toISOString(), validUntil: tariff.validUntil.toISOString(),
-      allInclusive: true, merchantCoversDifference: true } };
+      allInclusive: true, merchantCoversDifference: true, method:'POST_PISHTAZ', ...(parcel?{parcel}:{}) } };
 }
-async function quote(prisma, customer, items) { return calculate(await active(prisma), customer, items); }
+async function quote(prisma, customer, items) { const parcel=parcelShipping.required()?await parcelShipping.parcel(prisma,items):null; return calculate(await active(prisma), customer, items,parcel); }
 function accepted(input, q) {
   const a = input.shippingAcceptance;
   if (!a || a.tariffId !== q.tariffId || a.shippingFee !== q.shippingFee || a.totalPrice !== q.totalPrice) throw fail(409,'مبلغ ارسال یا سفارش تغییر کرده است؛ دوباره هزینه را محاسبه و تأیید کنید');

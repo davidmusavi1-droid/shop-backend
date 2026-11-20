@@ -1,5 +1,6 @@
 const { createHash } = require('node:crypto');
 const destinationShipping = require('./destination-shipping');
+const courier = require('./coordinated-courier');
 
 const MAX_AMOUNT = 2147483647;
 const RESERVATION_MS = 30 * 60 * 1000;
@@ -44,6 +45,12 @@ function checkoutInput(body, requestKey) {
   if (shippingAcceptance && (typeof shippingAcceptance.tariffId !== 'string' ||
       !Number.isInteger(shippingAcceptance.shippingFee) || !Number.isInteger(shippingAcceptance.totalPrice))) throw fail(400,'تأیید مبلغ ارسال نامعتبر است');
   const agreement = shippingAcceptance ? { shippingAcceptance: { tariffId: shippingAcceptance.tariffId, shippingFee: shippingAcceptance.shippingFee, totalPrice: shippingAcceptance.totalPrice } } : {};
+  if(body.shippingMethod && !['POST_PISHTAZ','COORDINATED_COURIER'].includes(body.shippingMethod)) throw fail(409,'روش ارسال غیرفعال است');
+  const a=body.courierAcceptance;
+  if(body.shippingMethod==='COORDINATED_COURIER' && (!a || typeof a.requestId!=='string' || typeof a.token!=='string' || !Number.isInteger(a.revision) || !Number.isInteger(a.shippingFee) || !Number.isInteger(a.totalPrice))) throw fail(400,'پذیرش پیشنهاد ارسال فوری لازم است');
+  if(a && body.shippingMethod!=='COORDINATED_COURIER') throw fail(400,'روش ارسال با پیشنهاد یکسان نیست');
+  if(body.shippingMethod) agreement.shippingMethod=body.shippingMethod;
+  if(a) agreement.courierAcceptance={requestId:a.requestId,token:a.token,revision:a.revision,shippingFee:a.shippingFee,totalPrice:a.totalPrice};
   const requestHash = createHash('sha256').update(JSON.stringify({ customer, items, ...agreement })).digest('hex');
   return { customer, items, ...agreement, requestKey: requestKey.toLowerCase(), requestHash };
 }
@@ -112,8 +119,8 @@ async function reserve(prisma, input) {
         items.push({ ...item, productId: variant.productId, unitPrice: variant.product.basePrice + variant.priceDelta });
       }
       let shippingQuote;
-      if (destinationShipping.required()) {
-        shippingQuote = await destinationShipping.quote(tx, input.customer, items);
+      if (destinationShipping.required() || input.courierAcceptance) {
+        shippingQuote = input.courierAcceptance ? await courier.acceptedQuote(tx,input,items) : await destinationShipping.quote(tx, input.customer, items);
         destinationShipping.accepted(input, shippingQuote);
         shipping.fee = shippingQuote.shippingFee;
       }
@@ -122,9 +129,10 @@ async function reserve(prisma, input) {
         orderId: order.id, tariffId: shippingQuote.tariffId, fee: shippingQuote.shippingFee, details: shippingQuote.details,
       } });
       const paidAmount = await tx.order.update({ where: { id: order.id }, data: { totalPrice, items: { create: items } } });
+      const reservationExpiry=input.courierAcceptance ? await courier.bind(tx,input,order.id,shippingQuote) : new Date(Date.now()+RESERVATION_MS);
       const savedReservation = await tx.checkoutReservation.update({
         where: { orderId: order.id },
-        data: { shippingFee: shipping.fee, expiresAt: new Date(Date.now() + RESERVATION_MS) },
+        data: { shippingFee: shipping.fee, expiresAt: reservationExpiry },
       });
       return receipt({ ...savedReservation, order: paidAmount }, input.requestHash);
     });

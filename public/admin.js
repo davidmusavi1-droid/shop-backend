@@ -1228,7 +1228,7 @@ MotifAdminSession.restore().then(showWorkspace).catch(err => {
 let shippingRevision=null,shippingProvinces=[];
 function shippingRuleRow(rule={}){
   const row=el('fieldset');row.className='two-fields';row.dataset.shippingRule='true';
-  for(const[name,label,type]of [['province','استان','select'],['city','شهر؛ * یعنی همه شهرهای استان','text'],['fee','مبلغ قطعی تومان','number'],['maxItems','حداکثر تعداد کالا','number'],['maxGoodsTomans','حداکثر ارزش کالا، تومان','number']]){
+  for(const[name,label,type]of [['province','استان','select'],['city','شهر؛ * یعنی همه شهرهای استان','text'],['fee','مبلغ قطعی تومان','number'],['maxItems','حداکثر تعداد کالا','number'],['maxGoodsTomans','حداکثر ارزش کالا، تومان','number'],['minGrams','حداقل وزن بسته، گرم','number'],['maxGrams','حداکثر وزن بسته، گرم','number'],['maxLengthMm','حداکثر طول، میلی‌متر','number'],['maxWidthMm','حداکثر عرض، میلی‌متر','number'],['maxHeightMm','حداکثر ارتفاع، میلی‌متر','number']]){
     const box=el('label',label),field=el(type==='select'?'select':'input');field.dataset.field=name;field.required=true;
     if(type==='select')for(const p of shippingProvinces){const o=el('option',p);o.value=p;field.append(o);}
     else{field.type=type;if(type==='number'){field.min='1';field.max=name==='maxItems'?'100':'2147483647';field.step='1';}else field.maxLength=80;}
@@ -1242,7 +1242,7 @@ async function loadShippingSettings(){
     const data=await api('/api/checkout/shipping/tariff');if(!Array.isArray(data.provinces))return;
     shippingProvinces=data.provinces;const t=data.tariff;shippingRevision=t?.id||null;
     form.elements.originProvince.replaceChildren(...shippingProvinces.map(p=>{const o=el('option',p);o.value=p;return o;}));
-    for(const name of ['source','carrier','originProvince','originCity'])form.elements[name].value=t?.[name]||'';
+    for(const name of ['source','carrier','originProvince','originCity'])form.elements[name].value=t?.[name]||({carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج'}[name]||'');
     const localDate=v=>{const d=new Date(v);return new Date(+d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
     form.elements.validFrom.value=localDate(t?.validFrom||Date.now());form.elements.validUntil.value=t?localDate(t.validUntil):'';
     form.elements.allInclusive.checked=false;form.elements.merchantCoversDifference.checked=false;

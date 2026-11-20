@@ -27,6 +27,7 @@ function handle(action) {
   };
 }
 
+router.use('/logistics', require('./logistics'));
 router.use('/tracking', require('./order-tracking'));
 router.use('/card-transfer', require('./card-transfer'));
 

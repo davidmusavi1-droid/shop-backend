@@ -410,3 +410,45 @@ model OrderShippingSnapshot {
   details Json
   createdAt DateTime @default(now())
 }
+
+model ShippingOperations {
+ id String @id
+ settings Json
+}
+model ShippingMeasurement {
+ variantId String @id
+ grams Int
+ approvedAt DateTime
+}
+model ShippingPackingPlan {
+ id String @id
+ items Json
+ tareGrams Int
+ lengthMm Int
+ widthMm Int
+ heightMm Int
+ approvedAt DateTime
+}
+model CourierRequest {
+ id String @id
+ requestKey String @unique
+ requestHash String
+ tokenHash String
+ phoneHash String
+ clientHash String
+ payload Json
+ state String
+ revision Int @default(0)
+ offer Json?
+ orderId String? @unique
+ createdAt DateTime @default(now())
+ expiresAt DateTime
+ @@index([phoneHash, createdAt])
+}
+model CourierOffer {
+ requestId String
+ revision Int
+ details Json
+ createdAt DateTime @default(now())
+ @@id([requestId, revision])
+}
