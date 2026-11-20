@@ -2,7 +2,7 @@ name: Zibal retry checks
 on:
   pull_request:
     branches: [main]
-    paths: ['src/lib/*retry*', 'src/routes/payment.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
+    paths: ['src/lib/*retry*', 'src/lib/zibal-live.js', 'src/lib/checkout-access.js', 'src/lib/payment-result.js', 'src/routes/checkout.js', 'src/routes/payment.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
 permissions:
   contents: read
 jobs:
@@ -41,3 +41,6 @@ jobs:
       - run: node test/zibal-retry-postgres.cjs
       - name: Status-2 callback regression (Express and isolated PostgreSQL)
         run: node test/zibal-retry-status2-postgres.cjs
+
+      - name: Public checkout access and final inquiry (isolated only)
+        run: node test/zibal-retry-public-postgres.cjs

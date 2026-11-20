@@ -2,10 +2,12 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const requireAdmin = require('../middleware/requireAdmin');
 const checkout = require('../lib/checkout');
+const { publicCheckout } = require('../lib/checkout-access');
 const router = express.Router();
 
 router.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
+  if (publicCheckout()) return next();
   if (process.env.MOTIF_CHECKOUT_PREVIEW !== 'true') return res.sendStatus(404);
   if (process.env.NODE_ENV !== 'test') return requireAdmin(req, res, next);
   next();

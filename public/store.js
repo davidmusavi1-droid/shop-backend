@@ -189,9 +189,9 @@ $('guestCheckout').addEventListener('submit', async event => {
   if (button.disabled) return;
   const items = cart.map(({ variantId, quantity }) => ({ variantId, quantity }));
   const body = JSON.stringify({ items, customer: Object.fromEntries(new FormData(form)) });
-  if (checkoutRequest?.body !== body) checkoutRequest = { body, key: crypto.randomUUID() };
   button.disabled = true;
   try {
+    checkoutRequest = await MotifCheckoutState.request(body, sessionStorage);
     const response = await checkoutWrite('/api/checkout/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': checkoutRequest.key }, body,
     });
@@ -207,8 +207,9 @@ $('guestCheckout').addEventListener('submit', async event => {
     try { sessionStorage.setItem('motif-card-order', JSON.stringify(cardOrder)); } catch {}
     void showCardReceipt(cardOrder);
     void showOnlinePayment(cardOrder);
+    MotifCheckoutState.complete(sessionStorage);
     checkoutRequest = undefined;
-    $('checkoutMessage').textContent = 'شماره سفارش آزمایشی ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
+    $('checkoutMessage').textContent = 'شماره سفارش ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
     if (location.pathname === '/cart') await renderCart();
   } catch (error) {
     $('checkoutMessage').textContent = error.message;

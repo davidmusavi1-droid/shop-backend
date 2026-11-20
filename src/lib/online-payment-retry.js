@@ -191,13 +191,9 @@ function createRetryPayment(prisma, gateway, options = {}) {
       if (state === 'REVIEW' || state === 'UNKNOWN') return pending('PAYMENT_REVIEW');
       if (state === 'OPEN') {
         const response = await invoke(attempt, 'verify');
-        if (response?.result === 100 && response.status === 1 && response.amount === toRials(current.amount)) {
-          return settle(current, attempt);
-        }
-        if (response?.result === 201) {
-          // 201 is never success by itself, even on a repeated callback.
-          if (await inspect(current, attempt) === 'PAID') return { status: 'PAID' };
-        }
+        // Public payments always require a fresh, amount-matched status-1
+        // inquiry, including a success or lost response from verify.
+        if (await inspect(current, attempt) === 'PAID') return { status: 'PAID' };
         if (response?.result === 201 || response?.result === 100 && [1, 2].includes(response.status)) {
           await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });
         }
