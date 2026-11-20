@@ -39,3 +39,5 @@ jobs:
           npx prisma db execute --file db/add-zibal-retries.sql --schema prisma/schema.prisma
       - run: node --test test/zibal-retry-policy.test.js
       - run: node test/zibal-retry-postgres.cjs
+      - name: Status-2 callback regression (Express and isolated PostgreSQL)
+        run: node test/zibal-retry-status2-postgres.cjs
