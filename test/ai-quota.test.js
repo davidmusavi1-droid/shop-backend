@@ -11,7 +11,7 @@ function fixture() {
   const row = { id:'run', operation:'analyze', scope:'same-scope', status:'pending', usage:null };
   const db = {smartAiRun:{updateMany:async ({where,data})=>{
     const matches = typeof where.status==='string' ? row.status===where.status : where.status.in.includes(row.status);
-    if(where.id!==row.id||!matches)return {count:0}; Object.assign(row,data); return {count:1};
+    if(where.id!==row.id||!matches||(where.usage&&!require('node:util').isDeepStrictEqual(row.usage,where.usage.equals)))return {count:0}; Object.assign(row,data); return {count:1};
   }}};
   const track = lifecycle(db,row.id,row.scope,{estimateToman:1000});row.usage=track.reservationUsage;
   return {row,track};
@@ -104,3 +104,5 @@ test('an unreported currency is distinct from an explicitly reported zero cost',
   const zero=budget.summarize([{operation:'analyze',status:'completed',usage:{estimateToman:1000,costUsd:0}}],cfg);
   assert.deepEqual(zero.reportedCostCounts,{usd:1,toman:0});assert.equal(zero.reportedUsd,0);assert.equal(zero.reservedToman,1000);
 });
+
+test('the durable dispatch boundary cannot be crossed twice',async()=>{const {track}=fixture();await track.beforeSend();await assert.rejects(()=>track.beforeSend(),/only begin once/);});

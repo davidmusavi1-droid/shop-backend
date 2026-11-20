@@ -1,6 +1,6 @@
 # Stage-aware MOTIF AI quota
 
-This change is not production activation. No schema changes or migration are needed; lifecycle evidence lives in existing SmartAiRun usage JSON and status text. Keep current production flags and quota unchanged until this PR is approved and deployed.
+This change is not production activation. No schema changes or migration are needed; lifecycle evidence lives in existing SmartAiRun usage JSON. Database statuses stay pending/completed/failed, preserving the existing status constraint; lifecycle phases distinguish dispatching, released and unknown. Keep current production flags and quota unchanged until this PR is approved and deployed.
 
 ## Accounting
 

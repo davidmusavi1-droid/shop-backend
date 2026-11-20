@@ -5,6 +5,7 @@ function lifecycle(db, id, scope, reservationUsage = {}) {
   const usage = extra => ({ ...reservationUsage, ...extra, lifecycle: { ...state } });
   return {
     async beforeSend() {
+      if (state.phase !== 'reserved') throw new Error('AI dispatch can only begin once');
       const reservationUsageWithPhase = usage();
       state = { ...state, phase: 'dispatching', dispatchedAt: new Date().toISOString() };
       const changed = await db.smartAiRun.updateMany({ where: { id, status: 'pending', usage: { equals: reservationUsageWithPhase } },
