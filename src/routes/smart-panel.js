@@ -12,6 +12,7 @@ const { approvedSections, reviewedFabric } = require('../lib/smart-panel/store')
 const { mapType, mapFabric } = require('../lib/smart-panel/suggestion-options');
 const { checkCode } = require('../lib/motif-code');
 const budget = require('../lib/smart-panel/ai-budget');
+const { lifecycle, releaseStaleUnsent } = require('../lib/smart-panel/ai-lifecycle');
 const { providerFor } = require('../lib/smart-panel/providers');
 const { checkResearchSubject, mockFinding, brandResearchState, sameSubject,
   displayResearch, researchAction, changeDraft } = require('../lib/smart-panel/brand-research');
@@ -118,7 +119,7 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
   router.get('/store/status', (req, res, next) => store ? res.json({ enabled: true }) : next(notFound()));
   const usageToday = async tx => budget.summarize(await tx.smartAiRun.findMany({
     where: { at: { gte: budget.utcDay() } }, select: { operation: true, usage: true, status: true },
-  }), c2 || { dailyLimit: Number(process.env.MOTIF_C22_DAILY_LIMIT) || 0, ...budget.budgetConfig(process.env) });
+  }), c2 || { dailyLimit: Math.min(Number(process.env.MOTIF_C22_DAILY_LIMIT) || 0, 20), ...budget.budgetConfig(process.env) });
   router.get('/ai/usage', wrap(async (req, res) => res.json(await usageToday(db))));
   router.get('/dossiers/:id/ai/quote', wrap(async (req, res) => {
     if (!store || !['analyze', 'research'].includes(req.query.operation)) throw notFound();
@@ -590,38 +591,43 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
       ? row.id + ':' + digest(JSON.stringify([row.payload.brand, row.payload.styleNumber || '', row.payload.researchSubjectRevision]))
       : analysisScope(row);
 
-
-    await db.$transaction(async tx => {
-      if (store) {
-        await tx.$queryRaw`SELECT pg_advisory_xact_lock(22022)::text AS locked`;
-        const day = new Date();
-        day.setUTCHours(0, 0, 0, 0);
-        if (await tx.smartAiRun.count({ where: { at: { gte: day } } }) >= c2.dailyLimit) {
-          throw V.fail(429, 'AI_DAILY_LIMIT', 'سقف روزانهٔ اجرای هوش مصنوعی پر شده است.');
-        }
-        const usage = await usageToday(tx);
-        if (usage.reservedUsd + estimate.estimateUsd > c2.dailyBudgetUsd + 1e-9) {
-          throw V.fail(429, 'AI_DAILY_LIMIT', 'سقف بودجهٔ برآوردی امروز پر شده است.');
-        }
-      }
-      await lockRevision(tx, row.id, version);
-      // Reserve before sending. A restart, timeout or duplicate cannot repeat the paid operation.
-      const inserted = await tx.smartAiRun.createMany({
-        data: { id, operation, scope, model, dossierId: row.id, version, status: 'pending',
-          ...(estimate && { usage: { estimateUsd: estimate.estimateUsd } }) }, skipDuplicates: true,
-      });
-      if (!inserted.count) throw V.fail(409, 'AI_ALREADY_ATTEMPTED', 'سهم این عملیات قبلاً استفاده شده است. گزارش اجرا را بررسی کنید.');
-    });
-
-    let outcome;
+    const reservationUsage = estimate ? { estimateUsd: estimate.estimateUsd, estimateToman: estimate.estimateToman } : {};
+    const tracked = lifecycle(db, id, scope, reservationUsage);
+    let cancelled = req.aborted || res.destroyed;
+    const cancel = () => { cancelled = true; };
+    const closed = () => { if (!res.writableEnded) cancel(); };
+    req.once('aborted', cancel); res.once('close', closed);
+    const cleanup = () => { req.off('aborted', cancel); res.off('close', closed); };
+    let outcome, providerInvoked = false;
+    if (cancelled) { cleanup(); throw V.fail(409, 'AI_CANCELLED_BEFORE_SEND', 'درخواست پیش از رزرو لغو شد.'); }
     try {
+
+      await db.$transaction(async tx => {
+        if (store) {
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock(22022)::text AS locked`;
+          await releaseStaleUnsent(tx);
+        budget.verifyQuote(req.body.quote, row, operation, c2);
+          budget.checkCapacity(await usageToday(tx), c2, operation);
+        }
+        await lockRevision(tx, row.id, version);
+        // Reserve before sending. A restart, timeout or duplicate cannot repeat the paid operation.
+        const inserted = await tx.smartAiRun.createMany({
+          data: { id, operation, scope, model, dossierId: row.id, version, status: 'pending',
+            usage: tracked.reservationUsage }, skipDuplicates: true,
+        });
+        if (!inserted.count) throw V.fail(409, 'AI_ALREADY_ATTEMPTED', 'سهم این عملیات قبلاً استفاده شده است. گزارش اجرا را بررسی کنید.');
+      });
+
       checkPilotWindow();
       const recordResponse = store ? undefined : rawResponse => db.smartAiRun.update({
         where: { id }, data: { rawResponse }, select: { id: true },
       });
+      const hooks = { beforeSend: tracked.beforeSend, isCancelled: () => cancelled };
+      if (cancelled) throw V.fail(409, 'AI_CANCELLED_BEFORE_SEND', 'درخواست پیش از ارسال لغو شد.');
+      providerInvoked = true;
       outcome = research ? await c2.provider.research({
         brand: row.payload.brand, styleNumber: row.payload.styleNumber || '',
-      }, recordResponse) : await c2.provider.analyze(images, recordResponse);
+      }, recordResponse, hooks) : await c2.provider.analyze(images, recordResponse, hooks);
       await mutate(req, version, research ? 'brand_research_completed' : 'ai_c2_analyzed', currentRow => {
         const field = research
           ? { research: { ...brandResearchState(currentRow.payload, outcome.result, researchMode, id), usage: outcome.usage } }
@@ -629,20 +635,17 @@ function createRouter(db, { storageDir, c2, store = false, storage }) {
         return {
           data: { payload: { ...currentRow.payload, ...field } },
           after: tx => tx.smartAiRun.update({ where: { id }, data: {
-            status: 'completed', result: outcome.result, usage: { ...outcome.usage, ...(estimate && { estimateUsd: estimate.estimateUsd }) },
+            status: 'completed', result: outcome.result, usage: tracked.completed(outcome.usage),
           } }),
         };
       });
+      res.json({ run: await db.smartAiRun.findUniqueOrThrow({ where: { id }, select: c2RunSelect }),
+        dossier: serialize(await current(db, row.id)) });
     } catch (error) {
-      // If the transaction outcome is uncertain, only transition an unfinished reservation.
-      await db.smartAiRun.updateMany({ where: { id, status: 'pending' }, data: {
-        status: 'failed', errorCode: error.code || 'AI_UNKNOWN',
-        ...(outcome?.usage || error.usage ? { usage: { ...(outcome?.usage || error.usage), ...(estimate && { estimateUsd: estimate.estimateUsd }) } } : {}),
-      } });
+      // Never free a possibly sent request, including timeout/network/persistence failures.
+      await tracked.failed(error, { providerInvoked, outcome });
       throw error;
-    }
-    res.json({ run: await db.smartAiRun.findUniqueOrThrow({ where: { id }, select: c2RunSelect }),
-      dossier: serialize(await current(db, row.id)) });
+    } finally { cleanup(); }
   }));
 
   router.post('/dossiers/:id/style-confirmation', wrap(async (req, res) => {

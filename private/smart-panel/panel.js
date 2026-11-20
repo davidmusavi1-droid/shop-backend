@@ -318,10 +318,17 @@ function analysis(p) {
     }).join("")+'</div>':"")+labelReview(p)+'</div>';
 }
 function usagePreview(u) {
-  return '<p>امروز (UTC): '+number(u.used)+' از '+number(u.dailyLimit)+' درخواست؛ باقی‌مانده: '+number(u.remaining)+
-    '</p><p>هزینهٔ گزارش‌شده: '+esc(u.reportedUsd)+' دلار / '+number(u.reportedToman)+' تومان؛ تعداد هزینه‌های نامشخص: '+number(u.unknownCosts)+
-    '</p><p>مصرف بودجهٔ برآوردی: '+esc(u.reservedUsd)+' از '+esc(u.dailyBudgetUsd??'تعیین نشده')+' دلار.</p>';
+  const c=u.statusCounts||{};
+  return '<p>امروز (UTC): سهمیهٔ درگیر '+number(u.used)+' از '+number(u.dailyLimit)+'؛ باقی‌مانده: '+number(u.remaining)+
+    '</p><p>آغازشده: '+number(c.started??u.used)+'؛ موفق: '+number(c.successful||0)+'؛ ناموفق قطعی: '+number(c.failed||0)+
+    '؛ نتیجهٔ نامشخص: '+number(c.unknown||0)+'؛ رزرو پیش از ارسال: '+number(c.reserved||0)+'؛ آزادشده پیش از ارسال: '+number(c.released||0)+
+    '</p><p>هزینهٔ واقعی گزارش‌شده: '+esc(u.reportedUsd)+' دلار / '+number(u.reportedToman)+' تومان؛ تعداد هزینه‌های نامشخص: '+number(u.unknownCosts)+
+    '</p><p>جمع برآورد درخواست‌های درگیر: '+number(u.estimatedToman||0)+' تومان / '+esc(u.estimatedUsd||0)+' دلار.'+
+    '</p><p>بودجهٔ درگیر (بیشترِ هزینهٔ گزارش‌شده یا برآورد): '+number(u.reservedToman||0)+' از '+number(u.dailyBudgetToman||0)+' تومان'+
+    (u.dailyBudgetUsd?'؛ '+esc(u.reservedUsd)+' از '+esc(u.dailyBudgetUsd)+' دلار':'')+
+    '.</p><p>رزرو فقط با اثبات عدم ارسال آزاد می‌شود. خطا و Timeout پس از ارسال، سهمیه را آزاد نمی‌کنند. تلاش مجدد خودکار وجود ندارد. سقف برآوردی پنل، سقف قطعی صورتحساب لیارا نیست.</p>';
 }
+
 const sourceStatus = {
   pending_source_review: "در انتظار بررسی منبع", manager_verified: "تأیید مدیر",
   rejected: "ادعا رد شد", no_source: "منبع معتبر یافت نشد", invalid_source: "منبع یا شاهد نامعتبر است",
@@ -753,7 +760,7 @@ document.addEventListener("click",e=>{
         const q=await requestPanel(dossierPath(p)+'/ai/quote?operation='+operation);
         const subject=operation==='analyze'?'چهار تصویر اولِ بدون گروه ایراد':'برند ثبت‌شده و شمارهٔ لیبل، در صورت تأیید';
         dialog("تأیید مصرف AI",'<p>این عملیات دقیقاً یک درخواست '+(operation==='analyze'?'Gemini':'Sonar')+' ارسال می‌کند.</p>'+
-          '<p>ورودی: '+subject+'</p><p>برآورد این درخواست: '+esc(q.estimateUsd)+' دلار. هزینهٔ واقعی ممکن است متفاوت باشد؛ تلاش مجدد خودکار انجام نمی‌شود.</p>'+
+          '<p>ورودی: '+subject+'</p><p>برآورد این درخواست: '+(q.estimateToman?number(q.estimateToman)+' تومان':esc(q.estimateUsd)+' دلار')+'. هزینهٔ واقعی ممکن است متفاوت باشد؛ تلاش مجدد خودکار انجام نمی‌شود.</p>'+
           usagePreview(q.usage),()=>withAction(async()=>{
             const response=await requestPanel(dossierPath(p)+'/ai/c2/'+operation,'POST',{
               version:p.version,quote:q.token,...(operation==='research'?{mode:'live',labelConfirmed:true}:{})});
