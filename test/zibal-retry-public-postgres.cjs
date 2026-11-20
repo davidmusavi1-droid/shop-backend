@@ -130,9 +130,9 @@ async function run() {
         const page = await context.newPage(); const origin = 'http://127.0.0.1:' + server.address().port;
         // Fail closed on every outside request, including payment redirects.
         await page.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
-        await page.goto(origin + '/cart');
-        await page.evaluate(value => localStorage.setItem('motif-cart', JSON.stringify(value)), [{ productId: item.id, variantId: item.variants[0].id, quantity: 1 }]);
-        await page.reload(); await page.locator('#guestCheckout').waitFor({ state: 'visible' });
+        // Seed before application startup; a late fixture write can race init/saveCart.
+        await page.addInitScript(value => localStorage.setItem('motif-cart', JSON.stringify(value)), [{ productId: item.id, variantId: item.variants[0].id, quantity: 1 }]);
+        await page.goto(origin + '/cart'); await page.locator('#guestCheckout').waitFor({ state: 'visible' });
         for (const [name, value] of Object.entries({ fullName: 'Synthetic browser', phone: '09000000002', province: 'تهران', city: 'تهران', address: 'Not a shipping address', postalCode: '0000000000' })) {
           if(name==='province')await page.locator('#guestCheckout [name="province"]').selectOption(value);
           else await page.locator('#guestCheckout [name="' + name + '"]').fill(value);
