@@ -5,7 +5,6 @@ const { TTL, WINDOW, MAX_ATTEMPTS, evidence, auditResponse } = require('./zibal-
 
 function createRetryPayment(prisma, gateway, options = {}) {
   const now = options.now || (() => new Date());
-  const status11Final = options.status11Final === true;
   const pending = code => ({ status: 'PENDING', code });
   const attempts = paymentId => prisma.zibalPaymentAttempt.findMany({
     where: { paymentId }, orderBy: { sequence: 'asc' },
@@ -83,7 +82,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
   async function inspect(payment, attempt) {
     if (!attempt.trackId) return 'UNKNOWN';
     const response = await invoke(attempt, 'inquiry');
-    const state = evidence(response, toRials(payment.amount), attempt.issuedAt, now(), status11Final);
+    const state = evidence(response, toRials(payment.amount), attempt.issuedAt, now());
     if (state === 'UNKNOWN' && response?.result === 100 &&
         ([1, 2].includes(response.status) || response.paidAt || response.verifiedAt || response.refNumber)) {
       await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });

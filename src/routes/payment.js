@@ -46,9 +46,8 @@ router.use((req, res, next) => {
   res.locals.sandbox = sandbox;
   res.locals.retryEnabled = process.env.MOTIF_ZIBAL_RETRY_ENABLED === 'true';
   res.locals.payment = res.locals.retryEnabled
-    ? createRetryPayment(prisma, mock ? gateway : (live || sandbox).gateway, {
-      status11Final: process.env.MOTIF_ZIBAL_STATUS11_FINALITY_APPROVED === 'true',
-    }) : mock ? mockPayment : createOnlinePayment(prisma, (live || sandbox).gateway);
+    ? createRetryPayment(prisma, mock ? gateway : (live || sandbox).gateway)
+    : mock ? mockPayment : createOnlinePayment(prisma, (live || sandbox).gateway);
   next();
 });
 const handle = action => async (req, res) => {

@@ -8,7 +8,7 @@ verifiedAt null. Local order PENDING, payment unsuccessful, reserved variant
 stock 0. Provider was `disabled` on v37. No production data or settings were
 changed for this work. Do not publish the merchant or customer records.
 
-## Contract and deliberate blocker
+## Confirmed contract
 
 Official API: https://help.zibal.ir/ipg/#tag/استعلام-پرداخت
 
@@ -21,12 +21,17 @@ release after that time ONLY with a valid pending (-1) inquiry, inquiry amount
 always returned, and verify 201 requiring inquiry confirmation. Existing rial
 conversion and amount equality checks are retained.
 
-**No cited source establishes that status 11 can never settle later.** Therefore
-`MOTIF_ZIBAL_STATUS11_FINALITY_APPROVED` defaults off. Do not set it in production
-without a written Zibal guarantee that an expired track with result 100/status 11,
-matching amount and null paidAt/verifiedAt cannot subsequently become paid.
-The PostgreSQL Mock tests explicitly assume that guarantee only for the fixture.
-Until then, real status-11 retry is intentionally blocked, including this pilot.
+On 2026-11-20 the owner supplied a further official support reply: a transaction
+cannot become successful after 30 minutes unless its status is already 1 or 2;
+the previous transaction's information may be used to request a new trackId.
+This resolves the status-11 finality blocker. No ticket identifier was supplied.
+The policy now permits status 11 only after the full 30-minute track lifetime,
+fresh result 100, an exactly matching integer rial amount, explicit null paidAt
+and verifiedAt and no reference/payment evidence. Statuses 1 and 2 remain blocked
+from retry. Unknown/error/missing/inconsistent responses remain blocked.
+No extra finality environment override is needed. The entire retry engine still
+defaults OFF behind `MOTIF_ZIBAL_RETRY_ENABLED`; this support reply authorizes no
+production activation, deployment, migration or financial transaction.
 
 ## Storage, locking and reservation rules
 
@@ -44,8 +49,8 @@ Until then, real status-11 retry is intentionally blocked, including this pilot.
   amount mismatch, invalid, transport error and missing amount block retry.
 - Existing pending (-1) can be reused before 30 minutes; after 30 minutes valid
   pending evidence can permit a new track while retaining the same stock hold.
-- Status 11 additionally requires the explicit finality approval above AND a full
-  30 minutes since issue AND explicit null payment timestamps. No early retry.
+- Status 11 requires a full 30 minutes since issue AND explicit null payment
+  timestamps under the support-confirmed finality contract. No early retry.
 - Maximum THREE tracks; a new request must start at least 30 minutes before the
   original order's 90-minute deadline. A successful request sets reservation to
   30 minutes from its issue, without deducting stock again. Unknown requests retain
@@ -60,8 +65,8 @@ Until then, real status-11 retry is intentionally blocked, including this pilot.
 
 ## Controlled deployment proposal — requires separate owner approval
 
-1. Review this Draft PR and targeted PostgreSQL 18.4 results. Obtain status-11
-   finality confirmation. No real request is allowed during preparation.
+1. Review this Draft PR and targeted PostgreSQL 18.4 results. The status-11
+   finality contract is confirmed above. No real request is allowed during preparation.
 2. Keep live provider disabled and public purchase admin-only. Obtain a fresh
    recoverable backup, then separately approve/run `db/add-zibal-retries.sql`.
    It is never in application startup or automatic production migrations.
@@ -80,6 +85,11 @@ Until then, real status-11 retry is intentionally blocked, including this pilot.
 ## Safe return to v37
 
 v37 is code c503c516bf12ca908d1082d6820663ab14c5a14a with provider disabled.
+This is a historical fallback, not an automatic downgrade target. Main advanced
+to beca45c7efa4655099e5684584f4e8ff21524679 after PR30; before any future release
+capture the actual healthy Liara deployment and its settings as the rollback
+target so that newer store/AI changes are preserved. A downgrade to v37 requires
+separate approval and evaluation of those newer changes.
 Liara code rollback does NOT restore environment values. Disable live explicitly,
 do not change any original variables, and roll back code only. Never drop the
 new tables, erase tracks, release inventory manually or restore a backup over live

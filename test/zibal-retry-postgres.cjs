@@ -32,7 +32,7 @@ const gateway = {
   },
   redirect: id => '/mock/' + id,
 };
-const options = { now: () => new Date(time), status11Final: true }; // Mock-only terminality assumption.
+const options = { now: () => new Date(time) }; // Same confirmed contract as the opt-in live retry engine.
 const service = () => createRetryPayment(p, gateway, options);
 async function fixture(legacy = false) {
   time = Date.now();
@@ -53,14 +53,14 @@ const failed = id => responses.set(id, { result: 100, status: 11, amount: 100000
 async function run() {
   await p.shippingSettings.create({ data: { id: 'default', fee: 0 } });
   const f = await fixture();
-  failed(f.first); time += TTL;
-  const closedPolicy = createRetryPayment(p, gateway, { now: options.now });
+  failed(f.first); time += TTL - 1;
   const before = requests;
-  assert.equal((await closedPolicy.start(f.orderId, f.key)).code, 'RETRY_NOT_PROVEN_SAFE');
+  assert.equal((await service().start(f.orderId, f.key)).code, 'RETRY_NOT_PROVEN_SAFE');
   assert.equal(requests, before);
   assert.equal(await stock(f), 0);
-  console.log('PASS production-default status 11 blocks retry and preserves stock');
+  console.log('PASS status 11 before full 30-minute expiry blocks retry and preserves stock');
 
+  time += 1;
   const second = await service().start(f.orderId, f.key);
   assert.equal(second.status, 'OPEN');
   const secondId = second.url.split('/').pop();
