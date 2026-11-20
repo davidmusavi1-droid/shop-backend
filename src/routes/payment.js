@@ -103,8 +103,12 @@ async function pilotOrder(orderId, key, live) {
   if ((live.orderId && orderId !== live.orderId) || typeof key !== 'string' || !/^[0-9a-f-]{36}$/.test(key)) return false;
   const order = await prisma.checkoutReservation.findFirst({
     where: { orderId, requestKey: key, order: { totalPrice: { gt: 0, lte: live.maxTomans } } },
-    select: { orderId: true },
+    select: { orderId: true, shippingFee: true, order: { select: { totalPrice: true } } },
   });
+  if (order && live.public) {
+    const snapshot = await prisma.orderShippingSnapshot.findUnique({ where: { orderId } });
+    return Boolean(snapshot && snapshot.fee === order.shippingFee && snapshot.details.totalPrice === order.order.totalPrice);
+  }
   return Boolean(order);
 }
 

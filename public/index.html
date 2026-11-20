@@ -37,14 +37,14 @@
   <div class="two-fields">
     <label>نام و نام خانوادگی<input name="fullName" autocomplete="name" required maxlength="120"></label>
     <label>موبایل<input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required maxlength="11"></label>
-    <label>استان<input name="province" autocomplete="address-level1" required maxlength="80"></label>
-    <label>شهر<input name="city" autocomplete="address-level2" required maxlength="80"></label>
+    <label>استان<select name="province" autocomplete="address-level1" required><option value="">استان را انتخاب کنید</option></select></label>
+    <label>شهر<input name="city" list="checkoutCities" autocomplete="address-level2" required maxlength="80" placeholder="شهر را انتخاب یا وارد کنید"><datalist id="checkoutCities"></datalist></label>
     <label>کد پستی<input name="postalCode" inputmode="numeric" autocomplete="postal-code" required maxlength="10"></label>
     <label>آدرس کامل<input name="address" autocomplete="street-address" required maxlength="500"></label>
   </div>
-  <p id="checkoutShipping"></p>
+  <p id="checkoutShipping" role="status" aria-live="polite"></p><button id="quoteShipping" type="button" hidden>محاسبه هزینه ارسال</button>
   <button class="primary">ثبت سفارش آزمایشی</button>
 </form><p class="notice">پرداخت آنلاین هنوز فعال نشده است. افزودن به این سبد، کالا را رزرو نمی‌کند.</p><a class="button" href="/collection">ادامهٔ انتخاب</a></section>
 <section id="contact" class="section" hidden><h1>ارتباط با MOTIF</h1><p>ما را دنبال کن یا از راه‌های ارتباطی زیر پیام بده.</p><div id="contactSocials" class="socials"></div><p id="contactEmpty" hidden>راه‌های ارتباطی به‌زودی اینجا ثبت می‌شوند.</p></section>
 </div><!--SERVER_CONTENT--></main><footer class="wrap"><a class="logo" href="/" dir="ltr">MOTIF<span>.</span></a><a href="/contact">تماس با ما</a><div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div></footer>
-<!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/checkout-state.js?v=20261120"></script><script src="/store.js?v=20261120-public-ready"></script></body></html>
+<!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/checkout-state.js?v=20261120"></script><script src="/store.js?v=20261120-destination-shipping"></script></body></html>

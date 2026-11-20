@@ -1,4 +1,5 @@
 const { createHash } = require('node:crypto');
+const destinationShipping = require('./destination-shipping');
 
 const MAX_AMOUNT = 2147483647;
 const RESERVATION_MS = 30 * 60 * 1000;
@@ -39,8 +40,12 @@ function checkoutInput(body, requestKey) {
     quantities.set(line.variantId, quantity);
   }
   const items = [...quantities.keys()].sort().map(variantId => ({ variantId, quantity: quantities.get(variantId) }));
-  const requestHash = createHash('sha256').update(JSON.stringify({ customer, items })).digest('hex');
-  return { customer, items, requestKey: requestKey.toLowerCase(), requestHash };
+  const shippingAcceptance = body.shippingAcceptance;
+  if (shippingAcceptance && (typeof shippingAcceptance.tariffId !== 'string' ||
+      !Number.isInteger(shippingAcceptance.shippingFee) || !Number.isInteger(shippingAcceptance.totalPrice))) throw fail(400,'تأیید مبلغ ارسال نامعتبر است');
+  const agreement = shippingAcceptance ? { shippingAcceptance: { tariffId: shippingAcceptance.tariffId, shippingFee: shippingAcceptance.shippingFee, totalPrice: shippingAcceptance.totalPrice } } : {};
+  const requestHash = createHash('sha256').update(JSON.stringify({ customer, items, ...agreement })).digest('hex');
+  return { customer, items, ...agreement, requestKey: requestKey.toLowerCase(), requestHash };
 }
 
 function orderTotal(fee, items) {
@@ -74,7 +79,7 @@ async function reserve(prisma, input) {
     return await prisma.$transaction(async tx => {
       const saved = await tx.checkoutReservation.findUnique({ where, include });
       if (saved) return receipt(saved, input.requestHash);
-      const shipping = await tx.shippingSettings.findUnique({ where: { id: SHIPPING_ID } });
+      const shipping = destinationShipping.required() ? { fee: 0 } : await tx.shippingSettings.findUnique({ where: { id: SHIPPING_ID } });
       if (!shipping) throw fail(503, 'تعرفه ارسال هنوز تنظیم نشده است');
 
       const dbCustomer = await tx.customer.upsert({
@@ -106,11 +111,20 @@ async function reserve(prisma, input) {
         if (reserved.count !== 1) throw fail(409, 'موجودی کافی نیست');
         items.push({ ...item, productId: variant.productId, unitPrice: variant.product.basePrice + variant.priceDelta });
       }
+      let shippingQuote;
+      if (destinationShipping.required()) {
+        shippingQuote = await destinationShipping.quote(tx, input.customer, items);
+        destinationShipping.accepted(input, shippingQuote);
+        shipping.fee = shippingQuote.shippingFee;
+      }
       const totalPrice = orderTotal(shipping.fee, items);
+      if (shippingQuote) await tx.orderShippingSnapshot.create({ data: {
+        orderId: order.id, tariffId: shippingQuote.tariffId, fee: shippingQuote.shippingFee, details: shippingQuote.details,
+      } });
       const paidAmount = await tx.order.update({ where: { id: order.id }, data: { totalPrice, items: { create: items } } });
       const savedReservation = await tx.checkoutReservation.update({
         where: { orderId: order.id },
-        data: { expiresAt: new Date(Date.now() + RESERVATION_MS) },
+        data: { shippingFee: shipping.fee, expiresAt: new Date(Date.now() + RESERVATION_MS) },
       });
       return receipt({ ...savedReservation, order: paidAmount }, input.requestHash);
     });

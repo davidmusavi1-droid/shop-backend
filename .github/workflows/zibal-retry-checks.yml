@@ -2,7 +2,7 @@ name: Zibal retry checks
 on:
   pull_request:
     branches: [main]
-    paths: ['src/lib/*retry*', 'src/lib/zibal-live.js', 'src/lib/checkout-access.js', 'src/lib/payment-result.js', 'src/routes/checkout.js', 'src/routes/payment.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
+    paths: ['src/lib/*retry*', 'src/lib/zibal-live.js', 'src/lib/checkout-access.js', 'src/lib/payment-result.js', 'src/routes/checkout.js', 'src/routes/payment.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'db/add-destination-shipping.sql', 'src/lib/destination-shipping.js', 'test/destination-shipping*', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
 permissions:
   contents: read
 jobs:
@@ -45,6 +45,12 @@ jobs:
       - run: npm install --no-save --no-package-lock playwright@1.56.1
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      - name: Install isolated destination shipping schema
+        run: |
+          npx prisma db execute --file db/add-destination-shipping.sql --schema prisma/schema.prisma
+          npx prisma db execute --file db/add-destination-shipping.sql --schema prisma/schema.prisma
+      - run: node --test test/destination-shipping.test.js
+      - run: node test/destination-shipping-postgres.cjs
       - name: Public checkout access and final inquiry (isolated only)
         run: node test/zibal-retry-public-postgres.cjs
         env:

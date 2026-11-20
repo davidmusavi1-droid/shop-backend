@@ -31,6 +31,11 @@ async function run() {
   assert.equal(config.public, true); assert.equal(config.orderId, null);
   assert.equal(configureLiveZibal({ ...process.env, MOTIF_ZIBAL_MODE: 'pilot' }), null);
   assert.equal(configureLiveZibal({ ...process.env, MOTIF_ZIBAL_RETRY_ENABLED: 'false' }), null);
+  const shipping = require('../src/lib/destination-shipping');
+  const tariff = await shipping.publish(p, { expectedTariffId: (await p.shippingTariffState.findUnique({where:{id:'default'}}))?.activeTariffId || null,
+    source:'Synthetic fixture only; not a real carrier tariff',carrier:'Synthetic',originProvince:'تهران',originCity:'تهران',
+    validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),allInclusive:true,merchantCoversDifference:true,
+    rules:shipping.provinces.map(province=>({province,city:'*',fee:2500,maxItems:100,maxGoodsTomans:2147483647})) });
   await p.shippingSettings.upsert({ where: { id: 'default' }, create: { id: 'default', fee: 2500 }, update: { fee: 2500 } });
   const product = await p.product.create({ data: { title: 'Public fixture only', basePrice: 10000,
     images: [], customerNeeds: [], styles: [], variants: { create: { size: 'T', color: 'test', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
@@ -45,7 +50,7 @@ async function run() {
   assert.equal((await request('/api/checkout/card-transfer/orders')).status, 401);
   console.log('PASS public customer routes open only with explicit flags; admin settings/orders remain protected');
   const key = randomUUID(), payload = JSON.stringify({ items: [{ variantId: product.variants[0].id, quantity: 1 }],
-    customer: { fullName: 'Synthetic public guest', phone: '09000000001', address: 'Not a real address', province: 'Fixture', city: 'Fixture', postalCode: '0000000000' }, totalPrice: 1 });
+    customer: { fullName: 'Synthetic public guest', phone: '09000000001', address: 'Not a real address', province: 'تهران', city: 'تهران', postalCode: '0000000000' }, shippingAcceptance: {tariffId:tariff.id,shippingFee:2500,totalPrice:12500}, totalPrice: 1 });
   const options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: payload };
   let r = await request('/api/checkout/orders', options); assert.equal(r.status, 201); const order = await r.json();
   assert.equal(order.totalPrice, 12500); assert.equal(order.shippingFee, 2500);
@@ -128,13 +133,17 @@ async function run() {
         await page.goto(origin + '/cart');
         await page.evaluate(value => localStorage.setItem('motif-cart', JSON.stringify(value)), [{ productId: item.id, variantId: item.variants[0].id, quantity: 1 }]);
         await page.reload(); await page.locator('#guestCheckout').waitFor({ state: 'visible' });
-        assert.ok((await page.locator('#checkoutShipping').innerText()).includes('۱۲٬۵۰۰'));
-        for (const [name, value] of Object.entries({ fullName: 'Synthetic browser', phone: '09000000002', province: 'Fixture', city: 'Fixture', address: 'Not a shipping address', postalCode: '0000000000' })) {
-          await page.locator('#guestCheckout [name="' + name + '"]').fill(value);
+        for (const [name, value] of Object.entries({ fullName: 'Synthetic browser', phone: '09000000002', province: 'تهران', city: 'تهران', address: 'Not a shipping address', postalCode: '0000000000' })) {
+          if(name==='province')await page.locator('#guestCheckout [name="province"]').selectOption(value);
+          else await page.locator('#guestCheckout [name="' + name + '"]').fill(value);
         }
+        assert.ok(await page.locator('#guestCheckout button.primary').isDisabled());
+        await page.locator('#quoteShipping').click();
+        await page.waitForFunction(()=>!document.querySelector('#guestCheckout button.primary').disabled);
+        assert.ok((await page.locator('#checkoutShipping').innerText()).includes('۱۲٬۵۰۰'));
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
         await page.screenshot({ path: 'artifacts/public-checkout-' + label + '-form.png', fullPage: true });
-        await page.locator('#guestCheckout button').click();
+        await page.locator('#guestCheckout button.primary').click();
         await page.waitForFunction(() => document.getElementById('checkoutMessage').textContent.includes('شماره سفارش '));
         await page.locator('#onlinePayment').waitFor({ state: 'visible' });
         assert.ok(!(await page.locator('#checkoutMessage').innerText()).includes('آزمایشی'));
