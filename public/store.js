@@ -156,16 +156,6 @@ if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))w
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
 
-async function checkoutWrite(url, options) {
-  const headers = new Headers(options.headers);
-  const session = await fetch('/api/admin/session', { cache: 'no-store', credentials: 'same-origin' });
-  if (session.ok) {
-    const state = await session.json();
-    if (typeof state.csrf === 'string') headers.set('X-Admin-CSRF', state.csrf);
-  }
-  return fetch(url, { ...options, headers, credentials: 'same-origin' });
-}
-
 let destinationCheckout = false, shippingQuote = null, destinationCities = {};
 function shippingPayload() { return JSON.stringify({ items: cart.map(({variantId,quantity})=>({variantId,quantity})), customer: Object.fromEntries(new FormData($('guestCheckout'))) }); }
 function invalidateShipping() {
@@ -192,6 +182,16 @@ $('quoteShipping').onclick = async () => {
     const submit=form.querySelector('button.primary');submit.disabled=false;submit.textContent='ثبت سفارش با مبلغ '+money(q.totalPrice);
   } catch(error) { invalidateShipping();$('checkoutShipping').textContent=error.message; } finally { button.disabled=false; }
 };
+async function checkoutWrite(url, options) {
+  const headers = new Headers(options.headers);
+  const session = await fetch('/api/admin/session', { cache: 'no-store', credentials: 'same-origin' });
+  if (session.ok) {
+    const state = await session.json();
+    if (typeof state.csrf === 'string') headers.set('X-Admin-CSRF', state.csrf);
+  }
+  return fetch(url, { ...options, headers, credentials: 'same-origin' });
+}
+
 async function showCheckout(ticket, total) {
   try {
     const response = await fetch('/api/checkout/shipping', { cache: 'no-store' });
