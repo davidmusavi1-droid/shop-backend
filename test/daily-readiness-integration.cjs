@@ -30,11 +30,14 @@ const storage = {
     uploads.set(url, { bytes: Buffer.from(bytes), ...options }); return { url };
   },
 };
-const cfg = { operations: ['analyze', 'research'], dailyLimit: 40, estimates: { analyze: 0.02, research: 0.03 },
+const cfg = { operations: ['analyze', 'research'], dailyLimit: 20, estimates: { analyze: 0.02, research: 0.03 },
+  estimatesToman:{analyze:1000,research:3000},dailyBudgetToman:40000,
   dailyBudgetUsd: 2, key: 'fixture-only-never-a-real-key', labelObservations: true, separateStyle: true,
   model: 'google/gemini-2.5-flash', researchModel: 'perplexity/sonar', endpoint: 'https://fixture.invalid/chat/completions' };
+let fault = null, cancelStarted, cancelGate;
 const provider = liaraProvider(cfg, { fetcher: async (url, options)=>{
   assert.equal(url, cfg.endpoint); paidCalls++;
+  if(fault==='timeout')throw new DOMException('fixture timeout','TimeoutError');
   const input=JSON.parse(options.body);
   const result=input.model===cfg.model ? {
     brand: { value:'PUMA',image:1,evidence:'PUMA sewn label' }, labelSize:null,
@@ -59,9 +62,10 @@ const edit=p=>({...p,variants:p.variants.map(v=>({...v,expectedStock:v.stock}))}
 async function main() {
   assert.equal((await db.$queryRaw`SELECT current_database() AS name`)[0].name,'motif_test');
   const app=express();app.use(express.json());app.use(express.static('public'));
+  app.use((req,res,next)=>{if(fault==='cancel'&&req.path.endsWith('/ai/c2/analyze'))res.once('close',()=>cancelGate.resolve());next();});
   app.use('/api/admin/session',require('../src/routes/admin-session')(requireAdmin.sessions));
   app.use('/smart-panel',assets(true));
-  app.use(base,requireAdmin,createRouter(db,{store:true,c2:{...cfg,provider},storage}));
+  app.use(base,requireAdmin,createRouter(db,{store:true,c2:{...cfg,provider:{...provider,analyze:async(images,record,hooks)=>{if(fault==='cancel'){cancelStarted.resolve();await cancelGate.promise;}return provider.analyze(images,record,hooks);}}},storage}));
   app.use('/api/products',require('../src/routes/products'));
   app.use((err,req,res,next)=>res.status(err.statusCode||err.status||500).json({error:err.message,code:err.code}));
   server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));
@@ -135,7 +139,8 @@ async function main() {
     await frame.locator('#section-analysis summary').click();
     await frame.getByRole('button',{name:'تحلیل تصاویر تأییدشده',exact:true}).click();
     await frame.getByRole('heading',{name:'تأیید مصرف AI',exact:true}).waitFor();
-    assert.match(await frame.locator('#dialog').innerText(),/0\.02/);
+    assert.match(await frame.locator('#dialog').innerText(),/تومان/);
+    assert.match(await frame.locator('#dialog').innerText(),/آغازشده/);
     assert.match(await frame.locator('#dialog').innerText(),/یک درخواست Gemini/);
     await frame.getByRole('button',{name:'انصراف',exact:true}).click();
     assert.equal(paidCalls,2,'Cancelling a cost preview must not call even the local provider fixture');
@@ -187,6 +192,36 @@ async function main() {
   assert.deepEqual(Buffer.from((await db.smartImage.findUnique({where:{id:removed.id}})).bytes),photos[1]);
   assert.equal((await fetch(origin+removed.url,{headers:auth})).status,404);
   assert.equal((await db.product.findUnique({where:{id:product.id}})).images.length,3);
+  // Targeted quota acceptance in the SAME existing synthetic database, never production.
+  const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};};
+  async function quotaFixture(code) {
+    const p=await ok('/api/products','POST',{productCode:code,title:'Quota synthetic fixture',brand:'PUMA',isActive:false,basePrice:0,inventoryMode:'SINGLE',variants:[{sku:code,size:'',color:'',stock:1}]});ids.push(p.id);
+    let d=await ok(base+'/store/products/'+p.id+'/dossier','POST',{});
+    for(const [i,bytes] of photos.entries())d=await ok(base+'/dossiers/'+d.id+'/images?imageId='+randomUUID()+'&version='+d.version+'&name=quota.'+(i?'png':'jpg'),'POST',bytes,{'Content-Type':i?'image/png':'image/jpeg'});
+    return d;
+  }
+  const target=await quotaFixture('MOTIF-975'), targetPath=base+'/dossiers/'+target.id;
+  fault='cancel';cancelStarted=deferred();cancelGate=deferred();
+  let q=await ok(targetPath+'/ai/quote?operation=analyze');
+  const controller=new AbortController();
+  const cancelled=fetch(origin+targetPath+'/ai/c2/analyze',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({version:target.version,quote:q.token}),signal:controller.signal}).catch(e=>e);
+  await cancelStarted.promise;controller.abort();await cancelled;await cancelGate.promise;
+  // Wait on server-side durable evidence, not another operation or provider retry.
+  let released;
+  for(let n=0;n<100;n++){released=await db.smartAiRun.findFirst({where:{dossierId:target.id,status:'failed',errorCode:'AI_CANCELLED_BEFORE_SEND'}});if(released)break;await new Promise(r=>setTimeout(r,10));}
+  assert.ok(released,'client cancellation is released before fetch');assert.equal(paidCalls,2);
+  assert.equal((await ok(base+'/ai/usage')).used,2);
+  fault='timeout';q=await ok(targetPath+'/ai/quote?operation=analyze');
+  assert.equal((await request(targetPath+'/ai/c2/analyze','POST',{version:target.version,quote:q.token})).status,504);
+  assert.equal((await db.smartAiRun.findFirst({where:{dossierId:target.id,status:'failed',errorCode:'AI_TIMEOUT'}})).usage.lifecycle.phase,'unknown');
+  assert.equal((await request(targetPath+'/ai/c2/analyze','POST',{version:target.version,quote:q.token})).status,409);assert.equal(paidCalls,3);
+  const left=await quotaFixture('MOTIF-976'),right=await quotaFixture('MOTIF-977');
+  await db.smartAiRun.createMany({data:Array.from({length:16},()=>({id:randomUUID(),operation:'analyze',scope:'quota-fixture-'+randomUUID(),dossierId:target.id,version:target.version,status:'failed',model:cfg.model,usage:{estimateToman:1000,estimateUsd:0.02}}))});
+  const [lq,rq]=await Promise.all([left,right].map(d=>ok(base+'/dossiers/'+d.id+'/ai/quote?operation=analyze')));fault=null;
+  const race=await Promise.all([left,right].map((d,i)=>request(base+'/dossiers/'+d.id+'/ai/c2/analyze','POST',{version:d.version,quote:[lq,rq][i].token})));
+  assert.deepEqual(race.map(r=>r.status).sort(),[200,429]);assert.equal(paidCalls,4);
+  const quota=await ok(base+'/ai/usage');assert.equal(quota.used,20);assert.equal(quota.remaining,0);assert.equal(quota.statusCounts.released,1);assert.equal(quota.statusCounts.unknown,17);
+  console.log('PASS: pre-send HTTP cancellation releases quota; sent timeout and duplicate stay reserved; concurrent requests cannot exceed 20; zero external AI calls');
   console.log('PASS: daily draft → original JPG/PNG → fixture Gemini/Sonar → mapped approvals → gallery/text previews → saved readback → independent dossier approval; no external AI calls');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{
