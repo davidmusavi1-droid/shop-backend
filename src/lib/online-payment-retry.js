@@ -110,7 +110,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
   async function start(orderId, requestKey) {
     // Authenticate ownership before making even the gate write.
     const owned = await prisma.checkoutReservation.findFirst({ where: { orderId, requestKey } });
-    if (!owned) throw fail(404, '????? ???? ???');
+    if (!owned) throw fail(404, 'سفارش پیدا نشد');
     return locked(orderId, async () => {
       const order = await prisma.order.findUniqueOrThrow({ where: { id: orderId },
         include: { checkout: true, payment: { include: { zibalAttempt: true } } } });
@@ -211,7 +211,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
 
   async function expire(orderId, requestKey) {
     const owned = await prisma.checkoutReservation.findFirst({ where: { orderId, requestKey } });
-    if (!owned) throw fail(404, '????? ???? ???');
+    if (!owned) throw fail(404, 'سفارش پیدا نشد');
     return locked(orderId, async () => {
       const payment = await prisma.payment.findUnique({ where: { orderId }, include: { zibalAttempt: true } });
       if (!payment || payment.isSuccessful) return pending('NO_UNPAID_PAYMENT');
