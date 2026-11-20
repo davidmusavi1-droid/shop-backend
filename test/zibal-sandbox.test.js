@@ -91,7 +91,7 @@ function databaseFixture() {
       async update({ data }) { Object.assign(payment, data); stats.successfulWrites++; return payment; },
     },
     zibalAttempt: {
-      async findFirst({ where }) { return attempt?.trackId === where.trackId ? { paymentId: payment.id } : null; },
+      async findFirst({ where }) { return attempt?.trackId === where.trackId ? { paymentId: payment.id, payment: { ...payment } } : null; },
       async findUnique({ where }) { return attempt?.trackId === where.trackId ? { ...attempt, payment: { ...payment } } : null; },
       async update({ data }) { Object.assign(attempt, data); return { ...attempt }; },
       async updateMany({ where, data }) {
