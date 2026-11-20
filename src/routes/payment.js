@@ -2,6 +2,7 @@ const express = require('express');
 const { randomInt } = require('node:crypto');
 const prisma = require('../lib/prisma');
 const { createOnlinePayment } = require('../lib/online-payment');
+const { createRetryPayment } = require('../lib/online-payment-retry');
 const { configureLiveZibal } = require('../lib/zibal-live');
 const { configureSandboxZibal } = require('../lib/zibal-sandbox');
 const { trackId, createZibalGateway } = require('../lib/zibal');
@@ -15,9 +16,14 @@ const gateway = createZibalGateway({
   callbackUrl: '/api/payment/verify',
   async transport(url, payload) {
     if (url.endsWith('/request')) return { result: 100, trackId: randomInt(100000000000, 999999999999) };
-    const attempt = await prisma.zibalAttempt.findUnique({
+    let attempt = await prisma.zibalAttempt.findUnique({
       where: { trackId: String(payload.trackId) }, include: { payment: true },
     });
+    if (!attempt && process.env.MOTIF_ZIBAL_RETRY_ENABLED === 'true') {
+      attempt = await prisma.zibalPaymentAttempt.findUnique({
+        where: { trackId: String(payload.trackId) }, include: { payment: true },
+      });
+    }
     if (url.endsWith('/inquiry') && attempt) {
       return { result: 100, status: attempt.payment.isSuccessful ? 1 : -1, amount: attempt.payment.amount * 10 };
     }
@@ -38,7 +44,10 @@ router.use((req, res, next) => {
   }
   res.locals.live = live;
   res.locals.sandbox = sandbox;
-  res.locals.payment = mock ? mockPayment : createOnlinePayment(prisma, (live || sandbox).gateway);
+  res.locals.retryEnabled = process.env.MOTIF_ZIBAL_RETRY_ENABLED === 'true';
+  res.locals.payment = res.locals.retryEnabled
+    ? createRetryPayment(prisma, mock ? gateway : (live || sandbox).gateway)
+    : mock ? mockPayment : createOnlinePayment(prisma, (live || sandbox).gateway);
   next();
 });
 const handle = action => async (req, res) => {
@@ -48,6 +57,9 @@ const handle = action => async (req, res) => {
   }
 };
 router.post('/request/:orderId', previewAdmin, handle(async (req, res) => {
+  if (process.env.MOTIF_ZIBAL_REQUESTS_DISABLED === 'true') {
+    return res.status(503).json({ code: 'NEW_PAYMENT_REQUESTS_DISABLED' });
+  }
   const key = req.get('Idempotency-Key');
   if (!key || !/^[0-9a-f-]{36}$/.test(key)) return res.sendStatus(404);
   const pilot = res.locals.live || res.locals.sandbox;
@@ -60,9 +72,13 @@ const verifyPayment = handle(async (req, res) => {
   if (Boolean(sandbox) !== (req.path === '/sandbox/verify')) return res.sendStatus(404);
   if (live || sandbox) {
     const id = trackId(req.query.trackId);
-    if (!id || !(await prisma.zibalAttempt.findFirst({
+    const legacy = id && await prisma.zibalAttempt.findFirst({
       where: { trackId: id, ...(live ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true },
-    }))) return res.sendStatus(404);
+    });
+    const retry = !legacy && id && res.locals.retryEnabled && await prisma.zibalPaymentAttempt.findFirst({
+      where: { trackId: id, ...(live ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true },
+    });
+    if (!legacy && !retry) return res.sendStatus(404);
   }
   const result = await res.locals.payment.verify(req.query.trackId);
   if (result.status === 'EXPIRED') {
@@ -74,6 +90,14 @@ const verifyPayment = handle(async (req, res) => {
 });
 router.get('/verify', verifyPayment);
 router.get('/sandbox/verify', verifyPayment);
+router.post('/reconcile/:orderId', previewAdmin, handle(async (req, res) => {
+  if (!res.locals.retryEnabled) return res.sendStatus(404);
+  const key = req.get('Idempotency-Key');
+  const pilot = res.locals.live || res.locals.sandbox;
+  if (!key || !/^[0-9a-f-]{36}$/.test(key) ||
+      pilot && !(await pilotOrder(req.params.orderId, key, pilot))) return res.sendStatus(404);
+  res.json(await res.locals.payment.expire(req.params.orderId, key));
+}));
 async function pilotOrder(orderId, key, live) {
   if ((live.orderId && orderId !== live.orderId) || typeof key !== 'string' || !/^[0-9a-f-]{36}$/.test(key)) return false;
   const order = await prisma.checkoutReservation.findFirst({
@@ -84,6 +108,9 @@ async function pilotOrder(orderId, key, live) {
 }
 
 router.get('/availability', previewAdmin, handle(async (req, res) => {
+  if (process.env.MOTIF_ZIBAL_REQUESTS_DISABLED === 'true') {
+    return res.json({ live: false, sandbox: false, mock: false });
+  }
   const live = res.locals.live;
   if (res.locals.sandbox) {
     return res.json({ sandbox: await pilotOrder(req.query.orderId, req.get('Idempotency-Key'), res.locals.sandbox) });

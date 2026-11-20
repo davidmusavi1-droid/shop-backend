@@ -1,0 +1,41 @@
+name: Zibal retry checks
+on:
+  pull_request:
+    branches: [main]
+    paths: ['src/lib/*retry*', 'src/routes/payment.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
+permissions:
+  contents: read
+jobs:
+  retry-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: motif_retry
+          POSTGRES_PASSWORD: retry_fixture_only
+          POSTGRES_DB: motif_retry
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U motif_retry -d motif_retry"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://motif_retry:retry_fixture_only@127.0.0.1:5432/motif_retry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock
+      - run: npx prisma generate
+      - run: npx prisma validate
+      - run: npx prisma migrate deploy
+      - name: Install isolated checkout fixture schema
+        run: |
+          for script in add-guest-checkout add-card-transfer add-order-tracking add-zibal-attempt add-zibal-retries; do
+            npx prisma db execute --file "db/$script.sql" --schema prisma/schema.prisma
+          done
+          npx prisma db execute --file db/add-zibal-retries.sql --schema prisma/schema.prisma
+      - run: node --test test/zibal-retry-policy.test.js
+      - run: node test/zibal-retry-postgres.cjs

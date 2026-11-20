@@ -1,0 +1,29 @@
+const TTL = 30 * 60 * 1000;
+const WINDOW = 90 * 60 * 1000;
+const MAX_ATTEMPTS = 3;
+
+// Zibal support, supplied by the owner on 2026-11-20: after 30 minutes an
+// unpaid track cannot later succeed; statuses 1 and 2 are payment evidence.
+// Keep this narrow: only the confirmed status-11 retry is added here.
+function evidence(response, amount, issuedAt, now) {
+  if (response?.result !== 100 || response.amount !== amount) return 'UNKNOWN';
+  if ([1, 2].includes(response.status) || response.paidAt || response.verifiedAt || response.refNumber) {
+    return response.status === 1 ? 'PAID' : 'REVIEW';
+  }
+  const elapsed = issuedAt && now.getTime() - issuedAt.getTime() >= TTL;
+  if (response.status === -1) return elapsed ? 'UNPAID' : 'OPEN';
+  if (response.status === 11 && elapsed &&
+      response.paidAt === null && response.verifiedAt === null) return 'UNPAID';
+  return 'UNKNOWN';
+}
+
+function auditResponse(value) {
+  const safe = {};
+  for (const key of ['result', 'status', 'amount', 'paidAt', 'verifiedAt', 'createdAt', 'refNumber', 'orderId']) {
+    const v = value?.[key];
+    if (v === null || typeof v === 'number' || typeof v === 'string' && v.length <= 160) safe[key] = v;
+  }
+  return safe;
+}
+
+module.exports = { TTL, WINDOW, MAX_ATTEMPTS, evidence, auditResponse };
