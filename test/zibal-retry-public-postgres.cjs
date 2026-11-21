@@ -42,7 +42,7 @@ async function run() {
   const shipping = require('../src/lib/destination-shipping');
   const tariff = await shipping.publish(p, { expectedTariffId: (await p.shippingTariffState.findUnique({where:{id:'default'}}))?.activeTariffId || null,
     source:'Synthetic fixture only; not a real carrier tariff',carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج',
-    validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),allInclusive:true,merchantCoversDifference:true,
+    validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),allInclusive:true,merchantCoversDifference:true,ownerApproved:true,
     rules:shipping.provinces.map(province=>({province,city:'*',fee:2500,maxItems:100,maxGoodsTomans:2147483647,minGrams:1,maxGrams:1000,maxLengthMm:500,maxWidthMm:500,maxHeightMm:500})) });
   await p.shippingSettings.upsert({ where: { id: 'default' }, create: { id: 'default', fee: 2500 }, update: { fee: 2500 } });
   const product = await measuredProduct({ data: { title: 'Public fixture only', basePrice: 10000,

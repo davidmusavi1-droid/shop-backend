@@ -31,13 +31,13 @@ Adds ShippingOperations, ShippingMeasurement, ShippingPackingPlan, CourierReques
 Prisma's new scalar metadata IDs intentionally avoid adding relation fields to existing product API responses. SQL installs restrictive foreign keys.
 Before any production DDL: fresh recoverable backup, live schema comparison and separate owner approval. Keep new tables/history on code rollback. No merge, deploy or public/payment activation is authorized.
 
-## Postex access investigation
-Official API overview: https://postex.ir/service/api
-Advertises free API/JSON/HTTP and rate inquiry; this does not establish free freight, collection, packing or account credit.
-The public documentation link returns to the overview rather than a usable endpoint/authentication contract. Official store request route: https://postex.ir/dashboard/requests. In the inspected browser, the login/register control did not open a form.
-No account, key, fee agreement, wallet top-up or shipping order was created. No customer information was transmitted. No Postex endpoint or money unit was guessed.
-Remaining: owner access/sign-in if needed, documented rate-only credentials and confirmation of Pishtaz from the actual Karaj pickup address, inclusive fees, units, coverage and quote validity. Postex live adapter stays unavailable until this contract is verified.
-Tipax remains disabled and cannot be selected or accepted server-side.
+## Current owner policy — 2026-11-21
+All agreed shipping charges are paid by the customer before payment. POST_PISHTAZ includes freight, packaging, insurance and necessary ancillary fees plus an owner-approved caution margin. The admin tariff editor totals integer toman components; the server rejects inconsistent totals. Explicit owner approval is required before publishing a measured-parcel tariff. No real rates or default margin are seeded.
+Courier includes the full agreed fee, explicitly accepted before payment. TIPAX remains disabled. Postex is removed from the current plan: no onboarding, credentials or API integration will be pursued.
+
+Actual-cost differences are accounting evidence, not an additional customer bill. Authenticated/CSRF-protected admin can record freight/packing/insurance/other actual costs for a successful paid order with an existing immutable shipping snapshot. Entries use a per-order ShippingOperations metadata row (the existing model), with advisory-locked append history and an idempotency key. Corrections append; they do not erase prior observations. Report latest actual minus collected amount by order, method, destination and parcel for future tariff revisions.
+No customer surcharge, automatic payment, refund, order repricing, reservation or stock modification is performed by this report. Any additional collection requires a separately agreed customer process; none is implemented here.
+This policy update adds no schema or migration file and runs no production migration. The previously prepared additive rollout scripts remain unexecuted in production.
 
 ## Verification
 Targeted test files:

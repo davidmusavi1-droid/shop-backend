@@ -22,6 +22,7 @@ function tariffInput(body) {
       +validUntil <= Date.now() || +validUntil - +validFrom > 90 * 86400000 ||
       body?.allInclusive !== true || body?.merchantCoversDifference !== true) throw fail(400,'منبع، مبدأ، اعتبار و قطعی‌بودن هزینه ارسال را تأیید کنید');
   if (!Array.isArray(body.rules) || !body.rules.length || body.rules.length > 1500) throw fail(400,'ردیف‌های تعرفه نامعتبرند');
+  if (body.ownerApproved !== true && parcelShipping.required()) throw fail(400,'تأیید صریح مالک برای فعال‌شدن تعرفه لازم است');
   const seen = new Set();
   const rules = body.rules.map(row => {
     const province = normalize(row.province), city = normalize(row.city);
@@ -33,7 +34,9 @@ function tariffInput(body) {
     const limits=parcelShipping.required()?parcelShipping.bounds(row):{};
     if(parcelShipping.required() && rulesOverlap(body.rules,row))throw fail(400,'بازه‌های تعرفه یک مقصد هم‌پوشانی دارند');
     seen.add(key);
-    return { province, city, fee, maxItems, maxGoodsTomans, ...limits };
+    const components=row.costs ? require('./shipping-costs').breakdown(row.costs,true) : null;
+    if(components && components.total!==fee)throw fail(400,'مبلغ ارسال با مجموع اجزای هزینه و حاشیه احتیاط برابر نیست');
+    return { province, city, fee, maxItems, maxGoodsTomans, ...limits, ...(components?{costs:components.costs}:{}), ownerApproved:body.ownerApproved===true };
   });
   if (provinces.some(p => !seen.has(p + ':*'))) throw fail(400,'برای پوشش سراسر ایران، تعرفه پایه تمام ۳۱ استان لازم است');
   if(parcelShipping.required() && (originProvince!=='البرز'||originCity!=='کرج'||carrier!=='POST_PISHTAZ'))throw fail(400,'مبدأ کرج و روش پست پیشتاز لازم است');

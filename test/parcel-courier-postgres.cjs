@@ -17,7 +17,7 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
  await db.shippingPackingPlan.create({data:p.planInput({items,tareGrams:50,lengthMm:300,widthMm:250,heightMm:50,approved:true})});
  assert.equal((await p.parcel(db,items)).grams,300);pass('approved grams, tare and exact packing; absent metadata blocked');
  const rules=shipping.provinces.flatMap(province=>[1,501].map((minGrams,i)=>({province,city:'*',fee:i?2000:1000,maxItems:20,maxGoodsTomans:1000000,minGrams,maxGrams:i?3000:500,maxLengthMm:500,maxWidthMm:500,maxHeightMm:500})));
- const t=await shipping.publish(db,{source:'Synthetic official-source placeholder for tests only',carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج',validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+3600000).toISOString(),rules,allInclusive:true,merchantCoversDifference:true});
+ const t=await shipping.publish(db,{source:'Synthetic official-source placeholder for tests only',carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج',validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+3600000).toISOString(),rules,allInclusive:true,merchantCoversDifference:true,ownerApproved:true});
  const q=await shipping.quote(db,customer,items.map(x=>({...x,unitPrice:10000})));assert.equal(q.shippingFee,1000);
  const postalInput=checkout.checkoutInput({customer,items,shippingAcceptance:{tariffId:t.id,shippingFee:q.shippingFee,totalPrice:q.totalPrice}},randomUUID());
  const postal=await checkout.reserve(db,postalInput);

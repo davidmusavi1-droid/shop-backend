@@ -1,3 +1,5 @@
+> Superseded policy notice (2026-11-21): Postex is no longer under consideration. All-inclusive customer-paid tariffs, owner approval and non-billing actual-cost variance reporting are described in [parcel-courier-readiness.md](parcel-courier-readiness.md). Historical provider research below is retained for reference only.
+
 # Destination shipping readiness — 2026-11-20
 
 ## Decision and cost

@@ -16,6 +16,17 @@ async function load(){
  const enabled=field(settings,'courierEnabled','ارسال فوری برای شهر تهران و شهر کرج','','checkbox');enabled.required=false;enabled.checked=data.settings.courierEnabled;
  action(settings,'ذخیره تنظیمات',async()=>{const f=settings.elements;await api(base+'/settings',{method:'PUT',body:JSON.stringify({supportPhone:f.supportPhone.value.trim(),courierEnabled:f.courierEnabled.checked,requestMinutes:f.requestMinutes.valueAsNumber,offerMinutes:f.offerMinutes.valueAsNumber,reservationMinutes:f.reservationMinutes.valueAsNumber})});});
  root.append(settings);
+ const audit=E('form');audit.append(E('h3','ثبت هزینه واقعی ارسال و اختلاف تعرفه'));
+ const orderId=field(audit,'orderId','شماره سفارش پرداخت‌شده');
+ for(const [n,t]of [['freight','کرایه واقعی'],['packing','بسته‌بندی واقعی'],['insurance','بیمه واقعی'],['other','سایر هزینه‌های ضروری']]){const f=field(audit,n,t+'، تومان','','number');f.min='0';}
+ field(audit,'note','شرح یا مرجع صورتحساب هزینه واقعی');
+ let auditKey=crypto.randomUUID();audit.addEventListener('input',()=>{auditKey=crypto.randomUUID();});
+ action(audit,'ثبت اختلاف بدون تغییر مبلغ سفارش',async()=>{const f=audit.elements;const event=await api(base+'/costs/'+encodeURIComponent(orderId.value.trim()),{method:'POST',body:JSON.stringify({requestKey:auditKey,note:f.note.value.trim(),costs:Object.fromEntries(['freight','packing','insurance','other'].map(k=>[k,f[k].valueAsNumber]))})});status.textContent='اختلاف ثبت شد؛ '+event.difference.toLocaleString('fa-IR')+' تومان';await loadReport();});
+ const report=E('div');async function loadReport(){const data=await api(base+'/costs');report.replaceChildren(E('p','جمع اختلاف هزینه واقعی منهای مبلغ دریافت‌شده: '+data.totalDifference.toLocaleString('fa-IR')+' تومان'));
+ for(const e of data.orders)report.append(E('p',[e.orderId,e.method,e.destination?.city,'دریافت‌شده '+e.charged,'واقعی '+e.actualTotal,'اختلاف '+e.difference].join(' · ')));
+ if(data.truncated)report.append(E('p','گزارش به ۵۰۰ سفارش محدود است؛ برای گزارش کامل خروجی اختصاصی لازم است.'));}
+ const reportButton=E('button','گزارش اختلاف برای اصلاح تعرفه‌های آینده');reportButton.type='button';reportButton.onclick=()=>loadReport().catch(e=>status.textContent=e.message);
+ root.append(audit,reportButton,report);
  const weights=E('form');weights.append(E('h3','وزن واقعی محصول / تنوع'));
  const label=E('label','انتخاب کالا'),select=E('select');select.name='variantId';select.required=true;
  for(const product of products)for(const v of product.variants||[]){const o=E('option',product.title+' · '+v.size+' · '+v.sku);o.value=v.id;select.append(o);}

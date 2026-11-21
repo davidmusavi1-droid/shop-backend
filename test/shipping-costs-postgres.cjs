@@ -1,0 +1,21 @@
+const assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
+const u=new URL(process.env.DATABASE_URL);assert(['127.0.0.1','localhost'].includes(u.hostname)&&u.pathname==='/motif_shipping');
+const {PrismaClient}=require('@prisma/client'),db=new PrismaClient();const cost=require('../src/lib/shipping-costs');
+(async()=>{
+ const tariff=await db.shippingTariff.findFirst({where:{carrier:'POST_PISHTAZ'}});
+ const customer=await db.customer.create({data:{phone:'09123334444',fullName:'Synthetic cost report'}});
+ const order=await db.order.create({data:{customerId:customer.id,totalPrice:12000,status:'PAID',payment:{create:{amount:12000,isSuccessful:true}},shippingSnapshot:{create:{tariffId:tariff.id,fee:2000,details:{method:'POST_PISHTAZ',destination:{province:'تهران',city:'تهران'}}}}},include:{payment:true,shippingSnapshot:true}});
+ const before=await db.variant.findMany({orderBy:{id:'asc'},select:{id:true,stock:true}});
+ const input={requestKey:randomUUID(),note:'Synthetic shipping invoice',costs:{freight:1600,packing:300,insurance:100,other:200}};
+ const events=await Promise.all([cost.record(db,order.id,input),cost.record(db,order.id,input)]);
+ assert.equal(events[0].id,events[1].id);assert.equal(events[0].difference,200);
+ await assert.rejects(cost.record(db,order.id,{...input,costs:{...input.costs,other:201}}),/متفاوت/);
+ await cost.record(db,order.id,{...input,requestKey:randomUUID(),note:'Synthetic corrected invoice',costs:{freight:1300,packing:300,insurance:100,other:0}});
+ const record=await db.shippingOperations.findUnique({where:{id:'shipping-cost:'+order.id}});
+ assert.equal(record.settings.events.length,2);assert.equal(record.settings.events[0].difference,200);
+ const report=await cost.report(db);assert.equal(report.orders.find(x=>x.orderId===order.id).difference,-300);
+ const after=await db.order.findUnique({where:{id:order.id},include:{payment:true,shippingSnapshot:true}});
+ assert.equal(after.totalPrice,12000);assert.equal(after.payment.amount,12000);assert.equal(after.shippingSnapshot.fee,2000);
+ assert.deepEqual(await db.variant.findMany({orderBy:{id:'asc'},select:{id:true,stock:true}}),before);
+ console.log('PASS concurrent idempotent cost recording, retained correction history, positive/negative variance and unchanged payment/order/stock');
+})().catch(e=>{console.error(e);process.exitCode=1;}).finally(()=>db.$disconnect());

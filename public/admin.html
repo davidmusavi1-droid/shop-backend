@@ -167,8 +167,8 @@
 <label>شروع اعتبار<input name="validFrom" type="datetime-local" required></label><label>پایان اعتبار (حداکثر ۹۰ روز)<input name="validUntil" type="datetime-local" required></label>
 <div id="shippingRules"></div><button type="button" id="addShippingRule">افزودن تعرفه ویژه شهر</button>
 <label><input name="allInclusive" type="checkbox" required>مبالغ شامل تمام هزینه‌های ارسال هستند و برای مشتری قطعی‌اند.</label>
-<label><input name="merchantCoversDifference" type="checkbox" required>اختلاف احتمالی هزینه حمل بر عهده فروشگاه است؛ مبلغ اضافی بدون توافق تازه از مشتری دریافت نمی‌شود.</label>
-<button type="submit">تأیید منبع و ثبت نسخه جدید تعرفه</button><p id="shippingStatus" role="status"></p></form>
+<label><input name="merchantCoversDifference" type="checkbox" required>مبلغ نمایش‌داده‌شده برای مشتری قطعی است؛ اختلاف هزینه ثبت می‌شود و مطالبه وجه اضافی فقط با توافق جدید مشتری مجاز است.</label>
+<label><input name="ownerApproved" type="checkbox" required>به‌عنوان مالک، مبالغ کامل ارسال و حاشیه احتیاط این نسخه را تأیید می‌کنم.</label><button type="submit">تأیید مالک و ثبت نسخه جدید تعرفه</button><p id="shippingStatus" role="status"></p></form>
           <form id="cardSettings" hidden>
             <label>شماره کارت مقصد<input name="cardNumber" inputmode="numeric" pattern="[0-9]{16}" required></label>
             <label>نام صاحب کارت<input name="accountHolder" maxlength="120" required></label>
