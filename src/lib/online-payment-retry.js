@@ -79,7 +79,7 @@ function createRetryPayment(prisma, gateway, options = {}) {
     });
   }
 
-  async function inspect(payment, attempt) {
+  async function inspect(payment, attempt, verifyUnverified = false) {
     if (!attempt.trackId) return 'UNKNOWN';
     const response = await invoke(attempt, 'inquiry');
     const state = evidence(response, toRials(payment.amount), attempt.issuedAt, now());
@@ -91,6 +91,14 @@ function createRetryPayment(prisma, gateway, options = {}) {
     if (state === 'REVIEW') {
       // Paid/unverified is never treated as a failed payment.
       await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });
+      if (verifyUnverified && response.status === 2) {
+        // Only a valid inquiry with the exact rial amount reaches this branch.
+        // Verify the existing track under the callback lock, then require a
+        // fresh status-1 inquiry. Neither status 2 nor verify 100/201 is success
+        // by itself. Also reconcile a lost verify response without charging again.
+        await invoke(attempt, 'verify');
+        return inspect(payment, attempt);
+      }
       return state;
     }
     if (state === 'UNPAID') {
@@ -178,18 +186,14 @@ function createRetryPayment(prisma, gateway, options = {}) {
       if (!attempt) return { status: 'UNKNOWN' };
       if (attempt.state === 'PAID' && current.isSuccessful) return { status: 'PAID' };
       // A delayed callback for an old attempt must still be reconciled server-side.
-      const state = await inspect(current, attempt);
+      const state = await inspect(current, attempt, true);
       if (state === 'PAID') return { status: 'PAID' };
       if (state === 'REVIEW' || state === 'UNKNOWN') return pending('PAYMENT_REVIEW');
       if (state === 'OPEN') {
         const response = await invoke(attempt, 'verify');
-        if (response?.result === 100 && response.status === 1 && response.amount === toRials(current.amount)) {
-          return settle(current, attempt);
-        }
-        if (response?.result === 201) {
-          // 201 is never success by itself, even on a repeated callback.
-          if (await inspect(current, attempt) === 'PAID') return { status: 'PAID' };
-        }
+        // Public payments always require a fresh, amount-matched status-1
+        // inquiry, including a success or lost response from verify.
+        if (await inspect(current, attempt) === 'PAID') return { status: 'PAID' };
         if (response?.result === 201 || response?.result === 100 && [1, 2].includes(response.status)) {
           await prisma.zibalRetryGate.update({ where: { orderId: payment.orderId }, data: { blocked: true } });
         }

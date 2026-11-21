@@ -158,11 +158,17 @@
           <p>
             متن‌ها، رنگ‌ها، بنرها و محصولات منتخب صفحهٔ اصلی را مدیریت کنید.
           </p>
-          <form id="shippingSettings" hidden>
-            <label>تعرفه ثابت ارسال (تومان)<input name="fee" type="number" min="0" max="2147483647" step="1" required></label>
-            <button type="submit">ذخیره تعرفه ارسال</button>
-            <p id="shippingStatus" role="status"></p>
-          </form>
+          <section id="logisticsAdmin" class="panel"><h3>وزن، بسته‌بندی و ارسال فوری</h3></section>
+<form id="shippingSettings" hidden>
+<h3>تعرفه قطعی ارسال بر اساس مقصد</h3><p>نسخه جدید، مبلغ سفارش‌های قبلی را تغییر نمی‌دهد. تمام هزینه‌های حمل، بسته‌بندی، مالیات و خدمات جانبی را لحاظ کنید.</p>
+<label>شرکت و نوع خدمت<input name="carrier" maxlength="80" required></label>
+<label>منبع تأییدشده / نشانی یا شماره قرارداد<input name="source" minlength="8" maxlength="500" required></label>
+<label>استان مبدأ<select name="originProvince" required></select></label><label>شهر مبدأ<input name="originCity" maxlength="80" required></label>
+<label>شروع اعتبار<input name="validFrom" type="datetime-local" required></label><label>پایان اعتبار (حداکثر ۹۰ روز)<input name="validUntil" type="datetime-local" required></label>
+<div id="shippingRules"></div><button type="button" id="addShippingRule">افزودن تعرفه ویژه شهر</button>
+<label><input name="allInclusive" type="checkbox" required>مبالغ شامل تمام هزینه‌های ارسال هستند و برای مشتری قطعی‌اند.</label>
+<label><input name="merchantCoversDifference" type="checkbox" required>مبلغ نمایش‌داده‌شده برای مشتری قطعی است؛ اختلاف هزینه ثبت می‌شود و مطالبه وجه اضافی فقط با توافق جدید مشتری مجاز است.</label>
+<label><input name="ownerApproved" type="checkbox" required>به‌عنوان مالک، مبالغ کامل ارسال و حاشیه احتیاط این نسخه را تأیید می‌کنم.</label><button type="submit">تأیید مالک و ثبت نسخه جدید تعرفه</button><p id="shippingStatus" role="status"></p></form>
           <form id="cardSettings" hidden>
             <label>شماره کارت مقصد<input name="cardNumber" inputmode="numeric" pattern="[0-9]{16}" required></label>
             <label>نام صاحب کارت<input name="accountHolder" maxlength="120" required></label>
@@ -207,5 +213,6 @@
     <script src="/admin-site.js?v=20261107-session"></script>
     <script src="/admin-fields.js?v=20261107-session"></script>
     <script src="/admin.js?v=20261119-daily-checkout"></script>
+  <script src="/admin-logistics.js?v=20261120"></script>
   </body>
 </html>

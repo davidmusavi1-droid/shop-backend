@@ -1,0 +1,75 @@
+name: Parcel and coordinated courier checks
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/lib/parcel-shipping.js'
+      - 'src/lib/shipping-costs.js'
+      - 'src/lib/postpaid-shipping.js'
+      - 'test/postpaid-shipping*'
+      - 'db/add-postpaid-shipping.sql'
+      - 'test/shipping-costs*'
+      - 'src/lib/coordinated-courier.js'
+      - 'src/lib/destination-shipping.js'
+      - 'src/lib/checkout.js'
+      - 'src/routes/logistics.js'
+      - 'src/routes/checkout.js'
+      - 'public/*courier*'
+      - 'public/admin-logistics.js'
+      - 'public/admin.js'
+      - 'public/admin.html'
+      - 'public/index.html'
+      - 'prisma/schema.prisma'
+      - 'db/add-parcel-courier.sql'
+      - 'test/parcel-courier*'
+      - '.github/workflows/parcel-courier-checks.yml'
+permissions:
+  contents: read
+jobs:
+  shipping-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:18.4
+        env:
+          POSTGRES_USER: motif_shipping
+          POSTGRES_PASSWORD: isolated_shipping_fixture
+          POSTGRES_DB: motif_shipping
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U motif_shipping -d motif_shipping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://motif_shipping:isolated_shipping_fixture@127.0.0.1:5432/motif_shipping
+      ADMIN_TOKEN: shipping-fixture-admin-only
+      MOTIF_PARCEL_BROWSER: 'true'
+      CHROME_BIN: /usr/bin/google-chrome
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-package-lock
+      - run: npm install --no-save --no-package-lock playwright@1.56.1
+      - run: npx prisma generate && npx prisma validate
+      - run: npx prisma migrate deploy
+      - name: Install additive schemas in independent fixture only
+        run: |
+          for script in add-guest-checkout add-card-transfer add-order-tracking add-zibal-attempt add-zibal-retries add-destination-shipping add-parcel-courier; do
+            npx prisma db execute --file "db/$script.sql" --schema prisma/schema.prisma
+          done
+          npx prisma db execute --file db/add-parcel-courier.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
+      - run: node --test test/parcel-courier.test.js test/shipping-costs.test.js test/postpaid-shipping.test.js
+      - run: node test/parcel-courier-postgres.cjs
+      - run: node test/shipping-costs-postgres.cjs
+      - run: node test/postpaid-shipping-postgres.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-parcel-courier-evidence
+          path: artifacts/parcel-courier-*.png
+          if-no-files-found: ignore

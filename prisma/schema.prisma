@@ -226,6 +226,7 @@ model Order {
   items   OrderItem[]
   payment Payment?
   checkout CheckoutReservation?
+  shippingSnapshot OrderShippingSnapshot?
   shipmentTrackingCode String?
   zibalRetryGate ZibalRetryGate?
 }
@@ -380,4 +381,74 @@ model SmartAiRun {
 
   @@unique([operation, scope])
   @@index([at])
+}
+
+model ShippingTariff {
+  id String @id
+  source String
+  carrier String
+  originProvince String
+  originCity String
+  validFrom DateTime
+  validUntil DateTime
+  rules Json
+  createdAt DateTime @default(now())
+  settings ShippingTariffState[]
+  orders OrderShippingSnapshot[]
+}
+model ShippingTariffState {
+  id String @id
+  activeTariffId String?
+  activeTariff ShippingTariff? @relation(fields: [activeTariffId], references: [id], onDelete: Restrict)
+}
+model OrderShippingSnapshot {
+  orderId String @id
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  tariffId String
+  tariff ShippingTariff @relation(fields: [tariffId], references: [id], onDelete: Restrict)
+  fee Int
+  details Json
+  createdAt DateTime @default(now())
+}
+
+model ShippingOperations {
+ id String @id
+ settings Json
+}
+model ShippingMeasurement {
+ variantId String @id
+ grams Int
+ approvedAt DateTime
+}
+model ShippingPackingPlan {
+ id String @id
+ items Json
+ tareGrams Int
+ lengthMm Int
+ widthMm Int
+ heightMm Int
+ approvedAt DateTime
+}
+model CourierRequest {
+ id String @id
+ requestKey String @unique
+ requestHash String
+ tokenHash String
+ phoneHash String
+ clientHash String
+ payload Json
+ state String
+ revision Int @default(0)
+ offer Json?
+ orderId String? @unique
+ createdAt DateTime @default(now())
+ expiresAt DateTime
+ @@index([phoneHash, createdAt])
+}
+model CourierOffer {
+ requestId String
+ revision Int
+ details Json
+ createdAt DateTime @default(now())
+ @@id([requestId, revision])
 }

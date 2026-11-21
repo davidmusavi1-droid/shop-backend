@@ -183,6 +183,11 @@ function display(view) {
   ])
     $(id).hidden = view !== v;
   $("sitePanel").hidden = true;
+  if (view === "settings") {
+    void loadShippingSettings();
+    void loadCardSettings();
+    void loadCheckoutOrders();
+  }
   $("pageTitle").textContent = {
     dashboard: "داشبورد",
     products: "محصولات",
@@ -1225,32 +1230,47 @@ MotifAdminSession.restore().then(showWorkspace).catch(err => {
   if (err.code !== "SESSION_REQUIRED") notice(err.message);
 }).finally(() => { loginButton.disabled = false; });
 
-async function loadShippingSettings() {
-  const form = $("shippingSettings");
-  form.hidden = true;
-  try {
-    const settings = await api("/api/checkout/shipping");
-    form.elements.fee.value = settings.shippingFee ?? "";
-    form.hidden = false;
-  } catch {}
-}
-
-$("shippingSettings").addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const button = form.querySelector("button");
-  button.disabled = true;
-  try {
-    await api("/api/checkout/shipping", {
-      method: "PUT",
-      body: JSON.stringify({ shippingFee: form.elements.fee.valueAsNumber }),
-    });
-    $("shippingStatus").textContent = "تعرفه ذخیره شد.";
-  } catch (error) {
-    $("shippingStatus").textContent = error.message;
-  } finally {
-    button.disabled = false;
+let shippingRevision=null,shippingProvinces=[];
+function shippingRuleRow(rule={}){
+  const row=el('fieldset');row.className='two-fields';row.dataset.shippingRule='true';
+  for(const[name,label,type]of [['province','استان','select'],['city','شهر؛ * یعنی همه شهرهای استان','text'],['fee','مبلغ کامل و قطعی ارسال، تومان','number'],['maxItems','حداکثر تعداد کالا','number'],['maxGoodsTomans','حداکثر ارزش کالا، تومان','number'],['minGrams','حداقل وزن بسته، گرم','number'],['maxGrams','حداکثر وزن بسته، گرم','number'],['maxLengthMm','حداکثر طول، میلی‌متر','number'],['maxWidthMm','حداکثر عرض، میلی‌متر','number'],['maxHeightMm','حداکثر ارتفاع، میلی‌متر','number']]){
+    const box=el('label',label),field=el(type==='select'?'select':'input');field.dataset.field=name;field.required=true;
+    if(type==='select')for(const p of shippingProvinces){const o=el('option',p);o.value=p;field.append(o);}
+    else{field.type=type;if(type==='number'){field.min='1';field.max=name==='maxItems'?'100':'2147483647';field.step='1';}else field.maxLength=80;}
+    field.value=rule[name]??(name==='city'?'*':'');box.append(field);row.append(box);
   }
+  for(const [key,label] of [['freight','کرایه'],['packing','بسته‌بندی'],['insurance','بیمه'],['other','سایر هزینه‌های ضروری'],['margin','حاشیه احتیاط مورد تأیید مالک']]){
+    const box=el('label',label+'، تومان'),field=el('input');field.type='number';field.min='0';field.max='2147483647';field.step='1';field.required=true;field.dataset.cost=key;field.value=rule.costs?.[key]??'';box.append(field);row.append(box);
+  }
+  const fee=row.querySelector('[data-field="fee"]');fee.readOnly=true;
+  row.addEventListener('input',()=>{const parts=[...row.querySelectorAll('[data-cost]')];fee.value=parts.every(x=>Number.isInteger(x.valueAsNumber)&&x.valueAsNumber>=0)?parts.reduce((sum,x)=>sum+x.valueAsNumber,0):'';});
+  const remove=el('button','حذف ردیف');remove.type='button';remove.onclick=()=>row.remove();row.append(remove);return row;
+}
+async function loadShippingSettings(){
+  const form=$('shippingSettings');form.hidden=true;
+  try{
+    const data=await api('/api/checkout/shipping/tariff');if(!Array.isArray(data.provinces))return;
+    shippingProvinces=data.provinces;const t=data.tariff;shippingRevision=t?.id||null;
+    form.elements.originProvince.replaceChildren(...shippingProvinces.map(p=>{const o=el('option',p);o.value=p;return o;}));
+    for(const name of ['source','carrier','originProvince','originCity'])form.elements[name].value=t?.[name]||({carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج'}[name]||'');
+    const localDate=v=>{const d=new Date(v);return new Date(+d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+    form.elements.validFrom.value=localDate(t?.validFrom||Date.now());form.elements.validUntil.value=t?localDate(t.validUntil):'';
+    form.elements.allInclusive.checked=false;form.elements.merchantCoversDifference.checked=false;form.elements.ownerApproved.checked=false;
+    $('shippingRules').replaceChildren(...(t?.rules||shippingProvinces.map(province=>({province,city:'*'}))).map(shippingRuleRow));
+    $('shippingStatus').textContent=t?'نسخه فعلی: '+t.id:'تعرفه‌ای ثبت نشده است؛ مبلغ واقعی را از روی حدس درج نکنید.';form.hidden=false;
+  }catch(error){$('shippingStatus').textContent=error.message;}
+}
+$('addShippingRule').onclick=()=>$('shippingRules').append(shippingRuleRow());
+$('shippingSettings').addEventListener('submit',async event=>{
+  event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]');button.disabled=true;
+  try{
+    const body={ownerApproved:form.elements.ownerApproved.checked,expectedTariffId:shippingRevision,allInclusive:form.elements.allInclusive.checked,merchantCoversDifference:form.elements.merchantCoversDifference.checked};
+    for(const name of ['source','carrier','originProvince','originCity'])body[name]=form.elements[name].value.trim();
+    for(const name of ['validFrom','validUntil'])body[name]=new Date(form.elements[name].value).toISOString();
+    body.rules=[...$('shippingRules').children].map(row=>({...Object.fromEntries([...row.querySelectorAll('[data-field]')].map(field=>[field.dataset.field,field.type==='number'?field.valueAsNumber:field.value])),costs:Object.fromEntries([...row.querySelectorAll('[data-cost]')].map(field=>[field.dataset.cost,field.valueAsNumber]))}));
+    await api('/api/checkout/shipping/tariff',{method:'POST',body:JSON.stringify(body)});
+    await loadShippingSettings();$('shippingStatus').textContent='نسخه جدید ذخیره شد؛ مبلغ سفارش‌های قبلی حفظ شد.';
+  }catch(error){$('shippingStatus').textContent=error.message;}finally{button.disabled=false;}
 });
 
 const transferBase = '/api/checkout/card-transfer';

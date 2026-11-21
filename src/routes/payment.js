@@ -8,8 +8,12 @@ const { configureSandboxZibal } = require('../lib/zibal-sandbox');
 const { trackId, createZibalGateway } = require('../lib/zibal');
 const router = express.Router();
 const requireAdmin = require('../middleware/requireAdmin');
+const { publicCheckout } = require('../lib/checkout-access');
+const { paymentResult } = require('../lib/payment-result');
 const previewAdmin = (req, res, next) => process.env.NODE_ENV === 'test'
   ? next() : requireAdmin(req, res, next);
+
+const customerAccess = (req, res, next) => publicCheckout() ? next() : previewAdmin(req, res, next);
 
 const gateway = createZibalGateway({
   merchant: 'mock',
@@ -56,7 +60,7 @@ const handle = action => async (req, res) => {
     res.status(error.statusCode || 503).json({ error: error.statusCode ? error.message : 'پرداخت نیاز به بررسی دارد' });
   }
 };
-router.post('/request/:orderId', previewAdmin, handle(async (req, res) => {
+router.post('/request/:orderId', customerAccess, handle(async (req, res) => {
   if (process.env.MOTIF_ZIBAL_REQUESTS_DISABLED === 'true') {
     return res.status(503).json({ code: 'NEW_PAYMENT_REQUESTS_DISABLED' });
   }
@@ -70,23 +74,20 @@ const verifyPayment = handle(async (req, res) => {
   const live = res.locals.live;
   const sandbox = res.locals.sandbox;
   if (Boolean(sandbox) !== (req.path === '/sandbox/verify')) return res.sendStatus(404);
+  let orderNumber;
   if (live || sandbox) {
     const id = trackId(req.query.trackId);
     const legacy = id && await prisma.zibalAttempt.findFirst({
-      where: { trackId: id, ...(live ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true },
+      where: { trackId: id, ...(live?.orderId ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true, payment: { select: { orderId: true } } },
     });
     const retry = !legacy && id && res.locals.retryEnabled && await prisma.zibalPaymentAttempt.findFirst({
-      where: { trackId: id, ...(live ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true },
+      where: { trackId: id, ...(live?.orderId ? { payment: { orderId: live.orderId } } : {}) }, select: { paymentId: true, payment: { select: { orderId: true } } },
     });
     if (!legacy && !retry) return res.sendStatus(404);
+    orderNumber = (legacy || retry).payment.orderId;
   }
   const result = await res.locals.payment.verify(req.query.trackId);
-  if (result.status === 'EXPIRED') {
-    return res.type('html').send('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>پرداخت منقضی</title><h1>پرداخت منقضی و رزرو آزاد شد</h1><a href="/collection">برای تلاش مجدد سفارش تازه ثبت کنید</a>');
-  }
-  const label = live ? 'پرداخت' : sandbox ? 'پرداخت آزمایشی زیبال' : 'پرداخت آزمایشی';
-  const message = result.status === 'PAID' ? label + ' تأیید شد' : label + ' تأیید نشده است';
-  res.type('html').send('<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>نتیجه پرداخت</title><h1>' + message + '</h1><a href="/cart">بازگشت به سبد</a>');
+  res.type('html').send(paymentResult(result, { orderNumber, sandbox: Boolean(sandbox), mock: !live && !sandbox }));
 });
 router.get('/verify', verifyPayment);
 router.get('/sandbox/verify', verifyPayment);
@@ -102,12 +103,16 @@ async function pilotOrder(orderId, key, live) {
   if ((live.orderId && orderId !== live.orderId) || typeof key !== 'string' || !/^[0-9a-f-]{36}$/.test(key)) return false;
   const order = await prisma.checkoutReservation.findFirst({
     where: { orderId, requestKey: key, order: { totalPrice: { gt: 0, lte: live.maxTomans } } },
-    select: { orderId: true },
+    select: { orderId: true, shippingFee: true, order: { select: { totalPrice: true } } },
   });
+  if (order && live.public) {
+    const snapshot = await prisma.orderShippingSnapshot.findUnique({ where: { orderId } });
+    return Boolean(snapshot && snapshot.fee === order.shippingFee && snapshot.details.totalPrice === order.order.totalPrice);
+  }
   return Boolean(order);
 }
 
-router.get('/availability', previewAdmin, handle(async (req, res) => {
+router.get('/availability', customerAccess, handle(async (req, res) => {
   if (process.env.MOTIF_ZIBAL_REQUESTS_DISABLED === 'true') {
     return res.json({ live: false, sandbox: false, mock: false });
   }
