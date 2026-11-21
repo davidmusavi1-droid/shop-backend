@@ -45,3 +45,10 @@ test('production shipping refuses unmeasured or missing weight coverage, no zero
  const q=shipping.calculate(tariff,customer,items,{grams:500,lengthMm:100,widthMm:100,heightMm:100});assert.equal(q.totalPrice,1100);assert.equal(q.details.parcel.grams,500);
  }finally{if(old===undefined)delete process.env.MOTIF_PARCEL_SHIPPING;else process.env.MOTIF_PARCEL_SHIPPING=old;}
 });
+
+test('JSONB key ordering does not change accepted customer or parcel fingerprints',()=>{
+ const a={customer:{name:'synthetic',city:'تهران'},parcel:{approvedAt:new Date('2026-11-20T00:00:00.000Z'),items:[{quantity:1,variantId:'a'}]}};
+ const b={parcel:{items:[{variantId:'a',quantity:1}],approvedAt:'2026-11-20T00:00:00.000Z'},customer:{city:'تهران',name:'synthetic'}};
+ assert.equal(p.hash(a),p.hash(b));
+ assert.notEqual(p.hash(a),p.hash({...b,customer:{...b.customer,city:'کرج'}}));
+});

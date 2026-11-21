@@ -121,7 +121,7 @@ async function reserve(prisma, input) {
       let shippingQuote;
       if (destinationShipping.required() || input.courierAcceptance) {
         shippingQuote = input.courierAcceptance ? await courier.acceptedQuote(tx,input,items) : await destinationShipping.quote(tx, input.customer, items);
-        destinationShipping.accepted(input, shippingQuote);
+        if (!input.courierAcceptance) destinationShipping.accepted(input, shippingQuote);
         shipping.fee = shippingQuote.shippingFee;
       }
       const totalPrice = orderTotal(shipping.fee, items);

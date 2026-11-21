@@ -1,7 +1,14 @@
 const { createHash } = require('node:crypto');
 const fail = (statusCode, message) => Object.assign(new Error(message), {statusCode});
 const required = () => process.env.NODE_ENV === 'production' || process.env.MOTIF_PARCEL_SHIPPING === 'true';
-const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// JSONB may reorder object keys. Compare semantic content, preserving array order.
+function canonical(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(k => [k, canonical(value[k])]));
+  return value;
+}
+const hash = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 function integer(n, min=1, max=2147483647) {
   if (!Number.isSafeInteger(n) || n<min || n>max) throw fail(400,'وزن، ابعاد یا زمان نامعتبر است');
   return n;

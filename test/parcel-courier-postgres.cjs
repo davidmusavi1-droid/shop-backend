@@ -31,11 +31,11 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
  const o=await courier.offer(db,r.id,{fee:500,eta:'Synthetic confirmed time window',availabilityConfirmed:true,expectedRevision:0});
  assert.equal(o.offer.totalPrice,10500);
  const makeAcceptance=(key=randomUUID(),extra={})=>checkout.checkoutInput({customer,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:r.id,token,revision:o.revision,shippingFee:500,totalPrice:10500,...extra}},key);
- await assert.rejects(checkout.reserve(db,makeAcceptance(randomUUID(),{totalPrice:10499})));
+ await assert.rejects(checkout.reserve(db,makeAcceptance(randomUUID(),{totalPrice:10499})),/صریحاً پذیرفته/);
  assert.equal((await db.variant.findUnique({where:{id:variant.id}})).stock,9);pass('forged acceptance rolls back order and stock');
  const accept=makeAcceptance();
  const race=await Promise.allSettled([checkout.reserve(db,accept),checkout.reserve(db,accept),checkout.reserve(db,makeAcceptance())]);
- const good=race.filter(x=>x.status==='fulfilled');assert(good.length>=1);
+ const good=race.filter(x=>x.status==='fulfilled');assert(good.length>=1,JSON.stringify(race.map(x=>x.status==='rejected'?{code:x.reason.code,message:x.reason.message}:x.status)));
  const id=good[0].value.orderNumber;assert(good.every(x=>x.value.orderNumber===id));
  assert.equal((await db.variant.findUnique({where:{id:variant.id}})).stock,8);
  assert.equal(await db.order.count({where:{id}}),1);
