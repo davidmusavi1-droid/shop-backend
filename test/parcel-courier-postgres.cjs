@@ -64,12 +64,32 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
  pass('real Express rejects admin access, tokenless reads, neighbouring cities and absent acceptance');
  if(process.env.MOTIF_PARCEL_BROWSER==='true'){
    const path=require('node:path');const {chromium}=require('playwright');
+   app.get('/api/products/admin/list',(_req,res)=>res.json([product]));
+   app.get('/api/products/admin/fabrics',(_req,res)=>res.json(require('../public/catalog').fabrics));
+   app.get('/api/admin/smart-panel/store/status',(_req,res)=>res.sendStatus(404));
    app.get('/api/products',(_req,res)=>res.json([product]));
    app.get('/api/products/:id',(_req,res)=>res.json(product));
    app.use(express.static(path.join(__dirname,'../public')));
    app.get('/cart',(_req,res)=>res.sendFile(path.join(__dirname,'../public/index.html')));
    const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||undefined});
    try{
+    const adminContext=await browser.newContext({viewport:{width:1280,height:900}});
+    const adminPage=await adminContext.newPage();
+    await adminPage.goto(origin+'/admin.html');
+    await adminPage.locator('#token').fill(process.env.ADMIN_TOKEN);
+    await adminPage.locator('#loginForm button').click();
+    await adminPage.locator('#workspace').waitFor({state:'visible'});
+    await adminPage.locator('#desktopNav [data-view="settings"]').click();
+    await adminPage.locator('#shippingSettings').waitFor({state:'visible'});
+    await adminPage.getByRole('button',{name:'مدیریت وزن، بسته‌بندی و پیک فوری',exact:true}).click();
+    const settingsForm=adminPage.locator('#logisticsAdmin form').first();
+    await settingsForm.locator('[name="requestMinutes"]').fill('90');
+    const settingsSaved=adminPage.waitForResponse(r=>r.url().endsWith('/logistics/settings')&&r.request().method()==='PUT');
+    await settingsForm.getByRole('button',{name:'ذخیره تنظیمات',exact:true}).click();
+    assert.equal((await settingsSaved).status(),200);
+    assert.equal((await p.settings(db)).requestMinutes,90);
+    await adminContext.close();
+    pass('authenticated admin can reach tariff panel and adjust courier durations with CSRF');
     for(const width of [320,1280]){
      const context=await browser.newContext({viewport:{width,height:900}});
      const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));

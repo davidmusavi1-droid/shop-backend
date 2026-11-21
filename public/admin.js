@@ -183,6 +183,11 @@ function display(view) {
   ])
     $(id).hidden = view !== v;
   $("sitePanel").hidden = true;
+  if (view === "settings") {
+    void loadShippingSettings();
+    void loadCardSettings();
+    void loadCheckoutOrders();
+  }
   $("pageTitle").textContent = {
     dashboard: "داشبورد",
     products: "محصولات",
