@@ -16,6 +16,15 @@ async function load(){
  const enabled=field(settings,'courierEnabled','ارسال فوری برای شهر تهران و شهر کرج','','checkbox');enabled.required=false;enabled.checked=data.settings.courierEnabled;
  action(settings,'ذخیره تنظیمات',async()=>{const f=settings.elements;await api(base+'/settings',{method:'PUT',body:JSON.stringify({supportPhone:f.supportPhone.value.trim(),courierEnabled:f.courierEnabled.checked,requestMinutes:f.requestMinutes.valueAsNumber,offerMinutes:f.offerMinutes.valueAsNumber,reservationMinutes:f.reservationMinutes.valueAsNumber})});});
  root.append(settings);
+ const postal=E('form');postal.append(E('h3','پست پیشتاز ـ پس‌کرایه'));
+ postal.append(E('p','پرداخت آنلاین فقط کالا است. این روش را صرفاً پس از تأیید واقعی دریافت کرایه از گیرنده توسط پست مبدأ کرج تأیید کنید؛ دریافت مبلغ کالا در محل (COD) جایگزین آن نیست.'));
+ field(postal,'evidence','مرجع تأیید پست / شماره قرارداد یا پاسخ معتبر');
+ field(postal,'validUntil','اعتبار تأییدیه','', 'datetime-local');
+ const confirmed=field(postal,'confirmed','امکان پس‌کرایه از مبدأ کرج را با پست تأیید کرده‌ام','','checkbox');
+ const current=await api(base+'/postpaid');
+ postal.append(E('p',current.policy?'مرجع فعلی: '+current.policy.source:'هنوز تأیید نشده؛ برای مشتری قابل پرداخت نیست.'));
+ action(postal,'ثبت تأییدیه پس‌کرایه',async()=>{await api(base+'/postpaid',{method:'POST',body:JSON.stringify({confirmed:confirmed.checked,evidence:postal.elements.evidence.value.trim(),validUntil:new Date(postal.elements.validUntil.value).toISOString(),expectedPolicyId:current.policy?.id||null})});await load();});
+ root.append(postal);
  const audit=E('form');audit.append(E('h3','ثبت هزینه واقعی ارسال و اختلاف تعرفه'));
  const orderId=field(audit,'orderId','شماره سفارش پرداخت‌شده');
  for(const [n,t]of [['freight','کرایه واقعی'],['packing','بسته‌بندی واقعی'],['insurance','بیمه واقعی'],['other','سایر هزینه‌های ضروری']]){const f=field(audit,n,t+'، تومان','','number');f.min='0';}

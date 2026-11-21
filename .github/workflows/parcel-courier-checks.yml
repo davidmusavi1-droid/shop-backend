@@ -5,6 +5,9 @@ on:
     paths:
       - 'src/lib/parcel-shipping.js'
       - 'src/lib/shipping-costs.js'
+      - 'src/lib/postpaid-shipping.js'
+      - 'test/postpaid-shipping*'
+      - 'db/add-postpaid-shipping.sql'
       - 'test/shipping-costs*'
       - 'src/lib/coordinated-courier.js'
       - 'src/lib/destination-shipping.js'
@@ -58,9 +61,12 @@ jobs:
             npx prisma db execute --file "db/$script.sql" --schema prisma/schema.prisma
           done
           npx prisma db execute --file db/add-parcel-courier.sql --schema prisma/schema.prisma
-      - run: node --test test/parcel-courier.test.js test/shipping-costs.test.js
+      - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
+      - run: node --test test/parcel-courier.test.js test/shipping-costs.test.js test/postpaid-shipping.test.js
       - run: node test/parcel-courier-postgres.cjs
       - run: node test/shipping-costs-postgres.cjs
+      - run: node test/postpaid-shipping-postgres.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

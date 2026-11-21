@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto');
 const destinationShipping = require('./destination-shipping');
 const courier = require('./coordinated-courier');
+const postpaid = require('./postpaid-shipping');
 
 const MAX_AMOUNT = 2147483647;
 const RESERVATION_MS = 30 * 60 * 1000;
@@ -45,7 +46,11 @@ function checkoutInput(body, requestKey) {
   if (shippingAcceptance && (typeof shippingAcceptance.tariffId !== 'string' ||
       !Number.isInteger(shippingAcceptance.shippingFee) || !Number.isInteger(shippingAcceptance.totalPrice))) throw fail(400,'تأیید مبلغ ارسال نامعتبر است');
   const agreement = shippingAcceptance ? { shippingAcceptance: { tariffId: shippingAcceptance.tariffId, shippingFee: shippingAcceptance.shippingFee, totalPrice: shippingAcceptance.totalPrice } } : {};
-  if(body.shippingMethod && !['POST_PISHTAZ','COORDINATED_COURIER'].includes(body.shippingMethod)) throw fail(409,'روش ارسال غیرفعال است');
+  if(shippingAcceptance?.shippingChargeMode!==undefined){
+    if(shippingAcceptance.shippingChargeMode!==postpaid.mode||shippingAcceptance.termsAccepted!==true)throw fail(400,'پذیرش پس‌کرایه نامعتبر است');
+    Object.assign(agreement.shippingAcceptance,{shippingChargeMode:postpaid.mode,termsAccepted:true});
+  }
+  if(body.shippingMethod && !['POST_PISHTAZ','POST_PISHTAZ_POSTPAID','COORDINATED_COURIER'].includes(body.shippingMethod)) throw fail(409,'روش ارسال غیرفعال است');
   const a=body.courierAcceptance;
   if(body.shippingMethod==='COORDINATED_COURIER' && (!a || typeof a.requestId!=='string' || typeof a.token!=='string' || !Number.isInteger(a.revision) || !Number.isInteger(a.shippingFee) || !Number.isInteger(a.totalPrice))) throw fail(400,'پذیرش پیشنهاد ارسال فوری لازم است');
   if(a && body.shippingMethod!=='COORDINATED_COURIER') throw fail(400,'روش ارسال با پیشنهاد یکسان نیست');
@@ -86,7 +91,7 @@ async function reserve(prisma, input) {
     return await prisma.$transaction(async tx => {
       const saved = await tx.checkoutReservation.findUnique({ where, include });
       if (saved) return receipt(saved, input.requestHash);
-      const shipping = destinationShipping.required() ? { fee: 0 } : await tx.shippingSettings.findUnique({ where: { id: SHIPPING_ID } });
+      const shipping = (destinationShipping.required() || postpaid.required()) ? { fee: 0 } : await tx.shippingSettings.findUnique({ where: { id: SHIPPING_ID } });
       if (!shipping) throw fail(503, 'تعرفه ارسال هنوز تنظیم نشده است');
 
       const dbCustomer = await tx.customer.upsert({
@@ -119,9 +124,9 @@ async function reserve(prisma, input) {
         items.push({ ...item, productId: variant.productId, unitPrice: variant.product.basePrice + variant.priceDelta });
       }
       let shippingQuote;
-      if (destinationShipping.required() || input.courierAcceptance) {
-        shippingQuote = input.courierAcceptance ? await courier.acceptedQuote(tx,input,items) : await destinationShipping.quote(tx, input.customer, items);
-        if (!input.courierAcceptance) destinationShipping.accepted(input, shippingQuote);
+      if (destinationShipping.required() || postpaid.required() || input.courierAcceptance) {
+        shippingQuote = input.courierAcceptance ? await courier.acceptedQuote(tx,input,items) : postpaid.required() ? await postpaid.quote(tx,input.customer,items) : await destinationShipping.quote(tx, input.customer, items);
+        if (!input.courierAcceptance) (postpaid.required()?postpaid:destinationShipping).accepted(input, shippingQuote);
         shipping.fee = shippingQuote.shippingFee;
       }
       const totalPrice = orderTotal(shipping.fee, items);

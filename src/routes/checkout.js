@@ -4,6 +4,7 @@ const requireAdmin = require('../middleware/requireAdmin');
 const checkout = require('../lib/checkout');
 const { publicCheckout } = require('../lib/checkout-access');
 const shipping = require('../lib/destination-shipping');
+const postpaid = require('../lib/postpaid-shipping');
 const { randomUUID } = require('node:crypto');
 const router = express.Router();
 
@@ -32,6 +33,10 @@ router.use('/tracking', require('./order-tracking'));
 router.use('/card-transfer', require('./card-transfer'));
 
 router.get('/shipping', handle(async (req, res) => {
+  if(postpaid.required()){
+    let policy;try{policy=await postpaid.active(prisma);}catch(e){if(e.statusCode!==503)throw e;}
+    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:false});
+  }
   if (shipping.required()) {
     let tariff;
     try { tariff = await shipping.active(prisma); } catch (e) { if (e.statusCode !== 503) throw e; }
@@ -44,7 +49,7 @@ router.get('/shipping', handle(async (req, res) => {
 }));
 
 router.put('/shipping', requireAdmin, handle(async (req, res) => {
-  if (shipping.required()) throw checkout.fail(409,'تعرفه ثابت برای ارسال عمومی معتبر نیست؛ تعرفه مقصد را تنظیم کنید');
+  if (shipping.required() || postpaid.required()) throw checkout.fail(409,'تعرفه ثابت برای ارسال عمومی معتبر نیست؛ تعرفه مقصد را تنظیم کنید');
   const fee = req.body?.shippingFee;
   if (!Number.isInteger(fee) || fee < 0 || fee > checkout.MAX_AMOUNT) {
     throw checkout.fail(400, 'تعرفه ارسال نامعتبر است');
@@ -72,8 +77,8 @@ router.post('/shipping/quote', handle(async (req, res) => {
     if (!v?.product.isActive || v.stock < item.quantity) throw checkout.fail(409,'موجودی کالا قابل تأیید نیست');
     lines.push({ ...item, unitPrice: v.product.basePrice + v.priceDelta });
   }
-  const q=await shipping.quote(prisma,input.customer,lines);
-  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier});
+  const q=await (postpaid.required()?postpaid:shipping).quote(prisma,input.customer,lines);
+  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms}:{})});
 }));
 
 router.post('/orders', handle(async (req, res) => {

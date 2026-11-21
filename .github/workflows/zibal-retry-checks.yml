@@ -51,6 +51,7 @@ jobs:
           npx prisma db execute --file db/add-destination-shipping.sql --schema prisma/schema.prisma
       - name: Install parcel metadata schema for production-mode fixture
         run: npx prisma db execute --file db/add-parcel-courier.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
       - run: node --test test/destination-shipping.test.js
       - run: node test/destination-shipping-postgres.cjs
       - name: Public checkout access and final inquiry (isolated only)

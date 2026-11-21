@@ -156,12 +156,12 @@ if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))w
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
 
-let destinationCheckout = false, shippingQuote = null, destinationCities = {};
+let destinationCheckout = false, shippingQuote = null, destinationCities = {}, postpaidCheckout = false;
 function shippingPayload() { return JSON.stringify({ items: cart.map(({variantId,quantity})=>({variantId,quantity})), customer: Object.fromEntries(new FormData($('guestCheckout'))) }); }
 function invalidateShipping() {
   if (!destinationCheckout) return;
   shippingQuote = null; $('guestCheckout').querySelector('button.primary').disabled = true;
-  $('checkoutShipping').textContent = 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
+  $('checkoutShipping').textContent = postpaidCheckout ? 'هزینه ارسال بر عهده خریدار است و هنگام تحویل مرسوله به شرکت پست پرداخت می‌شود.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
 }
 $('guestCheckout').addEventListener('input', invalidateShipping);
 $('guestCheckout').elements.province.addEventListener('change', () => {
@@ -178,7 +178,7 @@ $('quoteShipping').onclick = async () => {
     const q = await response.json(); if (!response.ok) throw Error(q.error || 'هزینه ارسال قابل محاسبه نیست.');
     if (body !== shippingPayload()) return;
     shippingQuote = {...q,body};
-    $('checkoutShipping').textContent = 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';
+    $('checkoutShipping').textContent = q.shippingChargeMode==='RECIPIENT_AT_DELIVERY' ? q.terms+' مبلغ پرداخت آنلاین فقط بابت کالا: '+money(q.totalPrice) : 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';
     const submit=form.querySelector('button.primary');submit.disabled=false;submit.textContent='ثبت سفارش با مبلغ '+money(q.totalPrice);
   } catch(error) { invalidateShipping();$('checkoutShipping').textContent=error.message; } finally { button.disabled=false; }
 };
@@ -199,13 +199,16 @@ async function showCheckout(ticket, total) {
     const shippingConfig=await response.json();
     const {shippingFee,public:customerCheckout,trackingAvailable}=shippingConfig;
     if (ticket !== requestId || location.pathname !== '/cart') return;
-    if(shippingConfig.mode==='destination'){
+    postpaidCheckout=shippingConfig.mode==='postpaid';
+    $('postpaidAgreement').hidden=!postpaidCheckout;$('postpaidAgreement').querySelector('input').required=postpaidCheckout;
+    $('quoteShipping').textContent=postpaidCheckout?'تأیید شرایط ارسال و مبلغ کالا':'محاسبه هزینه ارسال';
+    if(shippingConfig.mode==='destination'||postpaidCheckout){
       destinationCheckout=true;destinationCities=shippingConfig.cities||{};
       const field=$('guestCheckout').elements.province;
       if(field.options.length<2)for(const province of shippingConfig.provinces){const o=el('option',province);o.value=province;field.append(o);}
       $('guestCheckout').hidden=false;$('quoteShipping').hidden=false;$('quoteShipping').disabled=!shippingConfig.ready;invalidateShipping();
-      if(!shippingConfig.ready)$('checkoutShipping').textContent='تعرفه معتبر ارسال هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.';
-      document.querySelector('#cart .notice').textContent='رزرو کالا پس از ثبت سفارش انجام می‌شود. مبلغ کالا و ارسال پیش از پرداخت قطعی است.';
+      if(!shippingConfig.ready)$('checkoutShipping').textContent=postpaidCheckout?'پیشتاز پس‌کرایه از مبدأ کرج هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.':'تعرفه معتبر ارسال هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.';
+      document.querySelector('#cart .notice').textContent=postpaidCheckout?'رزرو پس از ثبت سفارش انجام می‌شود. پرداخت آنلاین فقط مبلغ کالا است؛ کرایه پست پس‌کرایه است.':'رزرو کالا پس از ثبت سفارش انجام می‌شود. مبلغ کالا و ارسال پیش از پرداخت قطعی است.';
       if(customerCheckout){$('trackingChallenge').hidden=true;$('trackingVerify').hidden=true;$('trackingResult').textContent='پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید.';}
       return;
     }
@@ -238,7 +241,7 @@ $('guestCheckout').addEventListener('submit', async event => {
   let body=JSON.stringify({items,customer:Object.fromEntries(new FormData(form))});
   if(destinationCheckout){
     if(!shippingQuote||shippingQuote.body!==body){invalidateShipping();return;}
-    body=JSON.stringify({...JSON.parse(body),shippingAcceptance:{tariffId:shippingQuote.tariffId,shippingFee:shippingQuote.shippingFee,totalPrice:shippingQuote.totalPrice}});
+    body=JSON.stringify({...JSON.parse(body),shippingAcceptance:{tariffId:shippingQuote.tariffId,shippingFee:shippingQuote.shippingFee,totalPrice:shippingQuote.totalPrice,...(shippingQuote.shippingChargeMode?{shippingChargeMode:shippingQuote.shippingChargeMode,termsAccepted:$('postpaidAgreement').querySelector('input').checked}:{})}});
   }
   button.disabled = true;
   try {

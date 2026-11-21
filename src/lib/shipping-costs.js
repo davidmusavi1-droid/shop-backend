@@ -22,6 +22,7 @@ async function record(db,orderId,body){
   if(!order?.payment?.isSuccessful||!order.shippingSnapshot||!['PAID','PROCESSING','SHIPPED','DELIVERED'].includes(order.status))throw fail(409,'سفارش پرداخت‌شده و مبلغ ارسال تأییدشده لازم است');
   if(events.length>=20)throw fail(409,'سقف اصلاحات گزارش این سفارش تکمیل است');
   const snapshot=order.shippingSnapshot;
+  if(snapshot.details.shippingChargeMode==='RECIPIENT_AT_DELIVERY')throw fail(409,'کرایه این سفارش مستقیماً به پست پرداخت می‌شود و هزینه دریافتی فروشگاه نیست');
   const event={id:randomUUID(),requestKey:body.requestKey,requestHash,orderId,costs,actualTotal:total,charged:snapshot.fee,difference:total-snapshot.fee,note:body.note.trim(),createdAt:new Date().toISOString(),
    method:snapshot.details.method||snapshot.details.carrier,tariffId:snapshot.tariffId,destination:snapshot.details.destination,parcel:snapshot.details.parcel||null};
   const settings={kind:'SHIPPING_COST_AUDIT',events:[...events,event]};

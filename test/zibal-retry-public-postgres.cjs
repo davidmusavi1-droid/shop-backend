@@ -19,9 +19,9 @@ async function measuredProduct(args) {
  return product;
 }
 let server, requests = 0, verifies = 0, inquiryStatus = -1, verificationStatus = 1;
-const gateway = { async request(amount) { requests++; assert.equal(amount, 125000); return { result: 100, trackId: 8200000000 + requests }; },
-  async inquiry() { return { result: 100, status: inquiryStatus, amount: 125000 }; },
-  async verify() { verifies++; inquiryStatus = verificationStatus; return { result: 100, status: 1, amount: 125000 }; },
+const gateway = { async request(amount) { requests++; assert.equal(amount, 100000); return { result: 100, trackId: 8200000000 + requests }; },
+  async inquiry() { return { result: 100, status: inquiryStatus, amount: 100000 }; },
+  async verify() { verifies++; inquiryStatus = verificationStatus; return { result: 100, status: 1, amount: 100000 }; },
   redirect: id => 'https://gateway.zibal.ir/start/' + id };
 // Factory injection is test-only. No HTTP request reaches Zibal or a bank.
 const zibal = require('../src/lib/zibal'), factory = zibal.createZibalGateway;
@@ -39,11 +39,8 @@ async function run() {
   assert.equal(config.public, true); assert.equal(config.orderId, null);
   assert.equal(configureLiveZibal({ ...process.env, MOTIF_ZIBAL_MODE: 'pilot' }), null);
   assert.equal(configureLiveZibal({ ...process.env, MOTIF_ZIBAL_RETRY_ENABLED: 'false' }), null);
-  const shipping = require('../src/lib/destination-shipping');
-  const tariff = await shipping.publish(p, { expectedTariffId: (await p.shippingTariffState.findUnique({where:{id:'default'}}))?.activeTariffId || null,
-    source:'Synthetic fixture only; not a real carrier tariff',carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج',
-    validFrom:new Date(Date.now()-1000).toISOString(),validUntil:new Date(Date.now()+86400000).toISOString(),allInclusive:true,merchantCoversDifference:true,ownerApproved:true,
-    rules:shipping.provinces.map(province=>({province,city:'*',fee:2500,maxItems:100,maxGoodsTomans:2147483647,minGrams:1,maxGrams:1000,maxLengthMm:500,maxWidthMm:500,maxHeightMm:500})) });
+  const shipping = require('../src/lib/postpaid-shipping');
+  const tariff=await shipping.publish(p,{confirmed:true,evidence:'Synthetic recipient-paid postage confirmation only',validUntil:new Date(Date.now()+86400000).toISOString()});
   await p.shippingSettings.upsert({ where: { id: 'default' }, create: { id: 'default', fee: 2500 }, update: { fee: 2500 } });
   const product = await measuredProduct({ data: { title: 'Public fixture only', basePrice: 10000,
     images: [], customerNeeds: [], styles: [], variants: { create: { size: 'T', color: 'test', sku: randomUUID(), stock: 1, itemImages: [] } } }, include: { variants: true } });
@@ -58,10 +55,10 @@ async function run() {
   assert.equal((await request('/api/checkout/card-transfer/orders')).status, 401);
   console.log('PASS public customer routes open only with explicit flags; admin settings/orders remain protected');
   const key = randomUUID(), payload = JSON.stringify({ items: [{ variantId: product.variants[0].id, quantity: 1 }],
-    customer: { fullName: 'Synthetic public guest', phone: '09000000001', address: 'Not a real address', province: 'تهران', city: 'تهران', postalCode: '0000000000' }, shippingAcceptance: {tariffId:tariff.id,shippingFee:2500,totalPrice:12500}, totalPrice: 1 });
+    customer: { fullName: 'Synthetic public guest', phone: '09000000001', address: 'Not a real address', province: 'تهران', city: 'تهران', postalCode: '0000000000' }, shippingAcceptance: {tariffId:tariff.id,shippingFee:0,totalPrice:10000,shippingChargeMode:'RECIPIENT_AT_DELIVERY',termsAccepted:true}, totalPrice: 1 });
   const options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: payload };
   let r = await request('/api/checkout/orders', options); assert.equal(r.status, 201); const order = await r.json();
-  assert.equal(order.totalPrice, 12500); assert.equal(order.shippingFee, 2500);
+  assert.equal(order.totalPrice, 10000); assert.equal(order.shippingFee, 0);
   r = await request('/api/checkout/orders', options); assert.equal((await r.json()).orderNumber, order.orderNumber);
   assert.equal((await p.variant.findUniqueOrThrow({ where: { id: product.variants[0].id } })).stock, 0);
   console.log('PASS production-mode guest order computes shipping server-side, reserves once and reuses request key');
@@ -146,9 +143,10 @@ async function run() {
           else await page.locator('#guestCheckout [name="' + name + '"]').fill(value);
         }
         assert.ok(await page.locator('#guestCheckout button.primary').isDisabled());
+        await page.locator('#postpaidAgreement input').check();
         await page.locator('#quoteShipping').click();
         await page.waitForFunction(()=>!document.querySelector('#guestCheckout button.primary').disabled);
-        assert.ok((await page.locator('#checkoutShipping').innerText()).includes('۱۲٬۵۰۰'));
+        assert.ok((await page.locator('#checkoutShipping').innerText()).includes('۱۰٬۰۰۰'));
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
         await page.screenshot({ path: 'artifacts/public-checkout-' + label + '-form.png', fullPage: true });
         await page.locator('#guestCheckout button.primary').click();
@@ -156,7 +154,7 @@ async function run() {
         await page.locator('#onlinePayment').waitFor({ state: 'visible' });
         assert.ok(!(await page.locator('#checkoutMessage').innerText()).includes('آزمایشی'));
         const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem('motif-card-order')));
-        assert.equal(saved.total, 12500); assert.ok(saved.number);
+        assert.equal(saved.total, 10000); assert.ok(saved.number);
         assert.equal((await p.variant.findUniqueOrThrow({ where: { id: item.variants[0].id } })).stock, 0);
         await page.screenshot({ path: 'artifacts/public-checkout-' + label + '-order.png', fullPage: true });
         await context.close();
