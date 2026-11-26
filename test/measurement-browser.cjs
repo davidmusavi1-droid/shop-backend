@@ -11,7 +11,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
  await page.route('http://motif.test/**',route=>{
   const u=new URL(route.request().url());
   if(u.pathname.startsWith('/api/'))return route.fulfill({contentType:'application/json',body:JSON.stringify(u.pathname==='/api/products'?products:products.find(p=>p.id===decodeURIComponent(u.pathname.split('/').at(-1))))});
-  const requested=path.basename(u.pathname),file=['catalog.js','store.js','site-content.js','store.css'].includes(requested)?requested:'index.html';return route.fulfill({contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(path.join(__dirname,'../public',file),'utf8')});
+  const requested=path.basename(u.pathname),file=['catalog.js','checkout-state.js','courier-checkout.js','store.js','site-content.js','store.css'].includes(requested)?requested:'index.html';return route.fulfill({contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(path.join(__dirname,'../public',file),'utf8')});
  });
  await page.goto('http://motif.test/collection');await page.locator('#products .card').first().waitFor();await page.locator('#advancedMeasurements>summary').click();
  assert.equal(await page.locator('#products .card').count(),4);
