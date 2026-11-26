@@ -2,12 +2,15 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const requireAdmin = require('../middleware/requireAdmin');
 const checkout = require('../lib/checkout');
+const { liveTrackingReady } = require('../lib/kavenegar');
 const { publicCheckout } = require('../lib/checkout-access');
 const shipping = require('../lib/destination-shipping');
 const postpaid = require('../lib/postpaid-shipping');
 const { randomUUID } = require('node:crypto');
 const router = express.Router();
 
+// Tracking remains available for existing orders when new checkout is paused.
+router.use('/tracking', require('./order-tracking'));
 router.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   if (publicCheckout()) return next();
@@ -29,23 +32,22 @@ function handle(action) {
 }
 
 router.use('/logistics', require('./logistics'));
-router.use('/tracking', require('./order-tracking'));
 router.use('/card-transfer', require('./card-transfer'));
 
 router.get('/shipping', handle(async (req, res) => {
   if(postpaid.required()){
     let policy;try{policy=await postpaid.active(prisma);}catch(e){if(e.statusCode!==503)throw e;}
-    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:false});
+    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady()});
   }
   if (shipping.required()) {
     let tariff;
     try { tariff = await shipping.active(prisma); } catch (e) { if (e.statusCode !== 503) throw e; }
     const cities = Object.fromEntries(shipping.provinces.map(p=>[p, tariff ? tariff.rules.filter(x=>x.province===p&&x.city!=='*').map(x=>x.city) : []]));
     return res.json({ mode: 'destination', shippingFee: null, ready: Boolean(tariff), provinces: shipping.provinces, cities,
-      public: publicCheckout(), trackingAvailable: false });
+      public: publicCheckout(), trackingAvailable: liveTrackingReady() });
   }
   const settings = await prisma.shippingSettings.findUnique({ where: { id: checkout.SHIPPING_ID } });
-  res.json({ shippingFee: settings?.fee ?? null, public: publicCheckout(), trackingAvailable: false });
+  res.json({ shippingFee: settings?.fee ?? null, public: publicCheckout(), trackingAvailable: liveTrackingReady() });
 }));
 
 router.put('/shipping', requireAdmin, handle(async (req, res) => {
