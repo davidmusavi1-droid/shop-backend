@@ -3,7 +3,11 @@ const prisma = require('../lib/prisma');
 const { createMockProvider, createTracking, uuid } = require('../lib/order-tracking');
 
 const router = express.Router();
-const provider = createMockProvider();
+const { liveTrackingReady, createKavenegarProvider } = require('../lib/kavenegar');
+router.get('/availability', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ available: liveTrackingReady() });
+});
 function handle(action) {
   return async (req, res) => {
     try { await action(req, res); }
@@ -17,9 +21,11 @@ router.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   const secret = process.env.MOTIF_TRACKING_OTP_SECRET;
   const testPhone = process.env.MOTIF_TRACKING_MOCK_PHONE;
-  if (process.env.NODE_ENV !== 'test' || process.env.MOTIF_TRACKING_PROVIDER !== 'mock' ||
-      !secret || secret.length < 32 || !/^09\d{9}$/.test(testPhone || '')) return res.sendStatus(404);
-  res.locals.testPhone = testPhone;
+  const mock = process.env.NODE_ENV === 'test' && process.env.MOTIF_TRACKING_PROVIDER === 'mock' &&
+    secret && secret.length >= 32 && /^09\d{9}$/.test(testPhone || '');
+  const provider = mock ? createMockProvider() : createKavenegarProvider();
+  if (!provider) return res.sendStatus(404);
+  res.locals.testPhone = mock ? testPhone : null;
   res.locals.tracking = createTracking({ prisma, provider, secret });
   next();
 });
@@ -31,7 +37,7 @@ router.post('/challenge', handle(async (req, res) => {
     return res.status(400).json({ error: 'شماره سفارش یا موبایل نامعتبر است' });
   }
   const { randomUUID } = require('node:crypto');
-  const reply = phone === res.locals.testPhone
+  const reply = (!res.locals.testPhone || phone === res.locals.testPhone)
     ? await res.locals.tracking.issue(orderNumber.toLowerCase(), phone)
     : { challengeId: randomUUID() };
   res.status(202).json(reply);
