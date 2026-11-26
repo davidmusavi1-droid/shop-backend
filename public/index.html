@@ -11,7 +11,7 @@
 <p id="rangeError" role="alert" hidden>بازه نامعتبر است؛ عدد مثبت وارد کن و مقدار «از» را بزرگ‌تر از «تا» نگذار.</p><div class="section-head"><span id="count"></span><label class="sort-label">مرتب‌سازی<select id="sort"><option value="fit">نزدیک‌ترین اندازه</option><option value="new">تازه‌ترین</option><option value="price">قیمت کمتر</option></select></label></div><div id="catalogStatus" class="state" role="status"></div><button id="retry" class="button" hidden>تلاش دوباره</button><div id="products" class="grid"></div><p class="hint">اندازه‌های ثبت‌شدهٔ هر آیتم معیارند؛ فرم و کشسانی لباس را هم بررسی کن.</p></div></section>
 <section id="product" hidden><nav id="productBreadcrumb" class="breadcrumb" aria-label="مسیر صفحه"></nav><a class="back" href="/collection">بازگشت به انتخاب‌ها</a><div id="productStatus" role="status" class="state"></div><button id="detailRetry" class="button" hidden>تلاش دوباره</button><div id="detail" class="detail" hidden></div></section>
 <section id="cart" class="section" hidden><h1>سبد انتخاب‌ها</h1><div id="cartItems"></div><p id="cartTotal"></p><p id="checkoutMessage" role="status" aria-live="polite"></p>
-<details>
+<details id="order-tracking">
   <summary>پیگیری سفارش</summary>
   <form id="trackingChallenge">
     <label>شماره سفارش<input name="orderNumber" required maxlength="36"></label>
@@ -22,7 +22,7 @@
     <label>کد تأیید<input name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="6"></label>
     <button type="submit">نمایش وضعیت سفارش</button>
   </form>
-  <p id="trackingResult" role="status"></p>
+  <p id="trackingResult" role="status">پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید و برای پیگیری از راه‌های تماس فروشگاه استفاده کنید.</p>
 </details>
 <p id="onlinePaymentStatus" role="status"></p><button id="onlinePayment" type="button" hidden>پرداخت آنلاین آزمایشی</button>
 <form id="cardReceipt" hidden>
