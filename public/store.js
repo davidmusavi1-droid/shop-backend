@@ -209,7 +209,7 @@ async function showCheckout(ticket, total) {
       $('guestCheckout').hidden=false;$('quoteShipping').hidden=false;$('quoteShipping').disabled=!shippingConfig.ready;invalidateShipping();
       if(!shippingConfig.ready)$('checkoutShipping').textContent=postpaidCheckout?'پیشتاز پس‌کرایه از مبدأ کرج هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.':'تعرفه معتبر ارسال هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.';
       document.querySelector('#cart .notice').textContent=postpaidCheckout?'رزرو پس از ثبت سفارش انجام می‌شود. پرداخت آنلاین فقط مبلغ کالا است؛ کرایه پست پس‌کرایه است.':'رزرو کالا پس از ثبت سفارش انجام می‌شود. مبلغ کالا و ارسال پیش از پرداخت قطعی است.';
-      if(customerCheckout){$('trackingChallenge').hidden=true;$('trackingVerify').hidden=true;$('trackingResult').textContent='پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید.';}
+      if(customerCheckout&&!trackingAvailable){$('trackingChallenge').hidden=true;$('trackingVerify').hidden=true;$('trackingResult').textContent='پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید.';}
       return;
     }
     destinationCheckout=false;
@@ -341,7 +341,7 @@ submitTracking('trackingChallenge', 'challenge', fields => ({
   trackingChallengeId = data.challengeId;
   $('trackingVerify').hidden = false;
   $('trackingVerify').reset();
-  $('trackingResult').textContent = 'درخواست آزمایشی دریافت شد.';
+  $('trackingResult').textContent = 'اگر شماره سفارش و موبایل مطابقت داشته باشند و محدودیت ارسال پر نشده باشد، کد تأیید ارسال می‌شود. پس از ۶۰ ثانیه می‌توانید دوباره درخواست کنید.';
 });
 
 submitTracking('trackingVerify', 'verify', fields => ({
@@ -393,3 +393,16 @@ async function showOnlinePayment(order) {
   } catch {}
 }
 try { void showOnlinePayment(JSON.parse(sessionStorage.getItem('motif-card-order'))); } catch {}
+
+async function refreshTrackingAvailability() {
+  let available = false;
+  try { const r = await fetch('/api/checkout/tracking/availability', { cache: 'no-store' });
+    if (r.ok) available = (await r.json()).available === true;
+  } catch {}
+  $('trackingChallenge').hidden = !available;
+  $('trackingVerify').hidden = true;
+  $('trackingResult').textContent = available
+    ? 'شماره سفارش و موبایل ثبت‌شده را وارد کنید. کد ۵ دقیقه اعتبار دارد و حداکثر ۵ بار قابل بررسی است.'
+    : 'پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید و از راه‌های تماس فروشگاه پیگیری کنید.';
+}
+void refreshTrackingAvailability();
