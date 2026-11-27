@@ -1250,6 +1250,7 @@ async function loadShippingSettings(){
   const form=$('shippingSettings');form.hidden=true;
   try{
     const data=await api('/api/checkout/shipping/tariff');if(!Array.isArray(data.provinces))return;
+    if(data.mode==='postpaid'){$('shippingStatus').textContent='پیشتاز پس‌کرایه است؛ ویرایش تعرفه پرداخت آنلاین غیرفعال است. تأییدیه پست و زمان‌های ارسال را از مدیریت ارسال تنظیم کنید.';return;}
     shippingProvinces=data.provinces;const t=data.tariff;shippingRevision=t?.id||null;
     form.elements.originProvince.replaceChildren(...shippingProvinces.map(p=>{const o=el('option',p);o.value=p;return o;}));
     for(const name of ['source','carrier','originProvince','originCity'])form.elements[name].value=t?.[name]||({carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج'}[name]||'');

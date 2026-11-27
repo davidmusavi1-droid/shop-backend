@@ -83,6 +83,8 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  for(const price of [4999999,5000000,20000000])assert.equal((await reserve(customer(),price)).q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
  assert.deepEqual(await db.orderShippingSnapshot.findMany({where:{orderId:{in:before.map(r=>r.orderId)}},orderBy:{orderId:'asc'}}),before);
  assert.throws(()=>checkout.checkoutInput({customer:large.input.customer,items:large.input.items,shippingAcceptance:{tariffId:large.q.tariffId,shippingFee:0,totalPrice:large.order.totalPrice,shippingChargeMode:'MERCHANT_PAYS',termsAccepted:true}},randomUUID()),e=>e.statusCode===400);
+ assert.equal((await json('/api/checkout/shipping/tariff',{})).status,409);
+ assert.equal((await fetch(origin+'/api/checkout/shipping/tariff',{headers:auth}).then(r=>r.json())).mode,'postpaid');
  assert.equal((await fetch(origin+'/api/checkout/logistics/settings').then(r=>r.json())).tipaxEnabled,false);
  assert.equal((await json('/api/checkout/shipping/quote',{customer:large.input.customer,items:large.input.items,shippingMethod:'TIPAX'})).status,409);
  await assert.rejects(db.$executeRawUnsafe('UPDATE "OrderShippingSnapshot" SET "fee"=1 WHERE "orderId"=$1',large.order.orderNumber));
