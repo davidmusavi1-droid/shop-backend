@@ -193,7 +193,7 @@ $('quoteShipping').onclick = async () => {
   try {
     const response = await checkoutWrite('/api/checkout/shipping/quote', {method:'POST',headers:{'Content-Type':'application/json'},body});
     const q = await response.json(); if (!response.ok) throw Error(q.error || 'هزینه ارسال قابل محاسبه نیست.');
-    if (body !== shippingPayload()) return;
+    if (body !== shippingPayload() || document.querySelector('[aria-label="روش ارسال"]')?.value==='COORDINATED_COURIER') return;
     shippingQuote = {...q,body};
     if(q.terms)$('shippingTerms').textContent=q.terms;
     $('checkoutShipping').textContent = q.shippingChargeMode ? q.terms+' مبلغ کالا / پرداخت آنلاین: '+money(q.totalPrice) : 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';

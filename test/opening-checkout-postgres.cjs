@@ -89,7 +89,12 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  assert.equal((await json('/api/checkout/shipping/quote',{customer:large.input.customer,items:large.input.items,shippingMethod:'TIPAX'})).status,409);
  await assert.rejects(db.$executeRawUnsafe('UPDATE "OrderShippingSnapshot" SET "fee"=1 WHERE "orderId"=$1',large.order.orderNumber));
  for(const name of ['shipping-guide','payment-guide','tracking-guide']){
-  const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(!html.includes('ارسال رایگان'));assert(html.includes('class="customer-guide"'));
+  const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(html.includes('class="customer-guide"'));
+  if(name==='shipping-guide'){
+   assert(html.includes((5000000).toLocaleString('fa-IR')));
+   assert(html.includes((7000000).toLocaleString('fa-IR')));
+  }
+  if(name==='payment-guide')assert(html.includes('کرایه ارسال رایگان با MOTIF است'));
  }
  process.env.NODE_ENV='production';process.env.ADMIN_ORIGIN='https://motifdress.com';
  assert.equal((await json('/api/checkout/orders',{},{})).status,401);
