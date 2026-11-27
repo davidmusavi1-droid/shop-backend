@@ -4,7 +4,7 @@ const assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
 const target=new URL(process.env.DATABASE_URL);
 assert(['127.0.0.1','localhost'].includes(target.hostname)&&target.pathname==='/motif_shipping');
 process.env.NODE_ENV='test';process.env.MOTIF_POSTPAID_SHIPPING='true';process.env.MOTIF_CHECKOUT_PREVIEW='true';
-process.env.MOTIF_CHECKOUT_LIMITS='true';delete process.env.MOTIF_PUBLIC_CHECKOUT;
+process.env.MOTIF_CHECKOUT_LIMITS='true';process.env.MOTIF_CHECKOUT_PUBLIC='false';
 const {PrismaClient}=require('@prisma/client'),db=new PrismaClient();
 const checkout=require('../src/lib/checkout'),post=require('../src/lib/postpaid-shipping'),policy=require('../src/lib/shipping-policy');
 const express=require('express'),sharp=require('sharp'),path=require('node:path');
@@ -81,9 +81,9 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  for(const name of ['shipping-guide','payment-guide','tracking-guide']){
   const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(html.includes('class="guide"'));
  }
- process.env.NODE_ENV='production';
+ process.env.NODE_ENV='production';process.env.ADMIN_ORIGIN='https://motifdress.com';
  assert.equal((await json('/api/checkout/orders',{},{})).status,401);
- process.env.NODE_ENV='test';
+ process.env.NODE_ENV='test';process.env.ADMIN_ORIGIN=origin;
  console.log('PASS strict free threshold, real-approval gate, stale settings, immutable snapshot, independent guides and closed production checkout');
  const samePhone=customer();
  await reserve(samePhone);await reserve(samePhone);await reserve(samePhone);

@@ -114,6 +114,7 @@ router.get('/orders', admin, handle(async (req, res) => {
     take: 31,
     select: {
       id: true, totalPrice: true, status: true, shipmentTrackingCode: true, createdAt: true,
+      shippingSnapshot: {select:{fee:true,details:true}},
       checkout: { select: { fullName: true, phone: true, address: true, province: true, city: true, postalCode: true, shippingFee: true, expiresAt: true } },
       payment: { select: { isSuccessful: true, cardTransfer: { select: { reviewedAt: true, rejected: true, bankTrackingCode: true, receiptDigest: true } } } },
     },

@@ -3,6 +3,10 @@ BEGIN;
 ALTER TABLE "CardTransfer" ALTER COLUMN "receipt" DROP NOT NULL;
 ALTER TABLE "CardTransfer" ADD COLUMN IF NOT EXISTS "bankTrackingCode" TEXT;
 ALTER TABLE "CardTransfer" ADD COLUMN IF NOT EXISTS "receiptDigest" TEXT;
+-- Backfill historical normalized receipt hashes. Existing duplicates deliberately
+-- abort the transaction for human review; never delete or merge payment history.
+UPDATE "CardTransfer" SET "receiptDigest"=encode(sha256("receipt"),'hex')
+WHERE "receipt" IS NOT NULL AND "receiptDigest" IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS "CardTransfer_bankTrackingCode_key" ON "CardTransfer"("bankTrackingCode");
 CREATE UNIQUE INDEX IF NOT EXISTS "CardTransfer_receiptDigest_key" ON "CardTransfer"("receiptDigest");
 ALTER TABLE "CardTransfer" DROP CONSTRAINT IF EXISTS "CardTransfer_evidence_check";

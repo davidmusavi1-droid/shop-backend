@@ -8,5 +8,5 @@ function trackingCode(value){
  return code;
 }
 const digest=receipt=>receipt?createHash('sha256').update(receipt).digest('hex'):null;
-function same(previous,code,hash){return previous.bankTrackingCode===code&&previous.receiptDigest===hash;}
+function same(previous,code,hash){return (previous.bankTrackingCode||null)===code&&(previous.receiptDigest||digest(previous.receipt))===hash;}
 module.exports={trackingCode,digest,same};

@@ -23,7 +23,7 @@ Based on main at 7993811b1b945b65bc8f60d232a11d37077909fc (PR34 merged). This pr
 
 ## Rollout gates — not performed
 
-1. Review final PR CI and SQL against a fresh authorized production backup. Run compatibility review; existing shipping/payment tables must already be present.
+1. Review final PR CI and SQL against a fresh authorized production backup. Run compatibility review; existing shipping/payment tables must already be present. Historical receipt digests are backfilled; if duplicate historical receipt bytes exist the migration rolls back for human investigation, without deleting/merging evidence.
 2. Separately approve manual db/add-payment-evidence.sql, then db/add-shipping-policy.sql. These are additive/constraint upgrades, not startup migrations. Run only after testing restore; never rerun the older postpaid constraint after the new shipping-policy constraint.
 3. Deploy only with owner approval. Keep existing public-checkout, live-gateway and SMS flags unchanged/disabled. Do not use old application code that assumes every card proof has a receipt after code-only records exist.
 4. Obtain postal-office confirmation for recipient-paid shipments AND merchant-paid/free postage. Enter real references/validity via authenticated panel. Synthetic CI evidence must never be copied.

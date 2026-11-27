@@ -5,7 +5,7 @@ const checkout = require('../lib/checkout');
 const { liveTrackingReady } = require('../lib/kavenegar');
 const { publicCheckout } = require('../lib/checkout-access');
 const shipping = require('../lib/destination-shipping');
-const policy = require('../lib/shipping-policy');
+const shippingPolicy = require('../lib/shipping-policy');
 const postpaid = require('../lib/postpaid-shipping');
 const { randomUUID } = require('node:crypto');
 const router = express.Router();
@@ -38,7 +38,7 @@ router.use('/card-transfer', require('./card-transfer'));
 router.get('/shipping', handle(async (req, res) => {
   if(postpaid.required()){
     let policy;try{policy=await postpaid.active(prisma);}catch(e){if(e.statusCode!==503)throw e;}
-    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady(),policy:policy.publicView(await policy.read(prisma))});
+    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady(),policy:shippingPolicy.publicView(await shippingPolicy.read(prisma))});
   }
   if (shipping.required()) {
     let tariff;

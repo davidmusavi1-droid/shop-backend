@@ -53,6 +53,10 @@ jobs:
           node-version: '22'
       - run: npm install --no-package-lock
       - run: npm install --no-save --no-package-lock playwright@1.56.1
+      - name: Record production dependency audit for opening review
+        run: |
+          mkdir -p artifacts
+          npm audit --omit=dev --json > artifacts/opening-dependency-audit.json || test -s artifacts/opening-dependency-audit.json
       - run: npx prisma generate && npx prisma validate
       - run: npx prisma migrate deploy
       - name: Install additive schemas in independent fixture only
@@ -76,5 +80,7 @@ jobs:
         if: always()
         with:
           name: synthetic-parcel-courier-evidence
-          path: artifacts/parcel-courier-*.png
+          path: |
+            artifacts/parcel-courier-*.png
+            artifacts/opening-dependency-audit.json
           if-no-files-found: ignore
