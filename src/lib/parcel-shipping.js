@@ -22,9 +22,9 @@ function settingsInput(b) {
   if(typeof b?.supportPhone!=='string' || (b.supportPhone && !/^0\d{10}$/.test(b.supportPhone)) || typeof b.courierEnabled!=='boolean') throw fail(400,'شماره پشتیبانی معتبر لازم است');
   if(b.courierEnabled && !b.supportPhone) throw fail(400,'پشتیبانی ارسال فوری را تنظیم کنید');
   return {supportPhone:b.supportPhone,courierEnabled:b.courierEnabled,
-    requestMinutes:integer(b.requestMinutes,1,1440),offerMinutes:integer(b.offerMinutes,1,30),reservationMinutes:integer(b.reservationMinutes,1,30)};
+    requestMinutes:integer(b.requestMinutes,1,1440),offerMinutes:integer(b.offerMinutes,1,30),reservationMinutes:integer(b.reservationMinutes,30,30)};
 }
-async function settings(db) {return (await db.shippingOperations.findUnique({where:{id:'default'}}))?.settings || defaults;}
+async function settings(db) {return {...defaults,...(await db.shippingOperations.findUnique({where:{id:'default'}}))?.settings,reservationMinutes:30};}
 function weightInput(b) {if(b?.approved!==true)throw fail(400,'اندازه‌گیری واقعی را تأیید کنید');return {grams:integer(b.grams,1,100000),approvedAt:new Date()};}
 function planInput(b) {
   if(b?.approved!==true || !Array.isArray(b.items)||!b.items.length||b.items.length>100)throw fail(400,'بسته‌بندی واقعی این ترکیب کالا را تأیید کنید');

@@ -12,7 +12,8 @@ async function load(){
  const refresh=E('button','تازه‌سازی تنظیمات و درخواست‌ها');refresh.type='button';refresh.onclick=()=>load().catch(e=>status.textContent=e.message);root.append(refresh);
  const settings=E('form');settings.append(E('h3','پیک فوری و زمان‌ها'));
  field(settings,'supportPhone','شماره عمومی پشتیبانی',data.settings.supportPhone).required=false;
- for(const [n,t]of [['requestMinutes','انقضای درخواست، دقیقه (۱ تا ۱۴۴۰)'],['offerMinutes','اعتبار پیشنهاد، دقیقه (حداکثر ۳۰)'],['reservationMinutes','رزرو پس از پذیرش، دقیقه (حداکثر ۳۰)']])field(settings,n,t,data.settings[n],'number');
+ for(const [n,t]of [['requestMinutes','انقضای درخواست، دقیقه (۱ تا ۱۴۴۰)'],['offerMinutes','اعتبار پیشنهاد، دقیقه (حداکثر ۳۰)'],['reservationMinutes','رزرو اولیه پس از پذیرش، ثابت ۳۰ دقیقه']])field(settings,n,t,data.settings[n],'number');
+ settings.elements.reservationMinutes.readOnly=true;settings.elements.reservationMinutes.min='30';settings.elements.reservationMinutes.max='30';
  const enabled=field(settings,'courierEnabled','ارسال فوری برای شهر تهران و شهر کرج','','checkbox');enabled.required=false;enabled.checked=data.settings.courierEnabled;
  action(settings,'ذخیره تنظیمات',async()=>{const f=settings.elements;await api(base+'/settings',{method:'PUT',body:JSON.stringify({supportPhone:f.supportPhone.value.trim(),courierEnabled:f.courierEnabled.checked,requestMinutes:f.requestMinutes.valueAsNumber,offerMinutes:f.offerMinutes.valueAsNumber,reservationMinutes:f.reservationMinutes.valueAsNumber})});});
  root.append(settings);

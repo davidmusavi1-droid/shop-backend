@@ -8,7 +8,7 @@ test('courier matches city and province, not neighbouring cities',()=>{
 });
 test('settings permit owner durations but no unbounded reservation',()=>{
  assert.equal(p.settingsInput({...p.defaults,supportPhone:'02112345678',courierEnabled:true}).requestMinutes,120);
- for(const reservationMinutes of [0,31,1.5])assert.throws(()=>p.settingsInput({...p.defaults,reservationMinutes}),/نامعتبر/);
+ for(const reservationMinutes of [0,1,29,31,1.5])assert.throws(()=>p.settingsInput({...p.defaults,reservationMinutes}),/نامعتبر/);
  assert.throws(()=>p.settingsInput({...p.defaults,courierEnabled:true}),/پشتیبانی/);
 });
 test('measurements require explicit approval and exact integers',()=>{
