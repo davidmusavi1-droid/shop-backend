@@ -81,7 +81,7 @@ router.post('/shipping/quote', handle(async (req, res) => {
     lines.push({ ...item, unitPrice: v.product.basePrice + v.priceDelta });
   }
   const q=await (postpaid.required()?postpaid:shipping).quote(prisma,input.customer,lines);
-  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms,eta:q.eta,freeShipping:q.freeShipping,freeShippingEligible:q.freeShippingEligible,freeShippingReady:q.freeShippingReady,remainingForFreeShipping:q.remainingForFreeShipping}:{})});
+  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms,eta:q.eta}:{})});
 }));
 
 router.post('/orders', handle(async (req, res) => {

@@ -3,6 +3,11 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'src/lib/shipping-policy.js'
+      - 'src/lib/customer-guides.js'
+      - 'test/shipping-policy.test.js'
+      - 'test/opening-checkout-postgres.cjs'
+      - 'db/add-shipping-policy.sql'
       - 'src/lib/parcel-shipping.js'
       - 'src/lib/shipping-costs.js'
       - 'src/lib/postpaid-shipping.js'

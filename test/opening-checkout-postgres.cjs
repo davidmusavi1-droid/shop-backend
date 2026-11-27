@@ -70,46 +70,52 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  await db.payment.update({where:{orderId:mismatched.order.orderNumber},data:{amount:9999}});
  assert.equal((await review(mismatched,true)).status,409);assert.equal(await stock(mismatched),0);
  console.log('PASS receipt-only and both, cross-order duplicates, private downloads, admin evidence, single rejection release, expired upload and amount mismatch');
+ const before=await db.orderShippingSnapshot.findMany({orderBy:{orderId:'asc'}});
+ await db.shippingOperations.upsert({where:{id:'customer-shipping-policy'},create:{id:'customer-shipping-policy',settings:{...policy.defaults,revision:'obsolete',threshold:1,postalFreeEnabled:true,karajFreeEnabled:true}},update:{settings:{...policy.defaults,revision:'obsolete',threshold:1,postalFreeEnabled:true,karajFreeEnabled:true}}});
  const state=await policy.read(db);
- await assert.rejects(reserve(customer(),5000001),e=>e.statusCode===503);
- const saved=await policy.save(db,{...state,expectedRevision:state.revision,postalFreeEvidence:'Synthetic postal approval for isolated test only',postalFreeValidUntil:new Date(Date.now()+3600000).toISOString()});
+ const saved=await policy.save(db,{...state,expectedRevision:state.revision});
  await assert.rejects(policy.save(db,{...state,expectedRevision:state.revision}),e=>e.statusCode===409);
- const free=await reserve(customer(),5000001);
- assert.equal(free.q.shippingChargeMode,'MERCHANT_PAYS');
- const snapshot=await db.orderShippingSnapshot.findUnique({where:{orderId:free.order.orderNumber}});
- assert.equal(snapshot.fee,0);assert.equal(snapshot.details.freeShipping,true);assert.equal(snapshot.details.policyRevision,saved.revision);
- const threshold=await reserve(customer(),5000000);assert.equal(threshold.q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
- await assert.rejects(db.$executeRawUnsafe('UPDATE "OrderShippingSnapshot" SET "fee"=1 WHERE "orderId"=$1',free.order.orderNumber));
+ await assert.rejects(policy.save(db,{...saved,expectedRevision:saved.revision,threshold:1,postalFreeEnabled:true}),e=>e.statusCode===409);
+ const large=await reserve(customer(),5000001);
+ assert.equal(large.q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
+ const snapshot=await db.orderShippingSnapshot.findUnique({where:{orderId:large.order.orderNumber}});
+ assert.equal(snapshot.fee,0);assert.equal(snapshot.details.shippingChargeMode,'RECIPIENT_AT_DELIVERY');assert.equal(snapshot.details.policyRevision,saved.revision);
+ for(const price of [4999999,5000000,20000000])assert.equal((await reserve(customer(),price)).q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
+ assert.deepEqual(await db.orderShippingSnapshot.findMany({where:{orderId:{in:before.map(r=>r.orderId)}},orderBy:{orderId:'asc'}}),before);
+ assert.throws(()=>checkout.checkoutInput({customer:large.input.customer,items:large.input.items,shippingAcceptance:{tariffId:large.q.tariffId,shippingFee:0,totalPrice:large.order.totalPrice,shippingChargeMode:'MERCHANT_PAYS',termsAccepted:true}},randomUUID()),e=>e.statusCode===400);
+ assert.equal((await fetch(origin+'/api/checkout/logistics/settings').then(r=>r.json())).tipaxEnabled,false);
+ assert.equal((await json('/api/checkout/shipping/quote',{customer:large.input.customer,items:large.input.items,shippingMethod:'TIPAX'})).status,409);
+ await assert.rejects(db.$executeRawUnsafe('UPDATE "OrderShippingSnapshot" SET "fee"=1 WHERE "orderId"=$1',large.order.orderNumber));
  for(const name of ['shipping-guide','payment-guide','tracking-guide']){
-  const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(html.includes('class="customer-guide"'));
+  const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(!html.includes('ارسال رایگان'));assert(html.includes('class="customer-guide"'));
  }
  process.env.NODE_ENV='production';process.env.ADMIN_ORIGIN='https://motifdress.com';
  assert.equal((await json('/api/checkout/orders',{},{})).status,401);
  process.env.NODE_ENV='test';process.env.ADMIN_ORIGIN=origin;
- console.log('PASS strict free threshold, real-approval gate, stale settings, immutable snapshot, independent guides and closed production checkout');
+ console.log('PASS postpaid at every amount, obsolete-settings rejection, disabled Tipax, immutable history, independent guides and closed checkout');
 
  // Exercise actual courier offers/acceptance and zero-fee SQL, including Arabic Kaf.
  const parcel=require('../src/lib/parcel-shipping'),courier=require('../src/lib/coordinated-courier');
- for(const [city,fee,mode] of [['كرج',0,'MERCHANT_PAYS'],['تهران',600,'RECIPIENT_AT_DELIVERY']]){
+ for(const [city,fee,price] of [['كرج',500,10000],['كرج',700,5000001],['تهران',600,10000],['تهران',800,5000001]]){
   const recipient={...customer(),province:city==='تهران'?'تهران':'البرز',city};
-  const product=await db.product.create({data:{title:'Synthetic courier policy boundary',basePrice:5000001,images:[],customerNeeds:[],styles:[],variants:{create:{size:'test',color:'test',sku:randomUUID(),stock:1,itemImages:[]}}},include:{variants:true}});
+  const product=await db.product.create({data:{title:'Synthetic courier policy boundary',basePrice:price,images:[],customerNeeds:[],styles:[],variants:{create:{size:'test',color:'test',sku:randomUUID(),stock:1,itemImages:[]}}},include:{variants:true}});
   const items=[{variantId:product.variants[0].id,quantity:1}];
   await db.shippingMeasurement.create({data:{variantId:items[0].variantId,...parcel.weightInput({grams:200,approved:true})}});
   await db.shippingPackingPlan.create({data:parcel.planInput({items,tareGrams:50,lengthMm:300,widthMm:200,heightMm:50,approved:true})});
   const input=checkout.checkoutInput({customer:recipient,items},randomUUID());input.clientHash=parcel.hash('synthetic-opening-courier');
   const token=require('node:crypto').randomBytes(32).toString('hex');
   const request=await courier.request(db,input,token);
-  if(fee===0)await assert.rejects(courier.offer(db,request.id,{fee:500,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0}),e=>e.statusCode===400);
+  await assert.rejects(courier.offer(db,request.id,{fee:0,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0}),e=>e.statusCode===400);
   const offer=await courier.offer(db,request.id,{fee,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0});
-  assert.equal(offer.offer.totalPrice,5000001);assert.equal(offer.offer.shippingFee,0);assert.equal(offer.offer.courierDueAtDelivery,fee);
-  const acceptedInput=checkout.checkoutInput({customer:recipient,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:request.id,token,revision:offer.revision,shippingFee:0,totalPrice:5000001}},randomUUID());
+  assert.equal(offer.offer.totalPrice,price);assert.equal(offer.offer.shippingFee,0);assert.equal(offer.offer.courierDueAtDelivery,fee);
+  const acceptedInput=checkout.checkoutInput({customer:recipient,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:request.id,token,revision:offer.revision,shippingFee:0,totalPrice:price}},randomUUID());
   const accepted=await checkout.reserve(db,acceptedInput);
   const shipping=await db.orderShippingSnapshot.findUnique({where:{orderId:accepted.orderNumber}});
-  assert.equal(shipping.fee,0);assert.equal(shipping.details.shippingChargeMode,mode);
+  assert.equal(shipping.fee,0);assert.equal(shipping.details.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
   assert.equal(shipping.details.destination.city,city==='كرج'?'کرج':'تهران');
   assert.equal((await db.variant.findUnique({where:{id:items[0].variantId}})).stock,0);
  }
- console.log('PASS actual Karaj free courier including Arabic spelling, Tehran postpaid courier, goods-only amount and SQL snapshots');
+ console.log('PASS agreed positive courier fares for Karaj/Tehran below and above old boundary, Arabic spelling and goods-only totals');
 
  const samePhone=customer();
  await reserve(samePhone);await reserve(samePhone);await reserve(samePhone,10000,true);
@@ -121,12 +127,13 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
   try{for(const width of [320,1280]){
    const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
-   await page.addInitScript(cart=>localStorage.setItem('motif-cart',JSON.stringify(cart)),[{productId:free.product.id,variantId:free.variant.id,quantity:1}]);
+   await page.addInitScript(cart=>localStorage.setItem('motif-cart',JSON.stringify(cart)),[{productId:large.product.id,variantId:large.variant.id,quantity:1}]);
    // The already-reserved item has no stock; restore fixture only for visual cart checks.
-   await db.variant.update({where:{id:free.variant.id},data:{stock:1}});
+   await db.variant.update({where:{id:large.variant.id},data:{stock:1}});
    await page.goto(origin+'/cart');await page.locator('#guestCheckout').waitFor({state:'visible'});
-   await page.locator('#freeShippingProgress').waitFor({state:'visible'});
-   assert((await page.locator('#freeShippingText').textContent()).includes('رایگان'));
+   assert.equal(await page.locator('#freeShippingProgress, #freeShippingMeter').count(),0);
+   assert(!(await page.locator('body').innerText()).includes('ارسال رایگان'));
+   assert((await page.locator('#checkoutShipping').innerText()).includes('پس‌کرایه'));
    const panel=page.locator('#cardReceipt');await panel.evaluate(e=>e.hidden=false);
    assert.equal(await panel.locator('[name="receipt"]').getAttribute('required'),null);
    assert.equal(await panel.locator('[name="bankTrackingCode"]').count(),1);
@@ -138,7 +145,7 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
    }
    assert.deepEqual(errors,[]);await context.close();
   }}finally{await browser.close();}
-  console.log('PASS desktop/mobile progress, evidence fields, three readable guide pages and no horizontal overflow');
+  console.log('PASS desktop/mobile absence of incentives, evidence fields, three readable guide pages and no horizontal overflow');
  }
 })().catch(e=>{console.error(e);process.exitCode=1;}).finally(async()=>{if(server)await new Promise(r=>server.close(r));await db.$disconnect();});
 async function fsMkdir(){await require('node:fs/promises').mkdir('artifacts',{recursive:true});}

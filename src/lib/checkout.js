@@ -47,7 +47,7 @@ function checkoutInput(body, requestKey) {
       !Number.isInteger(shippingAcceptance.shippingFee) || !Number.isInteger(shippingAcceptance.totalPrice))) throw fail(400,'تأیید مبلغ ارسال نامعتبر است');
   const agreement = shippingAcceptance ? { shippingAcceptance: { tariffId: shippingAcceptance.tariffId, shippingFee: shippingAcceptance.shippingFee, totalPrice: shippingAcceptance.totalPrice } } : {};
   if(shippingAcceptance?.shippingChargeMode!==undefined){
-    if(!['RECIPIENT_AT_DELIVERY','MERCHANT_PAYS'].includes(shippingAcceptance.shippingChargeMode)||shippingAcceptance.termsAccepted!==true)throw fail(400,'پذیرش پس‌کرایه نامعتبر است');
+    if(shippingAcceptance.shippingChargeMode!==postpaid.mode||shippingAcceptance.termsAccepted!==true)throw fail(400,'پذیرش پس‌کرایه نامعتبر است');
     Object.assign(agreement.shippingAcceptance,{shippingChargeMode:shippingAcceptance.shippingChargeMode,termsAccepted:true});
   }
   if(body.shippingMethod && !['POST_PISHTAZ','POST_PISHTAZ_POSTPAID','COORDINATED_COURIER'].includes(body.shippingMethod)) throw fail(409,'روش ارسال غیرفعال است');

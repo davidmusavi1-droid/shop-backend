@@ -160,11 +160,11 @@ if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))w
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
 
-let customerShippingPolicy = null, confirmedCartTotal = 0;
+let customerShippingPolicy = null;
 let destinationCheckout = false, shippingQuote = null, destinationCities = {}, postpaidCheckout = false;
 function shippingPayload() { return JSON.stringify({ items: cart.map(({variantId,quantity})=>({variantId,quantity})), customer: Object.fromEntries(new FormData($('guestCheckout'))) }); }
 function invalidateShipping() {
-  updateFreeShippingProgress();
+  updateShippingEstimate();
   if (!destinationCheckout) return;
   shippingQuote = null; $('shippingTerms').textContent='شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.'; $('guestCheckout').querySelector('button.primary').disabled = true;
   $('checkoutShipping').textContent = postpaidCheckout ? 'شرایط ارسال بر اساس روش، مقصد و مبلغ سبد محاسبه می‌شود؛ کرایه پس‌کرایه جدا از مبلغ کالا است.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
@@ -187,7 +187,7 @@ $('quoteShipping').onclick = async () => {
     if(q.terms)$('shippingTerms').textContent=q.terms;
     $('checkoutShipping').textContent = q.shippingChargeMode ? q.terms+' مبلغ کالا / پرداخت آنلاین: '+money(q.totalPrice) : 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';
     if(q.eta)$('checkoutShipping').textContent+=' زمان تقریبی: '+q.eta;
-    updateFreeShippingProgress(q.goodsTotal, q);
+    updateShippingEstimate(q);
     const submit=form.querySelector('button.primary');submit.disabled=false;submit.textContent='ثبت سفارش با مبلغ '+money(q.totalPrice);
   } catch(error) { invalidateShipping();$('checkoutShipping').textContent=error.message; } finally { button.disabled=false; }
 };
@@ -207,7 +207,7 @@ async function showCheckout(ticket, total) {
     if (!response.ok) return;
     const shippingConfig=await response.json();
     customerShippingPolicy=shippingConfig.policy||null;
-    confirmedCartTotal = total; updateFreeShippingProgress(total);
+    updateShippingEstimate();
     const {shippingFee,public:customerCheckout,trackingAvailable}=shippingConfig;
     if (ticket !== requestId || location.pathname !== '/cart') return;
     postpaidCheckout=shippingConfig.mode==='postpaid';
@@ -421,22 +421,10 @@ async function refreshTrackingAvailability() {
 }
 void refreshTrackingAvailability();
 
-function updateFreeShippingProgress(total,quote) {
- const box=$('freeShippingProgress');if(!box)return;
- const policy=customerShippingPolicy;if(!policy){box.hidden=true;return;}
- if(!Number.isFinite(total))total=confirmedCartTotal;
+function updateShippingEstimate(quote) {
+ const policy=customerShippingPolicy;if(!policy)return;
  const f=$('guestCheckout').elements,select=document.querySelector('[aria-label="روش ارسال"]');
- const courier=select?.value==='COORDINATED_COURIER';
  const normal=s=>s.trim().replace(/[يى]/g,'ی').replace(/ك/g,'ک');
- const karaj=normal(f.province.value)==='البرز'&&normal(f.city.value)==='کرج';
- const eligible=courier?karaj&&policy.karajFreeEnabled:policy.postalFreeEnabled;
- box.hidden=false;
- const meter=$('freeShippingMeter');meter.hidden=!eligible;
- $('shippingEta').textContent='زمان تقریبی: '+(quote?.eta||(courier?(karaj?policy.karajEta:policy.tehranEta):(normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta)))+'؛ زمان قطعی تضمین نمی‌شود.';
- if(!eligible){$('freeShippingText').textContent='کرایه این روش پس‌کرایه است؛ ارسال رایگان برای این روش و مقصد فعال نیست.';return;}
- const target=policy.threshold+1,remaining=Math.max(0,target-total);
- meter.value=Math.min(100,Math.max(0,total/target*100));
- $('freeShippingText').textContent=remaining?'برای ارسال رایگان '+money(remaining)+' دیگر به سبد اضافه کنید.':'این خرید مشمول ارسال رایگان است.';
- if(!courier&&!policy.postalFreeReady)$('freeShippingText').textContent=remaining?'پس از تأیید اداره پست، با '+money(remaining)+' خرید بیشتر مشمول ارسال رایگان می‌شوید.':'اجرای ارسال رایگان این خرید در انتظار تأیید اداره پست است.';
+ const courier=select?.value==='COORDINATED_COURIER',karaj=normal(f.province.value)==='البرز'&&normal(f.city.value)==='کرج';
  $('shippingEta').textContent='زمان تقریبی: '+(quote?.eta||(courier?(karaj?policy.karajEta:policy.tehranEta):(normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta)))+'؛ زمان قطعی تضمین نمی‌شود.';
 }

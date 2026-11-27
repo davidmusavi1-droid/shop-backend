@@ -29,7 +29,6 @@ async function quote(db,customer,items){
  for(const x of items){if(!Number.isSafeInteger(x.unitPrice)||x.unitPrice<0)throw fail(400,'مبلغ کالا نامعتبر است');goodsTotal+=x.unitPrice*x.quantity;}
  if(!Number.isSafeInteger(goodsTotal)||goodsTotal<=0||goodsTotal>2147483647)throw fail(400,'مبلغ کالا نامعتبر است');
  const current=await policy.read(db), cost=policy.calculate(current,'POST_PISHTAZ_POSTPAID',customer,goodsTotal);
- if(!cost.freeShippingReady)throw fail(503,'پرداخت کرایه پستی توسط فروشگاه هنوز با اداره پست تأیید نشده است');
  return {...cost,tariffId:p.id,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingChargeMode:cost.shippingChargeMode,terms:cost.terms,details:{...cost,
  method:'POST_PISHTAZ_POSTPAID',carrier:'POST_PISHTAZ',shippingChargeMode:cost.shippingChargeMode,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingDueAtDelivery:cost.shippingDueAtDelivery,terms:cost.terms,customerAccepted:true,originProvince:'البرز',originCity:'کرج',destination,policyId:p.id,source:p.source
  }};

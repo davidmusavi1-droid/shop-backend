@@ -1,38 +1,40 @@
-# MOTIF opening checkout completion — 2026-11-27
+# MOTIF PR35 — final owner policy and release readiness (2026-11-27)
 
-Based on main at 7993811b1b945b65bc8f60d232a11d37077909fc (PR34 merged). This proposal supersedes the universal postpaid policy in PR32 for new orders only.
+Based on main after PR34. The owner's latest instruction supersedes the earlier draft incentives. No merge or production release is authorized by this review.
 
-## Proposed behavior
+## Current shipping policy
 
-- Card transfer: receipt image, 6–40 digit bank tracking code, or both. Persian/Arabic digits normalize. At least one is enforced in API and database. Codes and normalized image digests have unique indexes; exact same-order replay is accepted, changed evidence conflicts. A duplicate reference across banks can require support/manual investigation: do not discard the original evidence or assign an invented reference.
-- Existing receipt-only rows stay accessible. Images are decoded/reencoded to JPEG with the existing 3 MB / pixel caps, held privately in PostgreSQL, and downloadable only by authenticated admin with no-store/nosniff. The order list returns presence and tracking code, never image bytes or digests.
-- Initial reservation is 30 minutes, including courier after acceptance. Expired evidence is rejected after the durable order lock. Any recorded evidence retains inventory until manual actual-bank verification. Approval does not deduct stock again; rejection releases once. No automated expiry of an uncertain payment.
-- A PostgreSQL-serialized maximum of 3 newly created orders per mobile per rolling hour applies in production; idempotent replay consumes no additional quota. This is an abuse bound, not proof of mobile ownership. OTP launch readiness remains separate.
-- Strict threshold: greater than 5,000,000 toman is free for Pishtaz and city-of-Karaj courier; exactly 5,000,000 is postpaid. Tehran courier is always postpaid. Courier still requires support availability/ETA confirmation and explicit offer acceptance.
-- Online payment contains goods only. Postpaid courier fare is explicitly offered and paid to courier at delivery. Postal fare is determined/collected by Post, not shown as zero/free. Free orders have merchant-paid mode and zero customer postage.
-- Admin can configure threshold, postal/Karaj free rules and destination-specific ETA text. Postal free service has separate real evidence and expiry (maximum 90 days); without it above-threshold postal checkout fails closed. Existing recipient-paid Post approval is still required. Neither approval is seeded by this PR.
-- Policy revision, charge mode, ETA, terms, destination and customer acceptance are snapshotted. Existing orders are not repriced.
-- Cart includes a destination/method-aware progress bar; Tehran courier has no free incentive. Three public server-rendered guide routes share current settings and MOTIF styling: /shipping-guide, /payment-guide, /tracking-guide. Tracking availability is reported honestly.
+- Pishtaz is recipient-paid postage, at every basket amount. Postage is paid by the customer to Post at delivery and never included in the online goods charge. The actual ability to send recipient-paid parcels from Karaj still requires valid postal-office confirmation.
+- Tehran and Karaj city courier require support-confirmed availability, agreed positive fare, ETA and explicit customer acceptance. The agreed fare is paid separately at delivery; online payment contains goods only.
+- Tipax remains disabled. No threshold, automatic merchant-funded postage, free-delivery progress bar or remaining-to-unlock amount exists in the new-order flow.
+- Existing stored incentive settings are ignored. The ETA-only admin API rejects the retired setting keys. Revision names change to invalidate unaccepted old offers; incompatible offers must be reissued.
+- ETA text remains editable. The cart and three guides disclose the current policy. No new order can claim MERCHANT_PAYS. Historical snapshots are not repriced or removed.
 
-## Image dependency security
+## Preserved payment behavior
 
-The isolated production dependency audit identified the existing sharp 0.34.x range as high severity (GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w). This PR pins sharp 0.35.5, the patched release, rather than silently retaining a known image-parser vulnerability. References: https://github.com/lovell/sharp/releases/tag/v0.35.5 and https://github.com/advisories/GHSA-wq5f-xc86-pv6w . Deployment requires a Node-API v9 compatible runtime (Node >=20.9) and compatible prebuilt libvips platform; confirm the Liara runtime before release. The final audit report is retained with CI evidence. An audit with no findings is not a full security certification.
+Private receipt image, 6–40 digit bank code, or both; at least one proof. Exact idempotent replay, cross-order duplicate protection, expiry checks and bank-amount verification remain. Initial reservation is fixed at 30 minutes; submitted evidence keeps stock for manual review. Approval never deducts again; rejection releases once. Existing payments and audit history are retained. Mock SMS only.
 
-## Validation
+## Required manual SQL — not executed on production
 
-- Local targeted policy/payment/OTP regressions: 32 passed. No real gateway, SMS, AI, postage or carrier request.
-- Database, Express and browser checks are automated in the PR's isolated PostgreSQL18.4 CI. Final results and links must be checked on the final commit; do not infer success from local unit checks.
-- New isolated integration covers code-only/image-only/both, simultaneous exact replay, conflicting and cross-order duplicate evidence, private image access, repeated approval/rejection, amount mismatch, expired evidence, held/released inventory, threshold boundary, absent postal approval, stale admin revision, immutable snapshots, mobile quota, closed production checkout and 320/1280 layouts.
-- Existing Zibal reconciliation/retry and mock OTP checks continue to run; no manual successful workflow rerun requested.
+1. Existing checkout, card, tracking, Zibal and destination/parcel schemas must already match main.
+2. db/add-payment-evidence.sql: nullable receipt, optional bank code, receipt digest, unique indexes and evidence check. Historical bytes are preserved; hashes are backfilled. Duplicate historical images abort/roll back the upgrade for human investigation.
+3. db/add-shipping-policy.sql: permits zero *collected* postage for recipient-paid postal/courier snapshots. Positive historical fees remain allowed. New merchant-paid snapshots are rejected. If retired-policy historical rows exist, the new constraint is NOT VALID for old rows but is still enforced on every new row; immutable history is retained. With compliant history it validates automatically. Inspect pg_constraint.convalidated before release.
+4. Neither script is in application startup. Reapply is tested; do not run the older postpaid-only constraint after the new shipping constraint. No destructive down migration, payment deletion or old-database restore is an application rollback plan.
 
-## Rollout gates — not performed
+## Backup status and restore evidence
 
-1. Review final PR CI and SQL against a fresh authorized production backup. Run compatibility review; existing shipping/payment tables must already be present. Historical receipt digests are backfilled; if duplicate historical receipt bytes exist the migration rolls back for human investigation, without deleting/merging evidence.
-2. Separately approve manual db/add-payment-evidence.sql, then db/add-shipping-policy.sql. These are additive/constraint upgrades, not startup migrations. Run only after testing restore; never rerun the older postpaid constraint after the new shipping-policy constraint.
-3. Deploy only with owner approval. Keep existing public-checkout, live-gateway and SMS flags unchanged/disabled. Do not use old application code that assumes every card proof has a receipt after code-only records exist.
-4. Obtain postal-office confirmation for recipient-paid shipments AND merchant-paid/free postage. Enter real references/validity via authenticated panel. Synthetic CI evidence must never be copied.
-5. Owner verifies destination ETA estimates against practical fulfillment, support contact, destination card, shipping funding, and courier availability.
-6. Kavenegar approved template/permission and explicitly authorized real SMS test remain launch requirements. Mock tests do not establish SMS delivery.
-7. Owner approves any future real payment pilot and public activation separately.
+No recent production backup artifact, timestamp, restore record or backup-console evidence was available during this review. No production backup, SQL or restore was initiated. Production backup readiness is therefore **unverified and a release blocker**, not a successful check inferred from CI.
 
-No merge, production SQL/configuration, deployment, real bank transaction, paid SMS, SnappPay integration, or public activation is part of this PR.
+The isolated PostgreSQL 18.4 restore test now applies both PR35 upgrades twice, verifies an old private receipt and its backfilled hash, inserts code-only evidence, retains a retired merchant-paid historical snapshot while rejecting a new one, then runs pg_dump -Fc and restores into an independent database. It compares payment/order/stock/evidence and shipping snapshots. This proves the fixture's compatibility/restore path, not the freshness or contents of a production backup.
+
+Before release, obtain a fresh full PostgreSQL18-compatible production backup, record completion time and successful restore verification in an isolated destination. Protect receipt/customer data and retain encryption/access controls. The old pg_dump17/server18 mismatch is not acceptable evidence of a successful backup.
+
+## Validation and release gates
+
+Final CI links and exact commit are recorded in the PR description. Essential coverage includes all amounts around the former boundary, both courier cities with agreed fares, ignored stale settings, rejected retired API input, disabled Tipax, absence of progress UI at 320/1280px, receipt/code/both, repeated and concurrent submission/review, expiry/hold/release, amount checks, unchanged history, mock OTP and Zibal callbacks.
+
+sharp remains pinned to the patched 0.35.5 from the existing PR; verify Node >=20.9 / compatible Liara native image runtime before deployment. Dependency audit is evidence only, not a complete security certification.
+
+A green PR can be reviewed for merge. Production release additionally requires verified fresh backup/restore, compatibility/catalog review, approved manual SQL, actual postal confirmation, owner-approved support/card/courier/ETA settings and owner authorization. Kavenegar approval and any real SMS/payment test remain separate. Public checkout and live gateway must remain off throughout this review.
+
+No merge, deployment, paid SMS, real transaction, production configuration write, Post order or SnappPay integration was performed.
