@@ -14,7 +14,7 @@ const customer=()=>({fullName:'Synthetic opening',phone:'0912999'+String(++seq).
 async function reserve(c=customer(),price=10000,race=false){
  const product=await db.product.create({data:{title:'Synthetic opening item',basePrice:price,images:[],customerNeeds:[],styles:[],variants:{create:{size:'test',color:'test',sku:randomUUID(),stock:1,itemImages:[]}}},include:{variants:true}});
  const variant=product.variants[0],items=[{variantId:variant.id,quantity:1}],q=await post.quote(db,c,[{...items[0],unitPrice:price}]);
- const input=checkout.checkoutInput({customer:c,items,shippingAcceptance:{tariffId:q.tariffId,shippingFee:0,totalPrice:q.totalPrice,shippingChargeMode:q.shippingChargeMode,termsAccepted:true}},randomUUID());
+ const input=checkout.checkoutInput({customer:c,items,shippingAcceptance:{tariffId:q.tariffId,shippingFee:0,totalPrice:q.totalPrice,shippingChargeMode:q.shippingChargeMode,policyRevision:q.policyRevision,termsAccepted:true}},randomUUID());
  const results=race?await Promise.all([checkout.reserve(db,input),checkout.reserve(db,input)]):[await checkout.reserve(db,input)];
  if(race)assert.equal(results[0].orderNumber,results[1].orderNumber);
  return {order:results[0],input,variant,product,q};
@@ -77,12 +77,12 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  await assert.rejects(policy.save(db,{...state,expectedRevision:state.revision}),e=>e.statusCode===409);
  await assert.rejects(policy.save(db,{...saved,expectedRevision:saved.revision,threshold:1,postalFreeEnabled:true}),e=>e.statusCode===409);
  const large=await reserve(customer(),5000001);
- assert.equal(large.q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
+ assert.equal(large.q.shippingChargeMode,'MERCHANT_PAYS');
  const snapshot=await db.orderShippingSnapshot.findUnique({where:{orderId:large.order.orderNumber}});
- assert.equal(snapshot.fee,0);assert.equal(snapshot.details.shippingChargeMode,'RECIPIENT_AT_DELIVERY');assert.equal(snapshot.details.policyRevision,saved.revision);
- for(const price of [4999999,5000000,20000000])assert.equal((await reserve(customer(),price)).q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
+ assert.equal(snapshot.fee,0);assert.equal(snapshot.details.shippingChargeMode,'MERCHANT_PAYS');assert.equal(snapshot.details.policyRevision,saved.revision);
+ for(const price of [4999999,5000000,20000000])assert.equal((await reserve(customer(),price)).q.shippingChargeMode,price>=5000000?'MERCHANT_PAYS':'RECIPIENT_AT_DELIVERY');
  assert.deepEqual(await db.orderShippingSnapshot.findMany({where:{orderId:{in:before.map(r=>r.orderId)}},orderBy:{orderId:'asc'}}),before);
- assert.throws(()=>checkout.checkoutInput({customer:large.input.customer,items:large.input.items,shippingAcceptance:{tariffId:large.q.tariffId,shippingFee:0,totalPrice:large.order.totalPrice,shippingChargeMode:'MERCHANT_PAYS',termsAccepted:true}},randomUUID()),e=>e.statusCode===400);
+ assert.throws(()=>checkout.checkoutInput({customer:large.input.customer,items:large.input.items,shippingAcceptance:{tariffId:large.q.tariffId,shippingFee:0,totalPrice:large.order.totalPrice,shippingChargeMode:'INVALID_MODE',termsAccepted:true}},randomUUID()),e=>e.statusCode===400);
  assert.equal((await json('/api/checkout/shipping/tariff',{})).status,409);
  assert.equal((await fetch(origin+'/api/checkout/shipping/tariff',{headers:auth}).then(r=>r.json())).mode,'postpaid');
  assert.equal((await fetch(origin+'/api/checkout/logistics/settings').then(r=>r.json())).tipaxEnabled,false);
@@ -94,11 +94,11 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  process.env.NODE_ENV='production';process.env.ADMIN_ORIGIN='https://motifdress.com';
  assert.equal((await json('/api/checkout/orders',{},{})).status,401);
  process.env.NODE_ENV='test';process.env.ADMIN_ORIGIN=origin;
- console.log('PASS postpaid at every amount, obsolete-settings rejection, disabled Tipax, immutable history, independent guides and closed checkout');
+ console.log('PASS recipient-paid and merchant-paid postage, obsolete-settings rejection, disabled Tipax, immutable history, independent guides and closed checkout');
 
  // Exercise actual courier offers/acceptance and zero-fee SQL, including Arabic Kaf.
  const parcel=require('../src/lib/parcel-shipping'),courier=require('../src/lib/coordinated-courier');
- for(const [city,fee,price] of [['كرج',500,10000],['كرج',700,5000001],['تهران',600,10000],['تهران',800,5000001]]){
+ for(const [city,fee,price] of [['كرج',500,10000],['كرج',700,5000001],['تهران',600,10000],['تهران',800,6999999],['تهران',850,7000000]]){
   const recipient={...customer(),province:city==='تهران'?'تهران':'البرز',city};
   const product=await db.product.create({data:{title:'Synthetic courier policy boundary',basePrice:price,images:[],customerNeeds:[],styles:[],variants:{create:{size:'test',color:'test',sku:randomUUID(),stock:1,itemImages:[]}}},include:{variants:true}});
   const items=[{variantId:product.variants[0].id,quantity:1}];
@@ -109,11 +109,12 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
   const request=await courier.request(db,input,token);
   await assert.rejects(courier.offer(db,request.id,{fee:0,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0}),e=>e.statusCode===400);
   const offer=await courier.offer(db,request.id,{fee,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0});
-  assert.equal(offer.offer.totalPrice,price);assert.equal(offer.offer.shippingFee,0);assert.equal(offer.offer.courierDueAtDelivery,fee);
+  const free=price>=(city==='تهران'?7000000:5000000);
+  assert.equal(offer.offer.totalPrice,price);assert.equal(offer.offer.shippingFee,0);assert.equal(offer.offer.courierDueAtDelivery,free?0:fee);
   const acceptedInput=checkout.checkoutInput({customer:recipient,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:request.id,token,revision:offer.revision,shippingFee:0,totalPrice:price}},randomUUID());
   const accepted=await checkout.reserve(db,acceptedInput);
   const shipping=await db.orderShippingSnapshot.findUnique({where:{orderId:accepted.orderNumber}});
-  assert.equal(shipping.fee,0);assert.equal(shipping.details.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
+  assert.equal(shipping.fee,0);assert.equal(shipping.details.shippingChargeMode,free?'MERCHANT_PAYS':'RECIPIENT_AT_DELIVERY');
   assert.equal(shipping.details.destination.city,city==='كرج'?'کرج':'تهران');
   assert.equal((await db.variant.findUnique({where:{id:items[0].variantId}})).stock,0);
  }
@@ -133,9 +134,9 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
    // The already-reserved item has no stock; restore fixture only for visual cart checks.
    await db.variant.update({where:{id:large.variant.id},data:{stock:1}});
    await page.goto(origin+'/cart');await page.locator('#guestCheckout').waitFor({state:'visible'});
-   assert.equal(await page.locator('#freeShippingProgress, #freeShippingMeter').count(),0);
-   assert(!(await page.locator('body').innerText()).includes('ارسال رایگان'));
-   assert((await page.locator('#checkoutShipping').innerText()).includes('پس‌کرایه'));
+   assert(await page.locator('#freeShippingProgress').isVisible());
+   assert.equal(await page.locator('#freeShippingMeter').getAttribute('max'),'5000000');
+   assert((await page.locator('#freeShippingText').innerText()).includes('مشمول ارسال رایگان'));
    const panel=page.locator('#cardReceipt');await panel.evaluate(e=>e.hidden=false);
    assert.equal(await panel.locator('[name="receipt"]').getAttribute('required'),null);
    assert.equal(await panel.locator('[name="bankTrackingCode"]').count(),1);

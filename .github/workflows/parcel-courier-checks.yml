@@ -8,6 +8,7 @@ on:
       - 'test/shipping-policy.test.js'
       - 'test/opening-checkout-postgres.cjs'
       - 'db/add-shipping-policy.sql'
+      - 'db/add-free-shipping-policy.sql'
       - 'src/lib/parcel-shipping.js'
       - 'src/lib/shipping-costs.js'
       - 'src/lib/postpaid-shipping.js'
@@ -76,6 +77,8 @@ jobs:
       - run: npx prisma db execute --file db/add-payment-evidence.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-shipping-policy.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-shipping-policy.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-free-shipping-policy.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-free-shipping-policy.sql --schema prisma/schema.prisma
       - run: node --test test/shipping-policy.test.js test/uploads.test.js test/upload-http.test.js
       - run: node --test test/parcel-courier.test.js test/shipping-costs.test.js test/postpaid-shipping.test.js
       - run: node test/parcel-courier-postgres.cjs
