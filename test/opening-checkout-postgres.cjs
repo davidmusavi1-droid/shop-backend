@@ -11,11 +11,13 @@ const express=require('express'),sharp=require('sharp'),path=require('node:path'
 const {loginAdmin}=require('../scripts/admin-http-client.cjs');
 let server,origin,auth,seq=0;
 const customer=()=>({fullName:'Synthetic opening',phone:'0912999'+String(++seq).padStart(4,'0'),province:'البرز',city:'کرج',address:'Synthetic address only',postalCode:'1111111111'});
-async function reserve(c=customer(),price=10000){
+async function reserve(c=customer(),price=10000,race=false){
  const product=await db.product.create({data:{title:'Synthetic opening item',basePrice:price,images:[],customerNeeds:[],styles:[],variants:{create:{size:'test',color:'test',sku:randomUUID(),stock:1,itemImages:[]}}},include:{variants:true}});
  const variant=product.variants[0],items=[{variantId:variant.id,quantity:1}],q=await post.quote(db,c,[{...items[0],unitPrice:price}]);
  const input=checkout.checkoutInput({customer:c,items,shippingAcceptance:{tariffId:q.tariffId,shippingFee:0,totalPrice:q.totalPrice,shippingChargeMode:q.shippingChargeMode,termsAccepted:true}},randomUUID());
- return {order:await checkout.reserve(db,input),input,variant,product,q};
+ const results=race?await Promise.all([checkout.reserve(db,input),checkout.reserve(db,input)]):[await checkout.reserve(db,input)];
+ if(race)assert.equal(results[0].orderNumber,results[1].orderNumber);
+ return {order:results[0],input,variant,product,q};
 }
 async function proof(r,code,image){
  const form=new FormData();if(code!==undefined)form.append('bankTrackingCode',code);
@@ -79,14 +81,14 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  const threshold=await reserve(customer(),5000000);assert.equal(threshold.q.shippingChargeMode,'RECIPIENT_AT_DELIVERY');
  await assert.rejects(db.$executeRawUnsafe('UPDATE "OrderShippingSnapshot" SET "fee"=1 WHERE "orderId"=$1',free.order.orderNumber));
  for(const name of ['shipping-guide','payment-guide','tracking-guide']){
-  const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(html.includes('class="guide"'));
+  const r=await fetch(origin+'/'+name);assert.equal(r.status,200);const html=await r.text();assert(html.includes('MOTIF'));assert(html.includes('class="customer-guide"'));
  }
  process.env.NODE_ENV='production';process.env.ADMIN_ORIGIN='https://motifdress.com';
  assert.equal((await json('/api/checkout/orders',{},{})).status,401);
  process.env.NODE_ENV='test';process.env.ADMIN_ORIGIN=origin;
  console.log('PASS strict free threshold, real-approval gate, stale settings, immutable snapshot, independent guides and closed production checkout');
  const samePhone=customer();
- await reserve(samePhone);await reserve(samePhone);await reserve(samePhone);
+ await reserve(samePhone);await reserve(samePhone);await reserve(samePhone,10000,true);
  await assert.rejects(reserve(samePhone),e=>e.statusCode===429);
  console.log('PASS DB-serialized mobile order quota prevents unlimited stock holds');
  if(process.env.MOTIF_PARCEL_BROWSER==='true'){
@@ -107,7 +109,7 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await fsMkdir();await page.screenshot({path:'artifacts/parcel-courier-opening-'+width+'.png',fullPage:true});
    for(const name of ['shipping-guide','payment-guide','tracking-guide']){
-    await page.goto(origin+'/'+name);await page.locator('.guide').waitFor({state:'visible'});assert(await page.locator('#serverContent').isVisible());
+    await page.goto(origin+'/'+name);await page.locator('article.customer-guide').waitFor({state:'visible'});assert(await page.locator('#serverContent').isVisible());
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    }
    assert.deepEqual(errors,[]);await context.close();

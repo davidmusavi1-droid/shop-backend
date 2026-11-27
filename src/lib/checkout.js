@@ -94,6 +94,8 @@ async function reserve(prisma, input) {
       if(process.env.NODE_ENV==='production'||process.env.MOTIF_CHECKOUT_LIMITS==='true') {
       // Serialize per-mobile limits before stock is reserved; replay above does not consume quota.
       await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${'checkout-phone:'+input.customer.phone},0))`;
+      const replay = await tx.checkoutReservation.findUnique({where,include});
+      if(replay)return receipt(replay,input.requestHash);
       const recent = await tx.checkoutReservation.count({where:{phone:input.customer.phone,order:{createdAt:{gte:new Date(Date.now()-3600000)}}}});
       if(recent>=3)throw fail(429,'سقف ثبت سفارش برای این شماره پر شده است؛ بعداً تلاش کنید');
       }

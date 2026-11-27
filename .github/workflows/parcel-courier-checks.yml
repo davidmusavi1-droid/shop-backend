@@ -56,6 +56,7 @@ jobs:
       - name: Record production dependency audit for opening review
         run: |
           mkdir -p artifacts
+          npm install --package-lock-only --ignore-scripts --no-audit
           npm audit --omit=dev --json > artifacts/opening-dependency-audit.json || test -s artifacts/opening-dependency-audit.json
       - run: npx prisma generate && npx prisma validate
       - run: npx prisma migrate deploy

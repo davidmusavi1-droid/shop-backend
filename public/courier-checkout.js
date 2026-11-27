@@ -3,7 +3,7 @@
 const form=document.getElementById('guestCheckout'),E=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
 const box=E('section');box.className='panel';form.after(box);box.hidden=true;
 const select=E('select');select.setAttribute('aria-label','روش ارسال');
-for(const [v,t]of [['POST_PISHTAZ','پست پیشتاز ـ پس‌کرایه'],['COORDINATED_COURIER','ارسال فوری با هماهنگی پشتیبانی']]){const o=E('option',t);o.value=v;select.append(o);}
+for(const [v,t]of [['POST_PISHTAZ','پست پیشتاز'],['COORDINATED_COURIER','ارسال فوری با هماهنگی پشتیبانی']]){const o=E('option',t);o.value=v;select.append(o);}
 const label=E('label','روش ارسال');label.append(select);form.querySelector('.two-fields').after(label);
 const note=E('p'),request=E('button','درخواست هماهنگی ارسال فوری'),check=E('button','بررسی پاسخ پشتیبانی'),result=E('div'),status=E('p');
 status.setAttribute('role','status');request.type=check.type='button';box.append(note,request,check,result,status);

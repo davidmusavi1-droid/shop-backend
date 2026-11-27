@@ -167,7 +167,7 @@ function invalidateShipping() {
   updateFreeShippingProgress();
   if (!destinationCheckout) return;
   shippingQuote = null; $('shippingTerms').textContent='شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.'; $('guestCheckout').querySelector('button.primary').disabled = true;
-  $('checkoutShipping').textContent = postpaidCheckout ? 'هزینه ارسال بر عهده خریدار است و هنگام تحویل مرسوله به شرکت پست پرداخت می‌شود.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
+  $('checkoutShipping').textContent = postpaidCheckout ? 'شرایط ارسال بر اساس روش، مقصد و مبلغ سبد محاسبه می‌شود؛ کرایه پس‌کرایه جدا از مبلغ کالا است.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
 }
 $('guestCheckout').addEventListener('input', invalidateShipping);
 $('guestCheckout').elements.province.addEventListener('change', () => {
@@ -432,10 +432,11 @@ function updateFreeShippingProgress(total,quote) {
  const eligible=courier?karaj&&policy.karajFreeEnabled:policy.postalFreeEnabled;
  box.hidden=false;
  const meter=$('freeShippingMeter');meter.hidden=!eligible;
+ $('shippingEta').textContent='زمان تقریبی: '+(quote?.eta||(courier?(karaj?policy.karajEta:policy.tehranEta):(normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta)))+'؛ زمان قطعی تضمین نمی‌شود.';
  if(!eligible){$('freeShippingText').textContent='کرایه این روش پس‌کرایه است؛ ارسال رایگان برای این روش و مقصد فعال نیست.';return;}
  const target=policy.threshold+1,remaining=Math.max(0,target-total);
  meter.value=Math.min(100,Math.max(0,total/target*100));
  $('freeShippingText').textContent=remaining?'برای ارسال رایگان '+money(remaining)+' دیگر به سبد اضافه کنید.':'این خرید مشمول ارسال رایگان است.';
- if(!courier&&!policy.postalFreeReady)$('freeShippingText').textContent+=' اجرای ارسال رایگان پستی در انتظار تأیید اداره پست است.';
+ if(!courier&&!policy.postalFreeReady)$('freeShippingText').textContent=remaining?'پس از تأیید اداره پست، با '+money(remaining)+' خرید بیشتر مشمول ارسال رایگان می‌شوید.':'اجرای ارسال رایگان این خرید در انتظار تأیید اداره پست است.';
  $('shippingEta').textContent='زمان تقریبی: '+(quote?.eta||(courier?(karaj?policy.karajEta:policy.tehranEta):(normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta)))+'؛ زمان قطعی تضمین نمی‌شود.';
 }
