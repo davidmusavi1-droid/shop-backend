@@ -87,6 +87,30 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  assert.equal((await json('/api/checkout/orders',{},{})).status,401);
  process.env.NODE_ENV='test';process.env.ADMIN_ORIGIN=origin;
  console.log('PASS strict free threshold, real-approval gate, stale settings, immutable snapshot, independent guides and closed production checkout');
+
+ // Exercise actual courier offers/acceptance and zero-fee SQL, including Arabic Kaf.
+ const parcel=require('../src/lib/parcel-shipping'),courier=require('../src/lib/coordinated-courier');
+ for(const [city,fee,mode] of [['كرج',0,'MERCHANT_PAYS'],['تهران',600,'RECIPIENT_AT_DELIVERY']]){
+  const recipient={...customer(),province:city==='تهران'?'تهران':'البرز',city};
+  const product=await db.product.create({data:{title:'Synthetic courier policy boundary',basePrice:5000001,images:[],customerNeeds:[],styles:[],variants:{create:{size:'test',color:'test',sku:randomUUID(),stock:1,itemImages:[]}}},include:{variants:true}});
+  const items=[{variantId:product.variants[0].id,quantity:1}];
+  await db.shippingMeasurement.create({data:{variantId:items[0].variantId,...parcel.weightInput({grams:200,approved:true})}});
+  await db.shippingPackingPlan.create({data:parcel.planInput({items,tareGrams:50,lengthMm:300,widthMm:200,heightMm:50,approved:true})});
+  const input=checkout.checkoutInput({customer:recipient,items},randomUUID());input.clientHash=parcel.hash('synthetic-opening-courier');
+  const token=require('node:crypto').randomBytes(32).toString('hex');
+  const request=await courier.request(db,input,token);
+  if(fee===0)await assert.rejects(courier.offer(db,request.id,{fee:500,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0}),e=>e.statusCode===400);
+  const offer=await courier.offer(db,request.id,{fee,eta:'Synthetic confirmed delivery',availabilityConfirmed:true,expectedRevision:0});
+  assert.equal(offer.offer.totalPrice,5000001);assert.equal(offer.offer.shippingFee,0);assert.equal(offer.offer.courierDueAtDelivery,fee);
+  const acceptedInput=checkout.checkoutInput({customer:recipient,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:request.id,token,revision:offer.revision,shippingFee:0,totalPrice:5000001}},randomUUID());
+  const accepted=await checkout.reserve(db,acceptedInput);
+  const shipping=await db.orderShippingSnapshot.findUnique({where:{orderId:accepted.orderNumber}});
+  assert.equal(shipping.fee,0);assert.equal(shipping.details.shippingChargeMode,mode);
+  assert.equal(shipping.details.destination.city,city==='كرج'?'کرج':'تهران');
+  assert.equal((await db.variant.findUnique({where:{id:items[0].variantId}})).stock,0);
+ }
+ console.log('PASS actual Karaj free courier including Arabic spelling, Tehran postpaid courier, goods-only amount and SQL snapshots');
+
  const samePhone=customer();
  await reserve(samePhone);await reserve(samePhone);await reserve(samePhone,10000,true);
  await assert.rejects(reserve(samePhone),e=>e.statusCode===429);

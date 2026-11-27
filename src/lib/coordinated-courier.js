@@ -1,5 +1,6 @@
 const {randomUUID,randomBytes,timingSafeEqual}=require('node:crypto');
 const policy=require('./shipping-policy');
+const {destination}=require('./destination-shipping');
 const p=require('./parcel-shipping');
 const {fail}=p;
 const capability=token=>p.hash(String(token||''));
@@ -74,7 +75,7 @@ async function acceptedQuote(tx,input,items) {
   if(goodsTotal!==row.offer.goodsTotal)throw fail(409,'قیمت کالا تغییر کرده است؛ پیشنهاد جدید لازم است');
   const currentCost=policy.calculate(await policy.read(tx),'COORDINATED_COURIER',input.customer,goodsTotal);
   if(currentCost.policyRevision!==row.offer.policyRevision)throw fail(409,'قانون ارسال تغییر کرده؛ پیشنهاد جدید لازم است');
-  const q={...row.offer,details:{...row.offer,method:'COORDINATED_COURIER',carrier:'COORDINATED_COURIER',requestId:row.id,revision:row.revision,destination:{province:input.customer.province,city:input.customer.city},originProvince:'البرز',originCity:'کرج',customerAccepted:true,allInclusive:row.offer.shippingChargeMode==='MERCHANT_PAYS'}};
+  const q={...row.offer,details:{...row.offer,method:'COORDINATED_COURIER',carrier:'COORDINATED_COURIER',requestId:row.id,revision:row.revision,destination:destination(input.customer),originProvince:'البرز',originCity:'کرج',customerAccepted:true,allInclusive:row.offer.shippingChargeMode==='MERCHANT_PAYS'}};
   if(a.totalPrice!==q.totalPrice||a.shippingFee!==q.shippingFee)throw fail(409,'مبلغ پیشنهاد باید صریحاً پذیرفته شود');
   return q;
 }

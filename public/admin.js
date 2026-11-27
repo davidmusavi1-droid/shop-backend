@@ -1341,7 +1341,7 @@ function renderCheckoutOrder(order) {
   line(receiver.fullName + ' · ' + receiver.phone + ' · ' + [receiver.province, receiver.city, receiver.address, receiver.postalCode].join('، '));
   line('مبلغ سفارش ' + order.totalPrice.toLocaleString('fa-IR') + ' تومان');
   const shipping=order.shippingSnapshot?.details;
-  if(shipping)line('روش ارسال: '+shipping.method+' · مبلغ کالا '+(shipping.goodsTotal??order.totalPrice)+' · '+(shipping.shippingChargeMode==='MERCHANT_PAYS'?'کرایه با فروشگاه':shipping.shippingChargeMode==='RECIPIENT_AT_DELIVERY'?'کرایه با گیرنده، جدا از پرداخت آنلاین':'کرایه دریافت‌شده '+order.shippingSnapshot.fee)+' · '+(shipping.eta||''));
+  if(shipping)line('روش ارسال: '+({POST_PISHTAZ_POSTPAID:'پست پیشتاز',COORDINATED_COURIER:'پیک با هماهنگی',POST_PISHTAZ:'پست پیشتاز'}[shipping.method]||'ارسال ثبت‌شده')+' · مبلغ کالا '+(shipping.goodsTotal??order.totalPrice)+' · '+(shipping.shippingChargeMode==='MERCHANT_PAYS'?'کرایه با فروشگاه':shipping.shippingChargeMode==='RECIPIENT_AT_DELIVERY'?'کرایه با گیرنده، جدا از پرداخت آنلاین':'کرایه دریافت‌شده '+order.shippingSnapshot.fee)+' · '+(shipping.eta||''));
   const transfer = order.payment?.cardTransfer;
   line(order.payment?.isSuccessful ? 'پرداخت تأیید شده' : transfer?.rejected ? 'رسید رد شده' : transfer ? 'رسید در انتظار بررسی' : 'رسید ثبت نشده');
   if (transfer?.bankTrackingCode) line('کد رهگیری بانکی: ' + transfer.bankTrackingCode);
