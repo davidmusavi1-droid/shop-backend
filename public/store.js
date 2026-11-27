@@ -168,10 +168,13 @@ function shippingPayload() { return JSON.stringify({ items: cart.map(({variantId
 function invalidateShipping() {
   updateShippingEstimate();
   if (!destinationCheckout) return;
+  $('postpaidAgreement').querySelector('input').checked = false;
   shippingQuote = null; $('shippingTerms').textContent='شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.'; $('guestCheckout').querySelector('button.primary').disabled = true;
   $('checkoutShipping').textContent = postpaidCheckout ? 'ارسال رایگان بر عهده MOTIF است. برای سفارش غیررایگان کرایه جداگانه هنگام تحویل پرداخت می‌شود.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
 }
-$('guestCheckout').addEventListener('input', invalidateShipping);
+$('guestCheckout').addEventListener('input', event => {
+  if (!$('postpaidAgreement').contains(event.target)) invalidateShipping();
+});
 $('guestCheckout').elements.province.addEventListener('change', () => {
   if (!destinationCheckout) return;
   const form = $('guestCheckout'); form.elements.city.value = '';
@@ -179,7 +182,13 @@ $('guestCheckout').elements.province.addEventListener('change', () => {
   invalidateShipping();
 });
 $('quoteShipping').onclick = async () => {
-  const form = $('guestCheckout'); if (!form.reportValidity()) return;
+  const form = $('guestCheckout');
+  const agreement = $('postpaidAgreement').querySelector('input');
+  const required = agreement.required;
+  agreement.required = false;
+  const valid = form.reportValidity();
+  agreement.required = required;
+  if (!valid) return;
   const button = $('quoteShipping'); button.disabled = true; const body = shippingPayload();
   try {
     const response = await checkoutWrite('/api/checkout/shipping/quote', {method:'POST',headers:{'Content-Type':'application/json'},body});
