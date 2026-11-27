@@ -1,4 +1,5 @@
 const {randomUUID}=require('node:crypto');
+const policy=require('./shipping-policy');
 const shipping=require('./destination-shipping');
 const {fail}=require('./parcel-shipping');
 const required=()=>process.env.NODE_ENV==='production'||process.env.MOTIF_POSTPAID_SHIPPING==='true';
@@ -27,12 +28,14 @@ async function quote(db,customer,items){
  let goodsTotal=0;
  for(const x of items){if(!Number.isSafeInteger(x.unitPrice)||x.unitPrice<0)throw fail(400,'مبلغ کالا نامعتبر است');goodsTotal+=x.unitPrice*x.quantity;}
  if(!Number.isSafeInteger(goodsTotal)||goodsTotal<=0||goodsTotal>2147483647)throw fail(400,'مبلغ کالا نامعتبر است');
- return {tariffId:p.id,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingChargeMode:mode,terms,details:{
- method:'POST_PISHTAZ_POSTPAID',carrier:'POST_PISHTAZ',shippingChargeMode:mode,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingDueAtDelivery:null,terms,customerAccepted:true,originProvince:'البرز',originCity:'کرج',destination,policyId:p.id,source:p.source
+ const current=await policy.read(db), cost=policy.calculate(current,'POST_PISHTAZ_POSTPAID',customer,goodsTotal);
+ if(!cost.freeShippingReady)throw fail(503,'پرداخت کرایه پستی توسط فروشگاه هنوز با اداره پست تأیید نشده است');
+ return {...cost,tariffId:p.id,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingChargeMode:cost.shippingChargeMode,terms:cost.terms,details:{...cost,
+ method:'POST_PISHTAZ_POSTPAID',carrier:'POST_PISHTAZ',shippingChargeMode:cost.shippingChargeMode,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingDueAtDelivery:cost.shippingDueAtDelivery,terms:cost.terms,customerAccepted:true,originProvince:'البرز',originCity:'کرج',destination,policyId:p.id,source:p.source
  }};
 }
 function accepted(input,q){
  const a=input.shippingAcceptance;
- if(!a||a.tariffId!==q.tariffId||a.shippingFee!==0||a.totalPrice!==q.totalPrice||a.shippingChargeMode!==mode||a.termsAccepted!==true)throw fail(409,'شرایط پس‌کرایه و مبلغ کالا را صریحاً تأیید کنید');
+ if(!a||a.tariffId!==q.tariffId||a.shippingFee!==0||a.totalPrice!==q.totalPrice||a.shippingChargeMode!==q.shippingChargeMode||a.termsAccepted!==true)throw fail(409,'شرایط پس‌کرایه و مبلغ کالا را صریحاً تأیید کنید');
 }
 module.exports={required,mode,terms,active,publish,quote,accepted};

@@ -57,16 +57,21 @@ jobs:
       - run: npx prisma migrate deploy
       - name: Install additive schemas in independent fixture only
         run: |
-          for script in add-guest-checkout add-card-transfer add-order-tracking add-zibal-attempt add-zibal-retries add-destination-shipping add-parcel-courier; do
+          for script in add-site-content add-guest-checkout add-card-transfer add-order-tracking add-zibal-attempt add-zibal-retries add-destination-shipping add-parcel-courier; do
             npx prisma db execute --file "db/$script.sql" --schema prisma/schema.prisma
           done
           npx prisma db execute --file db/add-parcel-courier.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-payment-evidence.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-shipping-policy.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-shipping-policy.sql --schema prisma/schema.prisma
+      - run: node --test test/shipping-policy.test.js
       - run: node --test test/parcel-courier.test.js test/shipping-costs.test.js test/postpaid-shipping.test.js
       - run: node test/parcel-courier-postgres.cjs
       - run: node test/shipping-costs-postgres.cjs
       - run: node test/postpaid-shipping-postgres.cjs
+      - run: node test/opening-checkout-postgres.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

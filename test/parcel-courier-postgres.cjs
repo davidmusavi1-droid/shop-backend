@@ -29,8 +29,8 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
  assert.equal((await db.payment.count()),0);await assert.rejects(courier.get(db,r.id,'wrong'));
  assert.equal((await courier.request(db,input,token)).id,r.id);pass('request has no stock reservation or payment; access capability and idempotency');
  const o=await courier.offer(db,r.id,{fee:500,eta:'Synthetic confirmed time window',availabilityConfirmed:true,expectedRevision:0});
- assert.equal(o.offer.totalPrice,10500);
- const makeAcceptance=(key=randomUUID(),extra={})=>checkout.checkoutInput({customer,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:r.id,token,revision:o.revision,shippingFee:500,totalPrice:10500,...extra}},key);
+ assert.equal(o.offer.totalPrice,10000);assert.equal(o.offer.courierDueAtDelivery,500);
+ const makeAcceptance=(key=randomUUID(),extra={})=>checkout.checkoutInput({customer,items,shippingMethod:'COORDINATED_COURIER',courierAcceptance:{requestId:r.id,token,revision:o.revision,shippingFee:0,totalPrice:10000,...extra}},key);
  await assert.rejects(checkout.reserve(db,makeAcceptance(randomUUID(),{totalPrice:10499})),/صریحاً پذیرفته/);
  assert.equal((await db.variant.findUnique({where:{id:variant.id}})).stock,9);pass('forged acceptance rolls back order and stock');
  const accept=makeAcceptance();
@@ -41,10 +41,10 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
  assert.equal(await db.order.count({where:{id}}),1);
  await assert.rejects(courier.offer(db,r.id,{fee:501,eta:'late offer',availabilityConfirmed:true,expectedRevision:o.revision}));
  await assert.rejects(db.$executeRawUnsafe('UPDATE "CourierOffer" SET "details"=\'{}\'::jsonb WHERE "requestId"=$1',r.id));
- const snapshot=await db.orderShippingSnapshot.findUnique({where:{orderId:id}});assert.equal(snapshot.fee,500);pass('concurrent acceptance creates one order/reservation; late revision and history rewrite rejected');
+ const snapshot=await db.orderShippingSnapshot.findUnique({where:{orderId:id}});assert.equal(snapshot.fee,0);pass('concurrent acceptance creates one order/reservation; late revision and history rewrite rejected');
  // An unresolved payment must prevent normal reservation cleanup.
  await db.checkoutReservation.update({where:{orderId:id},data:{expiresAt:new Date(Date.now()-60000)}});
- await db.payment.create({data:{orderId:id,amount:10500,authority:'SYNTHETIC_PENDING'}});
+ await db.payment.create({data:{orderId:id,amount:10000,authority:'SYNTHETIC_PENDING'}});
  await checkout.releaseExpired(db);assert.equal((await db.order.findUnique({where:{id}})).status,'PENDING');assert.equal((await db.variant.findUnique({where:{id:variant.id}})).stock,8);pass('unresolved payment retains inventory after reservation expiry');
  const expiredInput=checkout.checkoutInput({customer:{...customer,phone:'09120000001'},items},randomUUID());expiredInput.clientHash=p.hash('another-fixture');
  const expired=await courier.request(db,expiredInput,token);
@@ -112,9 +112,9 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
      await page.getByRole('button',{name:'تأیید مبلغ قطعی و ثبت سفارش',exact:true}).click();
      const acceptedHttp=await acceptedResponse;const acceptedBody=await acceptedHttp.json();
      assert.equal(acceptedHttp.status(),201,JSON.stringify(acceptedBody));
-     await page.getByText('شماره سفارش '+acceptedBody.orderNumber+' · مبلغ '+new Intl.NumberFormat('fa-IR').format(10700)+' تومان',{exact:true}).waitFor();
+     await page.getByText('شماره سفارش '+acceptedBody.orderNumber+' · مبلغ '+new Intl.NumberFormat('fa-IR').format(10000)+' تومان',{exact:true}).waitFor();
      const accepted=await db.courierRequest.findUnique({where:{id:request.id}});assert(accepted.orderId);
-     assert.equal((await db.order.findUnique({where:{id:accepted.orderId}})).totalPrice,10700);
+     assert.equal((await db.order.findUnique({where:{id:accepted.orderId}})).totalPrice,10000);
      assert.equal(await db.payment.count(),1,'Browser must not create any gateway attempt');
      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
      assert.deepEqual(errors,[]);

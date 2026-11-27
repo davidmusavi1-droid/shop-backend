@@ -16,6 +16,22 @@ async function load(){
  const enabled=field(settings,'courierEnabled','ارسال فوری برای شهر تهران و شهر کرج','','checkbox');enabled.required=false;enabled.checked=data.settings.courierEnabled;
  action(settings,'ذخیره تنظیمات',async()=>{const f=settings.elements;await api(base+'/settings',{method:'PUT',body:JSON.stringify({supportPhone:f.supportPhone.value.trim(),courierEnabled:f.courierEnabled.checked,requestMinutes:f.requestMinutes.valueAsNumber,offerMinutes:f.offerMinutes.valueAsNumber,reservationMinutes:f.reservationMinutes.valueAsNumber})});});
  root.append(settings);
+ const policy=await api(base+'/policy');
+ const policyForm=E('form');policyForm.append(E('h3','قوانین ارسال رایگان و زمان تقریبی'));
+ policyForm.append(E('p','خرید بیشتر از آستانه رایگان است؛ مبلغ برابر آستانه پس‌کرایه می‌ماند. تهران همیشه پس‌کرایه است. هیچ کرایه‌ای به پرداخت آنلاین اضافه نمی‌شود.'));
+ field(policyForm,'threshold','آستانه ارسال رایگان، تومان',policy.threshold,'number');
+ for(const [n,t] of [['postalFreeEnabled','ارسال رایگان پست بالای آستانه'],['karajFreeEnabled','ارسال رایگان پیک شهر کرج بالای آستانه']]){
+  const input=field(policyForm,n,t,'','checkbox');input.required=false;input.checked=policy[n];
+ }
+ for(const [n,t] of [['postalEta','زمان تقریبی پست سایر استان‌ها'],['postalLocalEta','زمان تقریبی پست استان البرز'],['karajEta','زمان تقریبی پیک کرج'],['tehranEta','زمان تقریبی پیک تهران']])field(policyForm,n,t,policy[n]);
+ field(policyForm,'postalFreeEvidence','مرجع واقعی تأیید پرداخت کرایه توسط فروشگاه',policy.postalFreeEvidence).required=false;
+ const valid=field(policyForm,'postalFreeValidUntil','اعتبار تأیید ارسال رایگان پستی (اختیاری تا دریافت تأیید)','','datetime-local');valid.required=false;
+ if(policy.postalFreeValidUntil){const d=new Date(policy.postalFreeValidUntil);valid.value=new Date(+d-d.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+ action(policyForm,'ذخیره قوانین ارسال',async()=>{
+  const f=policyForm.elements,body={expectedRevision:policy.revision,threshold:f.threshold.valueAsNumber,postalFreeEnabled:f.postalFreeEnabled.checked,karajFreeEnabled:f.karajFreeEnabled.checked,postalFreeValidUntil:valid.value?new Date(valid.value).toISOString():null};
+  for(const n of ['postalEta','postalLocalEta','karajEta','tehranEta','postalFreeEvidence'])body[n]=f[n].value.trim();
+  await api(base+'/policy',{method:'PUT',body:JSON.stringify(body)});await load();
+ });root.append(policyForm);
  const postal=E('form');postal.append(E('h3','پست پیشتاز ـ پس‌کرایه'));
  postal.append(E('p','پرداخت آنلاین فقط کالا است. این روش را صرفاً پس از تأیید واقعی دریافت کرایه از گیرنده توسط پست مبدأ کرج تأیید کنید؛ دریافت مبلغ کالا در محل (COD) جایگزین آن نیست.'));
  field(postal,'evidence','مرجع تأیید پست / شماره قرارداد یا پاسخ معتبر');
@@ -57,7 +73,7 @@ async function load(){
  root.append(E('h3','درخواست‌های ارسال فوری'));
  for(const r of data.requests){const box=E('article');box.append(E('p',r.id+' · '+r.state+' · مهلت '+new Date(r.expiresAt).toLocaleString('fa-IR')));const c=r.payload.customer;box.append(E('p',[c.fullName,c.phone,c.city,c.address].join(' · ')));box.append(E('p','اقلام: '+r.payload.items.map(x=>x.variantId+' × '+x.quantity).join('، ')));
  if(r.offer)box.append(E('p','پیشنهاد فعلی '+r.offer.totalPrice.toLocaleString('fa-IR')+' تومان · '+r.offer.eta));
- if(!r.orderId&&Date.parse(r.expiresAt)>Date.now()){const form=E('form');const fee=field(form,'fee','هزینه قطعی پیک، تومان','','number');const eta=field(form,'eta','بازه تحویل تأییدشده');const ok=field(form,'confirmed','امکان ارسال را بررسی کرده‌ام','','checkbox');ok.checked=false;
+ if(!r.orderId&&Date.parse(r.expiresAt)>Date.now()){const form=E('form');const fee=field(form,'fee','کرایه پیک هنگام تحویل؛ برای ارسال رایگان صفر، تومان','','number');fee.min='0';const eta=field(form,'eta','بازه تحویل تأییدشده');const ok=field(form,'confirmed','امکان ارسال را بررسی کرده‌ام','','checkbox');ok.checked=false;
  action(form,'اعلام پیشنهاد به مشتری',async()=>{await api(base+'/courier/'+encodeURIComponent(r.id)+'/offer',{method:'POST',body:JSON.stringify({fee:fee.valueAsNumber,eta:eta.value.trim(),availabilityConfirmed:ok.checked,expectedRevision:r.revision})});await load();});box.append(form);}
  if(r.orderId)box.append(E('p','شماره سفارش '+r.orderId));root.append(box);}
 }

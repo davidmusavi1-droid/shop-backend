@@ -47,8 +47,8 @@ function checkoutInput(body, requestKey) {
       !Number.isInteger(shippingAcceptance.shippingFee) || !Number.isInteger(shippingAcceptance.totalPrice))) throw fail(400,'تأیید مبلغ ارسال نامعتبر است');
   const agreement = shippingAcceptance ? { shippingAcceptance: { tariffId: shippingAcceptance.tariffId, shippingFee: shippingAcceptance.shippingFee, totalPrice: shippingAcceptance.totalPrice } } : {};
   if(shippingAcceptance?.shippingChargeMode!==undefined){
-    if(shippingAcceptance.shippingChargeMode!==postpaid.mode||shippingAcceptance.termsAccepted!==true)throw fail(400,'پذیرش پس‌کرایه نامعتبر است');
-    Object.assign(agreement.shippingAcceptance,{shippingChargeMode:postpaid.mode,termsAccepted:true});
+    if(!['RECIPIENT_AT_DELIVERY','MERCHANT_PAYS'].includes(shippingAcceptance.shippingChargeMode)||shippingAcceptance.termsAccepted!==true)throw fail(400,'پذیرش پس‌کرایه نامعتبر است');
+    Object.assign(agreement.shippingAcceptance,{shippingChargeMode:shippingAcceptance.shippingChargeMode,termsAccepted:true});
   }
   if(body.shippingMethod && !['POST_PISHTAZ','POST_PISHTAZ_POSTPAID','COORDINATED_COURIER'].includes(body.shippingMethod)) throw fail(409,'روش ارسال غیرفعال است');
   const a=body.courierAcceptance;
@@ -91,6 +91,12 @@ async function reserve(prisma, input) {
     return await prisma.$transaction(async tx => {
       const saved = await tx.checkoutReservation.findUnique({ where, include });
       if (saved) return receipt(saved, input.requestHash);
+      if(process.env.NODE_ENV==='production'||process.env.MOTIF_CHECKOUT_LIMITS==='true') {
+      // Serialize per-mobile limits before stock is reserved; replay above does not consume quota.
+      await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${'checkout-phone:'+input.customer.phone},0))`;
+      const recent = await tx.checkoutReservation.count({where:{phone:input.customer.phone,order:{createdAt:{gte:new Date(Date.now()-3600000)}}}});
+      if(recent>=3)throw fail(429,'سقف ثبت سفارش برای این شماره پر شده است؛ بعداً تلاش کنید');
+      }
       const shipping = (destinationShipping.required() || postpaid.required()) ? { fee: 0 } : await tx.shippingSettings.findUnique({ where: { id: SHIPPING_ID } });
       if (!shipping) throw fail(503, 'تعرفه ارسال هنوز تنظیم نشده است');
 

@@ -22,3 +22,7 @@ input::placeholder,.measure-panel .guide,.measure-panel .hint,.notice{color:var(
 .about:after{border-color:var(--on-ink,var(--paper))}
 
 .quality-guide{width:100%;padding:12px 0}.quality-guide summary{cursor:pointer;text-decoration:underline;line-height:1.9}.quality-guide h4{margin-bottom:6px}.quality-guide p{line-height:1.9}.condition-details{width:100%;border-top:1px solid var(--soft);padding-top:12px}.defect-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}.defect-gallery img{width:100%;max-height:360px;object-fit:contain}.defect-gallery a{min-width:0}
+
+.shipping-progress{border:1px solid var(--line,#d8cdb8);border-radius:12px;padding:16px;margin-block:16px;background:var(--paper,#faf7ef)}
+.shipping-progress progress{display:block;width:100%;height:12px;accent-color:var(--accent,#736344)}
+.customer-guides{display:flex;flex-wrap:wrap;gap:16px;margin-block:20px}.guide{max-width:760px;margin:auto;padding:24px}.guide p{line-height:2}

@@ -1342,8 +1342,9 @@ function renderCheckoutOrder(order) {
   line('مبلغ سفارش ' + order.totalPrice.toLocaleString('fa-IR') + ' تومان');
   const transfer = order.payment?.cardTransfer;
   line(order.payment?.isSuccessful ? 'پرداخت تأیید شده' : transfer?.rejected ? 'رسید رد شده' : transfer ? 'رسید در انتظار بررسی' : 'رسید ثبت نشده');
+  if (transfer?.bankTrackingCode) line('کد رهگیری بانکی: ' + transfer.bankTrackingCode);
   if (transfer) {
-    action('دریافت رسید', async () => {
+    if (transfer.hasReceipt) action('دریافت رسید', async () => {
       const response = await MotifAdminSession.request(url + '/receipt');
       if (!response.ok) throw Error('دریافت رسید ممکن نیست.');
       const objectUrl = URL.createObjectURL(await response.blob());

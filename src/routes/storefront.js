@@ -33,4 +33,10 @@ router.get('/collection',async(req,res)=>{
   catch{res.status(503).type('html').send(view.errorPage('دریافت مجموعه موقتاً ممکن نیست'));}
 });
 for(const name of ['cart','contact'])router.get('/'+name,async(req,res)=>{res.set('Cache-Control','no-store');try{res.type('html').send(view.renderUtility(name,await content.published()));}catch{res.status(503).type('html').send(view.errorPage('صفحه موقتاً در دسترس نیست'));}});
+for(const name of ['shipping-guide','payment-guide','tracking-guide'])router.get('/'+name,async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ try{const [settings,policy]=await Promise.all([content.published(),require('../lib/shipping-policy').read(prisma)]);
+ res.type('html').send(view.renderGuide(name,settings,policy,require('../lib/kavenegar').liveTrackingReady()));}
+ catch{res.status(503).type('html').send(view.errorPage('راهنما موقتاً در دسترس نیست'));}
+});
 module.exports=router;
