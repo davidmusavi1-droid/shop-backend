@@ -14,6 +14,10 @@ Based on main at 7993811b1b945b65bc8f60d232a11d37077909fc (PR34 merged). This pr
 - Policy revision, charge mode, ETA, terms, destination and customer acceptance are snapshotted. Existing orders are not repriced.
 - Cart includes a destination/method-aware progress bar; Tehran courier has no free incentive. Three public server-rendered guide routes share current settings and MOTIF styling: /shipping-guide, /payment-guide, /tracking-guide. Tracking availability is reported honestly.
 
+## Image dependency security
+
+The isolated production dependency audit identified the existing sharp 0.34.x range as high severity (GHSA-f88m-g3jw-g9cj, GHSA-rgj7-g3m4-5g8c, GHSA-wq5f-xc86-pv6w). This PR pins sharp 0.35.5, the patched release, rather than silently retaining a known image-parser vulnerability. References: https://github.com/lovell/sharp/releases/tag/v0.35.5 and https://github.com/advisories/GHSA-wq5f-xc86-pv6w . Deployment requires a Node-API v9 compatible runtime (Node >=20.9) and compatible prebuilt libvips platform; confirm the Liara runtime before release. The final audit report is retained with CI evidence. An audit with no findings is not a full security certification.
+
 ## Validation
 
 - Local targeted policy/payment/OTP regressions: 32 passed. No real gateway, SMS, AI, postage or carrier request.
