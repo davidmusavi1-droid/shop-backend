@@ -28,8 +28,10 @@
 <form id="cardReceipt" hidden>
   <h2>کارت‌به‌کارت</h2>
   <p id="cardDestination"></p>
-  <label>تصویر رسید<input name="receipt" type="file" accept="image/jpeg,image/png,image/webp" required></label>
-  <button class="primary">ارسال خصوصی رسید</button>
+  <label>تصویر رسید<input name="receipt" type="file" accept="image/jpeg,image/png,image/webp"></label>
+  <label>کد رهگیری بانکی<input name="bankTrackingCode" inputmode="numeric" maxlength="40" autocomplete="off"></label>
+  <p>حداقل تصویر رسید یا کد رهگیری بانکی را وارد کنید. ثبت مدرک به معنی تأیید واریز نیست؛ موجودی تا تصمیم مدیر نگه داشته می‌شود.</p>
+  <button class="primary">ثبت مدرک پرداخت</button>
   <p id="cardReceiptStatus" role="status"></p>
 </form>
 <form id="guestCheckout" hidden>
@@ -42,10 +44,11 @@
     <label>کد پستی<input name="postalCode" inputmode="numeric" autocomplete="postal-code" required maxlength="10"></label>
     <label>آدرس کامل<input name="address" autocomplete="street-address" required maxlength="500"></label>
   </div>
-  <label id="postpaidAgreement" hidden><input type="checkbox">هزینه ارسال بر عهده خریدار است و هنگام تحویل مرسوله به شرکت پست پرداخت می‌شود.</label>
-  <p id="checkoutShipping" role="status" aria-live="polite"></p><button id="quoteShipping" type="button" hidden>محاسبه هزینه ارسال</button>
+  <label id="postpaidAgreement" hidden><input type="checkbox"><span id="shippingTerms">شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.</span></label>
+  <p id="shippingEta" aria-live="polite"></p>
+<p id="checkoutShipping" role="status" aria-live="polite"></p><button id="quoteShipping" type="button" hidden>محاسبه هزینه ارسال</button>
   <button class="primary">ثبت سفارش آزمایشی</button>
 </form><p class="notice">پرداخت آنلاین هنوز فعال نشده است. افزودن به این سبد، کالا را رزرو نمی‌کند.</p><a class="button" href="/collection">ادامهٔ انتخاب</a></section>
 <section id="contact" class="section" hidden><h1>ارتباط با MOTIF</h1><p>ما را دنبال کن یا از راه‌های ارتباطی زیر پیام بده.</p><div id="contactSocials" class="socials"></div><p id="contactEmpty" hidden>راه‌های ارتباطی به‌زودی اینجا ثبت می‌شوند.</p></section>
-</div><!--SERVER_CONTENT--></main><footer class="wrap"><a class="logo" href="/" dir="ltr">MOTIF<span>.</span></a><a href="/contact">تماس با ما</a><div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div></footer>
+</div><!--SERVER_CONTENT--></main><footer class="wrap"><a class="logo" href="/" dir="ltr">MOTIF<span>.</span></a><a href="/contact">تماس با ما</a><div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div><nav class="customer-guides" aria-label="راهنمای خرید"><a href="/shipping-guide">راهنمای ارسال</a><a href="/payment-guide">راهنمای پرداخت</a><a href="/tracking-guide">راهنمای پیگیری</a></nav></footer>
 <!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/checkout-state.js?v=20261120"></script><script src="/store.js?v=20261120-destination-shipping"></script><script src="/courier-checkout.js?v=20261120"></script></body></html>

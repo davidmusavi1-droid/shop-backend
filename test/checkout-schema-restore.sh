@@ -68,6 +68,62 @@ apply_checkout
 [[ "$before" = "$(psql -XAtc "$query")" ]]
 [[ "$checkout_before" = "$(psql -XAtc "$full_query")" ]]
 echo 'PASS PostgreSQL 18.4: reapplying all four scripts preserves existing checkout records'
+
+# PR35 compatibility upgrades: preserve private legacy receipt bytes and retired
+# shipping history while enforcing the current policy on every new insert.
+for file in add-zibal-retries add-destination-shipping add-parcel-courier add-postpaid-shipping; do
+  psql -X -v ON_ERROR_STOP=1 -f "$root/db/$file.sql"
+done
+psql -X -v ON_ERROR_STOP=1 <<'SQL'
+INSERT INTO "ShippingTariff" ("id","source","carrier","originProvince","originCity","validFrom","validUntil","rules")
+VALUES ('schema-tariff','Synthetic fixture only','POST_PISHTAZ_POSTPAID','Alborz','Karaj',now(),now()+interval '1 day','[]'::jsonb);
+INSERT INTO "OrderShippingSnapshot" ("orderId","tariffId","fee","details")
+VALUES ('schema-order','schema-tariff',50000,'{"method":"POST_PISHTAZ","legacy":true}'::jsonb);
+-- Simulate a snapshot already committed by the retired proposal, not new policy.
+ALTER TABLE "OrderShippingSnapshot" DROP CONSTRAINT "OrderShippingSnapshot_fee_check";
+ALTER TABLE "OrderShippingSnapshot" ADD CONSTRAINT "OrderShippingSnapshot_fee_check" CHECK ("fee">=0);
+INSERT INTO "Order" ("id","customerId","totalPrice","updatedAt") VALUES ('schema-retired-order','schema-customer',9000000,now());
+INSERT INTO "Payment" ("id","orderId","amount","isSuccessful") VALUES ('schema-retired-payment','schema-retired-order',9000000,true);
+INSERT INTO "OrderShippingSnapshot" ("orderId","tariffId","fee","details")
+VALUES ('schema-retired-order','schema-tariff',0,'{"method":"POST_PISHTAZ_POSTPAID","shippingChargeMode":"MERCHANT_PAYS","shippingFee":0,"customerAccepted":true,"freeShipping":true,"policyRevision":"retired"}'::jsonb);
+SQL
+for _ in 1 2; do
+  for file in add-payment-evidence add-shipping-policy; do
+    psql -X -v ON_ERROR_STOP=1 -f "$root/db/$file.sql"
+  done
+done
+psql -X -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM "CardTransfer" WHERE "paymentId"='schema-payment' AND "receipt"=decode('ffd8ff','hex') AND "receiptDigest"=encode(sha256(decode('ffd8ff','hex')),'hex')) THEN RAISE EXCEPTION 'Legacy receipt was changed'; END IF;
+ IF NOT EXISTS (SELECT 1 FROM "OrderShippingSnapshot" WHERE "orderId"='schema-retired-order' AND "details"->>'shippingChargeMode'='MERCHANT_PAYS') THEN RAISE EXCEPTION 'Retired history was lost'; END IF;
+END $$;
+INSERT INTO "Order" ("id","customerId","totalPrice","updatedAt") VALUES ('schema-code-order','schema-customer',25000,now());
+INSERT INTO "Payment" ("id","orderId","amount") VALUES ('schema-code-payment','schema-code-order',25000);
+INSERT INTO "CardTransfer" ("paymentId","bankTrackingCode") VALUES ('schema-code-payment','1234567890');
+DO $$
+BEGIN
+ BEGIN
+  INSERT INTO "OrderShippingSnapshot" ("orderId","tariffId","fee","details")
+  VALUES ('schema-code-order','schema-tariff',0,'{"method":"POST_PISHTAZ_POSTPAID","shippingChargeMode":"MERCHANT_PAYS","shippingFee":0,"customerAccepted":true,"freeShipping":true,"policyRevision":"forged"}'::jsonb);
+  RAISE EXCEPTION 'New merchant-paid snapshot was accepted';
+ EXCEPTION WHEN check_violation THEN NULL;
+ END;
+END $$;
+INSERT INTO "OrderShippingSnapshot" ("orderId","tariffId","fee","details")
+VALUES ('schema-code-order','schema-tariff',0,'{"method":"POST_PISHTAZ_POSTPAID","shippingChargeMode":"RECIPIENT_AT_DELIVERY","shippingFee":0,"customerAccepted":true}'::jsonb);
+SQL
+before=$(psql -XAtc "$query")
+checkout_before=$(psql -XAtc "$full_query")
+shipping_query=$(cat <<'SQL'
+SELECT jsonb_build_object(
+ 'tariffs',(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM "ShippingTariff" t),
+ 'snapshots',(SELECT jsonb_agg(to_jsonb(t) ORDER BY "orderId") FROM "OrderShippingSnapshot" t));
+SQL
+)
+shipping_before=$(psql -XAtc "$shipping_query")
+echo 'PASS PR35 repeated upgrades preserve receipts and retired history; code-only proofs work; new merchant-paid snapshots are rejected'
+
 archive=$(mktemp)
 trap 'rm -f "$archive"' EXIT
 pg_dump -Fc --no-owner -f "$archive"
@@ -76,4 +132,6 @@ createdb motif_schema_restore_test
 PGDATABASE=motif_schema_restore_test pg_restore --exit-on-error --no-owner --no-privileges -d motif_schema_restore_test "$archive"
 [[ "$before" = "$(PGDATABASE=motif_schema_restore_test psql -XAtc "$query")" ]]
 [[ "$checkout_before" = "$(PGDATABASE=motif_schema_restore_test psql -XAtc "$full_query")" ]]
+[[ "$shipping_before" = "$(PGDATABASE=motif_schema_restore_test psql -XAtc "$shipping_query")" ]]
+echo 'PASS PR35 full restore retains new evidence columns, private receipt bytes, bank code and immutable shipping history'
 echo 'PASS PostgreSQL 18.4: full custom-format dump restores legacy and checkout data, including private receipt bytes'

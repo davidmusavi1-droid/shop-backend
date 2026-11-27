@@ -132,6 +132,10 @@ function metadata(p) {
  document.head.append(schema);
 }
 async function route(){
+ if(['/shipping-guide','/payment-guide','/tracking-guide'].includes(location.pathname)){
+  $('app').hidden=false;for(const id of ['homepage','catalog','product','cart','contact'])$(id).hidden=true;
+  if($('serverContent'))$('serverContent').hidden=false;return;
+ }
  const ticket=++requestId,match=location.pathname.match(/^\/products\/([^/]+)\/?$/);if(location.pathname==='/collection')query=new URLSearchParams(location.search);
  $('app').hidden=false;for(const id of ['homepage','catalog','product','cart','contact'])$(id).hidden=true;if($('serverContent'))$('serverContent').hidden=true;
  if(!match){const id=location.pathname==='/collection'?'catalog':location.pathname==='/cart'?'cart':location.pathname==='/contact'?'contact':'homepage';$(id).hidden=false;if(id==='catalog'){syncControls();renderCatalog();}if(id==='cart'){renderCart();if(location.hash==='#order-tracking'){$('order-tracking').open=true;$('order-tracking').scrollIntoView({block:'start'});}}metadata();return;}
@@ -156,12 +160,14 @@ if(window.parent!==window&&new URLSearchParams(location.search).has('preview'))w
 async function init(){try{const r=await fetch('/api/site',{cache:'no-store'});if(r.ok){const received=await r.json();if($('previewNotice').hidden)content=MotifSite.validate(received);}}catch{}renderContent();saveCart();measurementLabels();route();await loadCatalog();}
 init();
 
+let customerShippingPolicy = null;
 let destinationCheckout = false, shippingQuote = null, destinationCities = {}, postpaidCheckout = false;
 function shippingPayload() { return JSON.stringify({ items: cart.map(({variantId,quantity})=>({variantId,quantity})), customer: Object.fromEntries(new FormData($('guestCheckout'))) }); }
 function invalidateShipping() {
+  updateShippingEstimate();
   if (!destinationCheckout) return;
-  shippingQuote = null; $('guestCheckout').querySelector('button.primary').disabled = true;
-  $('checkoutShipping').textContent = postpaidCheckout ? 'هزینه ارسال بر عهده خریدار است و هنگام تحویل مرسوله به شرکت پست پرداخت می‌شود.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
+  shippingQuote = null; $('shippingTerms').textContent='شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.'; $('guestCheckout').querySelector('button.primary').disabled = true;
+  $('checkoutShipping').textContent = postpaidCheckout ? 'شرایط ارسال بر اساس روش، مقصد و مبلغ سبد محاسبه می‌شود؛ کرایه پس‌کرایه جدا از مبلغ کالا است.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
 }
 $('guestCheckout').addEventListener('input', invalidateShipping);
 $('guestCheckout').elements.province.addEventListener('change', () => {
@@ -178,7 +184,10 @@ $('quoteShipping').onclick = async () => {
     const q = await response.json(); if (!response.ok) throw Error(q.error || 'هزینه ارسال قابل محاسبه نیست.');
     if (body !== shippingPayload()) return;
     shippingQuote = {...q,body};
-    $('checkoutShipping').textContent = q.shippingChargeMode==='RECIPIENT_AT_DELIVERY' ? q.terms+' مبلغ پرداخت آنلاین فقط بابت کالا: '+money(q.totalPrice) : 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';
+    if(q.terms)$('shippingTerms').textContent=q.terms;
+    $('checkoutShipping').textContent = q.shippingChargeMode ? q.terms+' مبلغ کالا / پرداخت آنلاین: '+money(q.totalPrice) : 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';
+    if(q.eta)$('checkoutShipping').textContent+=' زمان تقریبی: '+q.eta;
+    updateShippingEstimate(q);
     const submit=form.querySelector('button.primary');submit.disabled=false;submit.textContent='ثبت سفارش با مبلغ '+money(q.totalPrice);
   } catch(error) { invalidateShipping();$('checkoutShipping').textContent=error.message; } finally { button.disabled=false; }
 };
@@ -197,6 +206,8 @@ async function showCheckout(ticket, total) {
     const response = await fetch('/api/checkout/shipping', { cache: 'no-store' });
     if (!response.ok) return;
     const shippingConfig=await response.json();
+    customerShippingPolicy=shippingConfig.policy||null;
+    updateShippingEstimate();
     const {shippingFee,public:customerCheckout,trackingAvailable}=shippingConfig;
     if (ticket !== requestId || location.pathname !== '/cart') return;
     postpaidCheckout=shippingConfig.mode==='postpaid';
@@ -208,7 +219,7 @@ async function showCheckout(ticket, total) {
       if(field.options.length<2)for(const province of shippingConfig.provinces){const o=el('option',province);o.value=province;field.append(o);}
       $('guestCheckout').hidden=false;$('quoteShipping').hidden=false;$('quoteShipping').disabled=!shippingConfig.ready;invalidateShipping();
       if(!shippingConfig.ready)$('checkoutShipping').textContent=postpaidCheckout?'پیشتاز پس‌کرایه از مبدأ کرج هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.':'تعرفه معتبر ارسال هنوز تأیید نشده است؛ ثبت سفارش و پرداخت ممکن نیست.';
-      document.querySelector('#cart .notice').textContent=postpaidCheckout?'رزرو پس از ثبت سفارش انجام می‌شود. پرداخت آنلاین فقط مبلغ کالا است؛ کرایه پست پس‌کرایه است.':'رزرو کالا پس از ثبت سفارش انجام می‌شود. مبلغ کالا و ارسال پیش از پرداخت قطعی است.';
+      document.querySelector('#cart .notice').textContent=postpaidCheckout?'رزرو اولیه ۳۰ دقیقه است. مبلغ کالا و شیوه پرداخت کرایه پیش از پرداخت اعلام می‌شود.':'رزرو کالا پس از ثبت سفارش انجام می‌شود. مبلغ کالا و ارسال پیش از پرداخت قطعی است.';
       if(customerCheckout&&!trackingAvailable){$('trackingChallenge').hidden=true;$('trackingVerify').hidden=true;$('trackingResult').textContent='پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید.';}
       return;
     }
@@ -294,13 +305,16 @@ $('cardReceipt').addEventListener('submit', async event => {
   const button = form.querySelector('button');
   button.disabled = true;
   try {
+    if (!form.elements.receipt.files.length && !form.elements.bankTrackingCode.value.trim()) throw Error('تصویر رسید یا کد رهگیری بانکی لازم است.');
+    const payload = new FormData(form);
+    if (!form.elements.receipt.files.length) payload.delete('receipt');
     const url = '/api/checkout/card-transfer/orders/' + encodeURIComponent(activeCardOrder.number) + '/receipt';
-    const response = await checkoutWrite(url, { method: 'POST', headers: { 'Idempotency-Key': activeCardOrder.key }, body: new FormData(form) });
+    const response = await checkoutWrite(url, { method: 'POST', headers: { 'Idempotency-Key': activeCardOrder.key }, body: payload });
     const result = await response.json();
     if (!response.ok) throw Error(result.error);
     form.reset();
     try { sessionStorage.removeItem('motif-card-order'); } catch {}
-    $('cardReceiptStatus').textContent = 'رسید ثبت شد و در انتظار بررسی مدیر است.';
+    $('cardReceiptStatus').textContent = 'مدرک ثبت شد؛ موجودی تا بررسی واریز واقعی و تصمیم مدیر نگه داشته می‌شود.';
     activeCardOrder = undefined;
   } catch (error) {
     $('cardReceiptStatus').textContent = error.message || 'ارسال رسید ممکن نیست.';
@@ -406,3 +420,11 @@ async function refreshTrackingAvailability() {
     : 'پیگیری پیامکی هنوز فعال نشده است؛ شماره سفارش را نگه دارید و از راه‌های تماس فروشگاه پیگیری کنید.';
 }
 void refreshTrackingAvailability();
+
+function updateShippingEstimate(quote) {
+ const policy=customerShippingPolicy;if(!policy)return;
+ const f=$('guestCheckout').elements,select=document.querySelector('[aria-label="روش ارسال"]');
+ const normal=s=>s.trim().replace(/[يى]/g,'ی').replace(/ك/g,'ک');
+ const courier=select?.value==='COORDINATED_COURIER',karaj=normal(f.province.value)==='البرز'&&normal(f.city.value)==='کرج';
+ $('shippingEta').textContent='زمان تقریبی: '+(quote?.eta||(courier?(karaj?policy.karajEta:policy.tehranEta):(normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta)))+'؛ زمان قطعی تضمین نمی‌شود.';
+}

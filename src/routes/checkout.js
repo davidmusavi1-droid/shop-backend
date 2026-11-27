@@ -5,6 +5,7 @@ const checkout = require('../lib/checkout');
 const { liveTrackingReady } = require('../lib/kavenegar');
 const { publicCheckout } = require('../lib/checkout-access');
 const shipping = require('../lib/destination-shipping');
+const shippingPolicy = require('../lib/shipping-policy');
 const postpaid = require('../lib/postpaid-shipping');
 const { randomUUID } = require('node:crypto');
 const router = express.Router();
@@ -37,7 +38,7 @@ router.use('/card-transfer', require('./card-transfer'));
 router.get('/shipping', handle(async (req, res) => {
   if(postpaid.required()){
     let policy;try{policy=await postpaid.active(prisma);}catch(e){if(e.statusCode!==503)throw e;}
-    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady()});
+    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady(),policy:shippingPolicy.publicView(await shippingPolicy.read(prisma))});
   }
   if (shipping.required()) {
     let tariff;
@@ -51,7 +52,8 @@ router.get('/shipping', handle(async (req, res) => {
 }));
 
 router.put('/shipping', requireAdmin, handle(async (req, res) => {
-  if (shipping.required() || postpaid.required()) throw checkout.fail(409,'تعرفه ثابت برای ارسال عمومی معتبر نیست؛ تعرفه مقصد را تنظیم کنید');
+  if(postpaid.required())throw checkout.fail(409,'پیشتاز پس‌کرایه است؛ هزینه ارسال آنلاین قابل تنظیم نیست');
+  if (shipping.required()) throw checkout.fail(409,'تعرفه ثابت برای ارسال عمومی معتبر نیست؛ تعرفه مقصد را تنظیم کنید');
   const fee = req.body?.shippingFee;
   if (!Number.isInteger(fee) || fee < 0 || fee > checkout.MAX_AMOUNT) {
     throw checkout.fail(400, 'تعرفه ارسال نامعتبر است');
@@ -66,9 +68,10 @@ router.put('/shipping', requireAdmin, handle(async (req, res) => {
 
 router.get('/shipping/tariff', requireAdmin, handle(async (req, res) => {
   const state = await prisma.shippingTariffState.findUnique({ where: { id: 'default' }, include: { activeTariff: true } });
-  res.json({ tariff: state?.activeTariff || null, provinces: shipping.provinces });
+  res.json({ tariff: state?.activeTariff || null, provinces: shipping.provinces, mode:postpaid.required()?'postpaid':'destination' });
 }));
 router.post('/shipping/tariff', requireAdmin, handle(async (req, res) => {
+  if(postpaid.required())throw checkout.fail(409,'پیشتاز پس‌کرایه است؛ تعرفه پیش‌پرداخت غیرفعال است');
   res.json(await shipping.publish(prisma, req.body));
 }));
 router.post('/shipping/quote', handle(async (req, res) => {
@@ -80,7 +83,7 @@ router.post('/shipping/quote', handle(async (req, res) => {
     lines.push({ ...item, unitPrice: v.product.basePrice + v.priceDelta });
   }
   const q=await (postpaid.required()?postpaid:shipping).quote(prisma,input.customer,lines);
-  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms}:{})});
+  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms,eta:q.eta}:{})});
 }));
 
 router.post('/orders', handle(async (req, res) => {

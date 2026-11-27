@@ -6,8 +6,9 @@ const admin = require('../middleware/requireAdmin');
 const { fail } = require('../lib/checkout');
 
 const router = express.Router();
+const evidence = require('../lib/card-evidence');
 const accountId = 'default';
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024, files: 1, fields: 0, parts: 2 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 3 * 1024 * 1024, files: 1, fields: 1, parts: 3 } });
 
 function handle(action) {
   return async (req, res, next) => {
@@ -64,16 +65,21 @@ router.post('/orders/:id/receipt', handle(async (req, res, next) => {
   res.locals.orderId = match.orderId;
   next();
 }), readUpload, handle(async (req, res) => {
-  if (!req.file) throw fail(400, 'تصویر رسید لازم است');
-  let receipt;
-  try {
+  const bankTrackingCode = evidence.trackingCode(req.body?.bankTrackingCode);
+  if (!req.file && !bankTrackingCode) throw fail(400, 'تصویر رسید یا کد رهگیری بانکی لازم است');
+  let receipt = null;
+  if (req.file) try {
     const image = sharp(req.file.buffer, { limitInputPixels: 12_000_000 });
     const { format } = await image.metadata();
     if (!['jpeg', 'png', 'webp'].includes(format)) throw Error('unsupported image');
     receipt = await image.rotate().resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
   } catch { throw fail(400, 'تصویر رسید نامعتبر است'); }
 
-  await prisma.$transaction(async tx => {
+  const receiptDigest = evidence.digest(receipt);
+  const replay = previous => {
+    if (!evidence.same(previous, bankTrackingCode, receiptDigest)) throw fail(409, 'مدرک دیگری قبلاً برای این سفارش ثبت شده است');
+  };
+  try { await prisma.$transaction(async tx => {
     const id = res.locals.orderId;
     const claimed = await tx.order.updateMany({
       where: { id, status: 'PENDING', payment: null, checkout: { expiresAt: { gt: new Date() } } },
@@ -81,16 +87,21 @@ router.post('/orders/:id/receipt', handle(async (req, res, next) => {
     });
     if (claimed.count !== 1) {
       const previous = await tx.payment.findUnique({ where: { orderId: id }, include: { cardTransfer: true } });
-      if (previous?.cardTransfer && !previous.cardTransfer.reviewedAt) return;
+      if (previous?.cardTransfer && !previous.cardTransfer.reviewedAt) return replay(previous.cardTransfer);
       throw fail(409, 'رزرو منقضی شده یا سفارش در انتظار پرداخت نیست');
     }
     // Recheck after taking the order lock. A concurrent upload may have added a payment.
     const existing = await tx.payment.findUnique({ where: { orderId: id }, include: { cardTransfer: true } });
-    if (existing?.cardTransfer && !existing.cardTransfer.reviewedAt) return;
+    if (existing?.cardTransfer && !existing.cardTransfer.reviewedAt) return replay(existing.cardTransfer);
     if (existing) throw fail(409, 'پرداخت قبلاً آغاز شده است');
+    const reservation = await tx.checkoutReservation.findUnique({where:{orderId:id},select:{expiresAt:true}});
+    if(!reservation || +reservation.expiresAt<=Date.now()) throw fail(409,'رزرو منقضی شده است');
     const order = await tx.order.findUnique({ where: { id }, select: { totalPrice: true } });
-    await tx.payment.create({ data: { orderId: id, amount: order.totalPrice, cardTransfer: { create: { receipt } } } });
-  });
+    await tx.payment.create({ data: { orderId: id, amount: order.totalPrice, cardTransfer: { create: { receipt, receiptDigest, bankTrackingCode } } } });
+  }); } catch (error) {
+    if (error.code === 'P2002') throw fail(409, 'این مدرک پرداخت قبلاً ثبت شده است');
+    throw error;
+  }
   res.status(202).json({ status: 'AWAITING_REVIEW' });
 }));
 
@@ -103,16 +114,21 @@ router.get('/orders', admin, handle(async (req, res) => {
     take: 31,
     select: {
       id: true, totalPrice: true, status: true, shipmentTrackingCode: true, createdAt: true,
+      shippingSnapshot: {select:{fee:true,details:true}},
       checkout: { select: { fullName: true, phone: true, address: true, province: true, city: true, postalCode: true, shippingFee: true, expiresAt: true } },
-      payment: { select: { isSuccessful: true, cardTransfer: { select: { reviewedAt: true, rejected: true } } } },
+      payment: { select: { isSuccessful: true, cardTransfer: { select: { reviewedAt: true, rejected: true, bankTrackingCode: true, receiptDigest: true } } } },
     },
   });
-  res.json({ orders: orders.slice(0, 30), next: orders.length > 30 ? orders[29].id : null });
+  res.json({ orders: orders.slice(0, 30).map(order => {
+    const transfer=order.payment?.cardTransfer;
+    if(transfer){transfer.hasReceipt=Boolean(transfer.receiptDigest)||!transfer.bankTrackingCode;delete transfer.receiptDigest;}
+    return order;
+  }), next: orders.length > 30 ? orders[29].id : null });
 }));
 
 router.get('/orders/:id/receipt', admin, handle(async (req, res) => {
   const payment = await prisma.payment.findUnique({ where: { orderId: req.params.id }, include: { cardTransfer: true } });
-  if (!payment?.cardTransfer) throw fail(404, 'رسید پیدا نشد');
+  if (!payment?.cardTransfer?.receipt) throw fail(404, 'تصویر رسید ثبت نشده است');
   res.set('X-Content-Type-Options', 'nosniff').attachment('receipt.jpg').type('jpeg').send(Buffer.from(payment.cardTransfer.receipt));
 }));
 

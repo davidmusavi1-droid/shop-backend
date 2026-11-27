@@ -1,4 +1,6 @@
 const {randomUUID,randomBytes,timingSafeEqual}=require('node:crypto');
+const policy=require('./shipping-policy');
+const {destination}=require('./destination-shipping');
 const p=require('./parcel-shipping');
 const {fail}=p;
 const capability=token=>p.hash(String(token||''));
@@ -47,10 +49,11 @@ async function offer(db,id,body) {
     let goodsTotal=0;
     const priced=[];
     for(const item of row.payload.items){const v=await tx.variant.findUnique({where:{id:item.variantId},include:{product:true}});if(!v?.product.isActive||v.stock<item.quantity)throw fail(409,'موجودی کافی نیست');const unitPrice=v.product.basePrice+v.priceDelta;p.integer(unitPrice,0);goodsTotal+=unitPrice*item.quantity;priced.push({...item,unitPrice});}
-    const totalPrice=p.integer(goodsTotal+fee);
+    const cost=policy.calculate(await policy.read(tx),'COORDINATED_COURIER',row.payload.customer,goodsTotal);
+    const totalPrice=p.integer(goodsTotal);
     const expiresAt=new Date(Math.min(+row.expiresAt,+now+config.offerMinutes*60000));
     const tariff=await tx.shippingTariff.create({data:{id:randomUUID(),source:'تأیید دستی پشتیبانی؛ پیشنهاد '+id,carrier:'COORDINATED_COURIER',originProvince:'البرز',originCity:'کرج',validFrom:now,validUntil:expiresAt,rules:[]}});
-    const quote={tariffId:tariff.id,shippingFee:fee,goodsTotal,totalPrice,eta:body.eta.trim(),expiresAt:expiresAt.toISOString(),reservationMinutes:config.reservationMinutes,parcel,items:priced};
+    const quote={...cost,tariffId:tariff.id,shippingFee:0,courierDueAtDelivery:fee,goodsTotal,totalPrice,eta:body.eta.trim(),expiresAt:expiresAt.toISOString(),reservationMinutes:30,parcel,items:priced};
     await tx.courierOffer.create({data:{requestId:id,revision:row.revision+1,details:quote}});
     return view(await tx.courierRequest.update({where:{id},data:{state:'OFFERED',revision:row.revision+1,offer:quote}}));
   });
@@ -68,7 +71,10 @@ async function acceptedQuote(tx,input,items) {
   if(p.hash(parcel)!==p.hash(row.offer.parcel))throw fail(409,'اطلاعات مرسوله تغییر کرده است؛ پیشنهاد جدید لازم است');
   const goodsTotal=items.reduce((sum,x)=>sum+x.unitPrice*x.quantity,0);
   if(goodsTotal!==row.offer.goodsTotal)throw fail(409,'قیمت کالا تغییر کرده است؛ پیشنهاد جدید لازم است');
-  const q={...row.offer,details:{...row.offer,method:'COORDINATED_COURIER',carrier:'COORDINATED_COURIER',requestId:row.id,revision:row.revision,destination:{province:input.customer.province,city:input.customer.city},originProvince:'البرز',originCity:'کرج',customerAccepted:true,allInclusive:true}};
+  const currentCost=policy.calculate(await policy.read(tx),'COORDINATED_COURIER',input.customer,goodsTotal);
+  if(row.offer.shippingChargeMode!=='RECIPIENT_AT_DELIVERY'||row.offer.shippingFee!==0||!Number.isInteger(row.offer.courierDueAtDelivery)||row.offer.courierDueAtDelivery<=0)throw fail(409,'پیشنهاد قدیمی با سیاست فعلی سازگار نیست؛ پیشنهاد جدید لازم است');
+  if(currentCost.policyRevision!==row.offer.policyRevision)throw fail(409,'قانون ارسال تغییر کرده؛ پیشنهاد جدید لازم است');
+  const q={...row.offer,details:{...row.offer,method:'COORDINATED_COURIER',carrier:'COORDINATED_COURIER',requestId:row.id,revision:row.revision,destination:destination(input.customer),originProvince:'البرز',originCity:'کرج',customerAccepted:true,allInclusive:false}};
   if(a.totalPrice!==q.totalPrice||a.shippingFee!==q.shippingFee)throw fail(409,'مبلغ پیشنهاد باید صریحاً پذیرفته شود');
   return q;
 }
@@ -76,6 +82,6 @@ async function bind(tx,input,orderId,q) {
   const a=input.courierAcceptance;
   const result=await tx.courierRequest.updateMany({where:{id:a.requestId,orderId:null,state:'OFFERED',revision:a.revision},data:{state:'ACCEPTED',orderId}});
   if(result.count!==1)throw fail(409,'این درخواست قبلاً به سفارش تبدیل شده است');
-  return new Date(Math.min(+new Date(q.expiresAt),Date.now()+q.reservationMinutes*60000));
+  return new Date(Date.now()+30*60000);
 }
 module.exports={request,get,offer,acceptedQuote,bind,view,authorize,lock};

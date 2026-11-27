@@ -1250,6 +1250,7 @@ async function loadShippingSettings(){
   const form=$('shippingSettings');form.hidden=true;
   try{
     const data=await api('/api/checkout/shipping/tariff');if(!Array.isArray(data.provinces))return;
+    if(data.mode==='postpaid'){$('shippingStatus').textContent='پیشتاز پس‌کرایه است؛ ویرایش تعرفه پرداخت آنلاین غیرفعال است. تأییدیه پست و زمان‌های ارسال را از مدیریت ارسال تنظیم کنید.';return;}
     shippingProvinces=data.provinces;const t=data.tariff;shippingRevision=t?.id||null;
     form.elements.originProvince.replaceChildren(...shippingProvinces.map(p=>{const o=el('option',p);o.value=p;return o;}));
     for(const name of ['source','carrier','originProvince','originCity'])form.elements[name].value=t?.[name]||({carrier:'POST_PISHTAZ',originProvince:'البرز',originCity:'کرج'}[name]||'');
@@ -1340,10 +1341,13 @@ function renderCheckoutOrder(order) {
   line(order.id + ' · ' + checkoutStatuses[order.status]);
   line(receiver.fullName + ' · ' + receiver.phone + ' · ' + [receiver.province, receiver.city, receiver.address, receiver.postalCode].join('، '));
   line('مبلغ سفارش ' + order.totalPrice.toLocaleString('fa-IR') + ' تومان');
+  const shipping=order.shippingSnapshot?.details;
+  if(shipping)line('روش ارسال: '+({POST_PISHTAZ_POSTPAID:'پست پیشتاز',COORDINATED_COURIER:'پیک با هماهنگی',POST_PISHTAZ:'پست پیشتاز'}[shipping.method]||'ارسال ثبت‌شده')+' · مبلغ کالا '+(shipping.goodsTotal??order.totalPrice)+' · '+(shipping.shippingChargeMode==='MERCHANT_PAYS'?'کرایه با فروشگاه':shipping.shippingChargeMode==='RECIPIENT_AT_DELIVERY'?'کرایه با گیرنده، جدا از پرداخت آنلاین':'کرایه دریافت‌شده '+order.shippingSnapshot.fee)+' · '+(shipping.eta||''));
   const transfer = order.payment?.cardTransfer;
   line(order.payment?.isSuccessful ? 'پرداخت تأیید شده' : transfer?.rejected ? 'رسید رد شده' : transfer ? 'رسید در انتظار بررسی' : 'رسید ثبت نشده');
+  if (transfer?.bankTrackingCode) line('کد رهگیری بانکی: ' + transfer.bankTrackingCode);
   if (transfer) {
-    action('دریافت رسید', async () => {
+    if (transfer.hasReceipt) action('دریافت رسید', async () => {
       const response = await MotifAdminSession.request(url + '/receipt');
       if (!response.ok) throw Error('دریافت رسید ممکن نیست.');
       const objectUrl = URL.createObjectURL(await response.blob());

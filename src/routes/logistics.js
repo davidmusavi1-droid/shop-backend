@@ -7,6 +7,8 @@ const courier=require('../lib/coordinated-courier');
 const {randomUUID}=require('node:crypto');
 const router=express.Router();
 const handle=fn=>async(req,res)=>{try{await fn(req,res);}catch(e){res.status(e.statusCode||500).json({error:e.statusCode?e.message:'تنظیمات ارسال موقتاً در دسترس نیست'});}};
+router.get('/policy',admin,handle(async(req,res)=>res.json(await require('../lib/shipping-policy').read(prisma))));
+router.put('/policy',admin,handle(async(req,res)=>res.json(await require('../lib/shipping-policy').save(prisma,req.body))));
 router.post('/costs/:id',admin,handle(async(req,res)=>res.json(await require('../lib/shipping-costs').record(prisma,req.params.id,req.body))));
 router.get('/costs',admin,handle(async(req,res)=>res.json(await require('../lib/shipping-costs').report(prisma))));
 router.get('/postpaid',admin,handle(async(req,res)=>{

@@ -155,7 +155,9 @@ model ShippingSettings {
 model CardTransfer {
   paymentId String @id
   payment Payment @relation(fields: [paymentId], references: [id])
-  receipt Bytes
+  receipt Bytes?
+  bankTrackingCode String? @unique
+  receiptDigest String? @unique
   reviewedAt DateTime?
   rejected Boolean @default(false)
 }

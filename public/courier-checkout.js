@@ -3,7 +3,7 @@
 const form=document.getElementById('guestCheckout'),E=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
 const box=E('section');box.className='panel';form.after(box);box.hidden=true;
 const select=E('select');select.setAttribute('aria-label','روش ارسال');
-for(const [v,t]of [['POST_PISHTAZ','پست پیشتاز ـ پس‌کرایه'],['COORDINATED_COURIER','ارسال فوری با هماهنگی پشتیبانی']]){const o=E('option',t);o.value=v;select.append(o);}
+for(const [v,t]of [['POST_PISHTAZ','پست پیشتاز'],['COORDINATED_COURIER','ارسال فوری با هماهنگی پشتیبانی']]){const o=E('option',t);o.value=v;select.append(o);}
 const label=E('label','روش ارسال');label.append(select);form.querySelector('.two-fields').after(label);
 const note=E('p'),request=E('button','درخواست هماهنگی ارسال فوری'),check=E('button','بررسی پاسخ پشتیبانی'),result=E('div'),status=E('p');
 status.setAttribute('role','status');request.type=check.type='button';box.append(note,request,check,result,status);
@@ -24,7 +24,7 @@ function sync(){
  form.querySelector('button.primary').hidden=courier;
  note.textContent='درخواست اولیه کالا را رزرو نمی‌کند. امکان ارسال، زمان تحویل و هزینه با پشتیبانی هماهنگ می‌شود؛ تحویل همان‌روز تضمین‌شده نیست.'+(config?.supportPhone?' پشتیبانی: '+config.supportPhone:'');
 }
-select.onchange=sync;form.addEventListener('input',sync);form.addEventListener('change',sync);
+select.onchange=()=>{sync();updateShippingEstimate();};form.addEventListener('input',sync);form.addEventListener('change',sync);
 new MutationObserver(sync).observe(form,{attributes:true,attributeFilter:['hidden']});
 async function api(url,options={}){const r=await checkoutWrite('/api/checkout/logistics'+url,{...options,headers:{'Content-Type':'application/json','X-Courier-Token':saved?.token||'',...options.headers}});const d=await r.json();if(!r.ok)throw Error(d.error||'خطای ارسال فوری');return d;}
 request.onclick=async()=>{
@@ -45,7 +45,8 @@ check.onclick=async()=>{
  if(Date.parse(offer.expiresAt)<=Date.now()){status.textContent='درخواست منقضی شده است؛ درخواست تازه لازم است.';return;}
  if(!offer.offer){status.textContent='در انتظار هماهنگی پشتیبانی';return;}
  const q=offer.offer;
- result.append(E('p',offer.customer.city+' · '+offer.customer.address),E('p','کالا '+money(q.goodsTotal)+' · پیک '+money(q.shippingFee)+' · جمع '+money(q.totalPrice)),E('p',q.eta+' · اعتبار تا '+new Date(q.expiresAt).toLocaleString('fa-IR')));
+ updateShippingEstimate(q);
+ result.append(E('p',offer.customer.city+' · '+offer.customer.address),E('p','کالا / پرداخت آنلاین '+money(q.goodsTotal)+' · '+('کرایه توافق‌شده پیک هنگام تحویل '+money(q.courierDueAtDelivery))),E('p',q.eta+' · اعتبار تا '+new Date(q.expiresAt).toLocaleString('fa-IR')));
  const accept=E('button','تأیید مبلغ قطعی و ثبت سفارش');accept.type='button';accept.disabled=Date.parse(q.expiresAt)<=Date.now();result.append(accept);
  accept.onclick=async()=>{
  accept.disabled=true;

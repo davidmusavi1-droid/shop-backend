@@ -74,4 +74,5 @@ function sitemap(products) {
 function errorPage(message) {
   return '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>'+escape(message)+' | MOTIF</title><h1>'+escape(message)+'</h1><a href="/">بازگشت به فروشگاه</a></html>';
 }
-module.exports = { ORIGIN, productPath, inStock, renderProduct, renderHome, renderCollection, renderUtility, sitemap, errorPage };
+function renderGuide(kind,settings,policy,trackingReady){const g=require('./customer-guides').sections(kind,policy,trackingReady);return page({settings,pathname:'/'+kind,title:g.title+' | MOTIF',body:`<article class="customer-guide"><h1>${escape(g.title)}</h1>${g.paragraphs.map(p=>`<p>${escape(p)}</p>`).join('')}<a href="/cart#order-tracking">پیگیری سفارش</a> · <a href="/contact">ارتباط با فروشگاه</a></article>`});}
+module.exports = { renderGuide, ORIGIN, productPath, inStock, renderProduct, renderHome, renderCollection, renderUtility, sitemap, errorPage };

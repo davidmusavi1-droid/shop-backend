@@ -37,6 +37,7 @@ jobs:
             npx prisma db execute --file "db/$script.sql" --schema prisma/schema.prisma
           done
           npx prisma db execute --file db/add-zibal-retries.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-payment-evidence.sql --schema prisma/schema.prisma
       - run: node --test test/zibal-retry-policy.test.js
       - run: node test/zibal-retry-postgres.cjs
       - name: Status-2 callback regression (Express and isolated PostgreSQL)
@@ -52,6 +53,7 @@ jobs:
       - name: Install parcel metadata schema for production-mode fixture
         run: npx prisma db execute --file db/add-parcel-courier.sql --schema prisma/schema.prisma
       - run: npx prisma db execute --file db/add-postpaid-shipping.sql --schema prisma/schema.prisma
+      - run: npx prisma db execute --file db/add-shipping-policy.sql --schema prisma/schema.prisma
       - run: node --test test/destination-shipping.test.js
       - run: node test/destination-shipping-postgres.cjs
       - name: Public checkout access and final inquiry (isolated only)
