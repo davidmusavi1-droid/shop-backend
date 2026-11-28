@@ -1,0 +1,30 @@
+name: Shipping icon presentation checks
+on:
+  pull_request:
+    branches: [main]
+    paths: ['public/**', 'src/lib/storefront.js', 'src/lib/customer-guides.js', 'src/lib/shipping-icon.js', 'test/shipping-icons-browser.cjs', '.github/workflows/shipping-icons.yml']
+permissions:
+  contents: read
+jobs:
+  responsive-icons:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      NODE_PATH: /tmp/motif-icons-browser/node_modules
+      CHROME_BIN: /usr/bin/google-chrome
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # This GET-only presentation fixture requires no application dependencies or database.
+      - run: npm install --prefix /tmp/motif-icons-browser --no-package-lock playwright@1.56.1
+      - run: node --test test/shipping-policy.test.js test/postpaid-shipping.test.js test/parcel-courier.test.js test/shipping-costs.test.js
+      - run: node test/shipping-icons-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shipping-icon-responsive-previews
+          path: artifacts/shipping-icons-*.png
+          if-no-files-found: error

@@ -27,3 +27,16 @@ input::placeholder,.measure-panel .guide,.measure-panel .hint,.notice{color:var(
 #postpaidAgreement{display:flex;align-items:flex-start;gap:10px}#postpaidAgreement[hidden]{display:none}
 #postpaidAgreement input{width:20px;height:20px;padding:0;flex:0 0 20px}
 .free-shipping{margin-block:1rem;padding:.8rem 1rem;border:1px solid currentColor;border-radius:.75rem}.free-shipping p{margin:0 0 .45rem}.free-shipping progress{display:block;width:100%;height:.65rem;accent-color:currentColor}
+
+/* Decorative Lucide icons use logical spacing; Persian text keeps its wrapping. */
+.shipping-icon{display:inline-block;inline-size:1.25rem;block-size:1.25rem;flex-shrink:0;vertical-align:-.22em;margin-inline-end:.5rem;pointer-events:none}
+.customer-guide h1 .shipping-icon{inline-size:1.6rem;block-size:1.6rem}
+.customer-guide p{overflow-wrap:anywhere}
+.shipping-line{display:flex;align-items:baseline;gap:.5rem;min-inline-size:0}
+.shipping-line>.shipping-icon{margin:0;align-self:flex-start;margin-block-start:.35rem}
+.shipping-line>p{min-inline-size:0;overflow-wrap:anywhere}
+.shipping-line:not(:has(>p:not(:empty))){display:none}
+.shipping-method .method-bike{display:none}
+.shipping-method:has(option[value="COORDINATED_COURIER"]:checked) .method-bike{display:inline-block}
+.shipping-method:has(option[value="COORDINATED_COURIER"]:checked) .method-truck{display:none}
+@media(max-width:480px){.customer-guide{padding:20px 0}}

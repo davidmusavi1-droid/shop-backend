@@ -4,7 +4,13 @@ const form=document.getElementById('guestCheckout'),E=(tag,text)=>{const e=docum
 const box=E('section');box.className='panel';form.after(box);box.hidden=true;
 const select=E('select');select.setAttribute('aria-label','روش ارسال');
 for(const [v,t]of [['POST_PISHTAZ','پست پیشتاز'],['COORDINATED_COURIER','ارسال فوری با هماهنگی پشتیبانی']]){const o=E('option',t);o.value=v;select.append(o);}
-const label=E('label','روش ارسال');label.append(select);form.querySelector('.two-fields').after(label);
+const label=E('label','روش ارسال');label.className='shipping-method';
+for(const name of ['truck','bike']){
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),use=document.createElementNS('http://www.w3.org/2000/svg','use');
+ for(const [key,value]of Object.entries({class:'shipping-icon method-'+name,width:'24',height:'24',viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'2','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true',focusable:'false'}))svg.setAttribute(key,value);
+ use.setAttribute('href','/shipping-icons.svg#'+name);svg.append(use);label.prepend(svg);
+}
+label.append(select);form.querySelector('.two-fields').after(label);
 const note=E('p'),request=E('button','درخواست هماهنگی ارسال فوری'),check=E('button','بررسی پاسخ پشتیبانی'),result=E('div'),status=E('p');
 status.setAttribute('role','status');request.type=check.type='button';box.append(note,request,check,result,status);
 let config=null,saved=null,offer=null;

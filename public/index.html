@@ -12,7 +12,7 @@
 <section id="product" hidden><nav id="productBreadcrumb" class="breadcrumb" aria-label="مسیر صفحه"></nav><a class="back" href="/collection">بازگشت به انتخاب‌ها</a><div id="productStatus" role="status" class="state"></div><button id="detailRetry" class="button" hidden>تلاش دوباره</button><div id="detail" class="detail" hidden></div></section>
 <section id="cart" class="section" hidden><h1>سبد انتخاب‌ها</h1><div id="cartItems"></div><p id="cartTotal"></p><p id="checkoutMessage" role="status" aria-live="polite"></p>
 <details id="order-tracking">
-  <summary>پیگیری سفارش</summary>
+  <summary><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#package-search"></use></svg>پیگیری سفارش</summary>
   <form id="trackingChallenge">
     <label>شماره سفارش<input name="orderNumber" required maxlength="36"></label>
     <label>موبایل<input name="phone" type="tel" inputmode="numeric" required maxlength="11"></label>
@@ -35,11 +35,11 @@
   <p id="cardReceiptStatus" role="status"></p>
 </form>
 <div id="freeShippingProgress" class="free-shipping" hidden>
-  <p id="freeShippingText" aria-live="polite"></p>
+  <div class="shipping-line"><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#gift"></use></svg><p id="freeShippingText" aria-live="polite"></p></div>
   <progress id="freeShippingMeter" aria-labelledby="freeShippingText" max="1" value="0"></progress>
 </div>
 <form id="guestCheckout" hidden>
-  <h2>مشخصات گیرنده</h2>
+  <h2><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#map-pin"></use></svg>مشخصات گیرنده</h2>
   <div class="two-fields">
     <label>نام و نام خانوادگی<input name="fullName" autocomplete="name" required maxlength="120"></label>
     <label>موبایل<input name="phone" type="tel" inputmode="numeric" autocomplete="tel-national" required maxlength="11"></label>
@@ -49,10 +49,10 @@
     <label>آدرس کامل<input name="address" autocomplete="street-address" required maxlength="500"></label>
   </div>
   <label id="postpaidAgreement" hidden><input type="checkbox"><span id="shippingTerms">شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.</span></label>
-  <p id="shippingEta" aria-live="polite"></p>
-<p id="checkoutShipping" role="status" aria-live="polite"></p><button id="quoteShipping" type="button" hidden>محاسبه هزینه ارسال</button>
+  <div class="shipping-line"><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#clock"></use></svg><p id="shippingEta" aria-live="polite"></p></div>
+<div class="shipping-line"><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#wallet"></use></svg><p id="checkoutShipping" role="status" aria-live="polite"></p></div><button id="quoteShipping" type="button" hidden>محاسبه هزینه ارسال</button>
   <button class="primary">ثبت سفارش آزمایشی</button>
 </form><p class="notice">پرداخت آنلاین هنوز فعال نشده است. افزودن به این سبد، کالا را رزرو نمی‌کند.</p><a class="button" href="/collection">ادامهٔ انتخاب</a></section>
 <section id="contact" class="section" hidden><h1>ارتباط با MOTIF</h1><p>ما را دنبال کن یا از راه‌های ارتباطی زیر پیام بده.</p><div id="contactSocials" class="socials"></div><p id="contactEmpty" hidden>راه‌های ارتباطی به‌زودی اینجا ثبت می‌شوند.</p></section>
-</div><!--SERVER_CONTENT--></main><footer class="wrap"><a class="logo" href="/" dir="ltr">MOTIF<span>.</span></a><a href="/contact">تماس با ما</a><div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div><nav class="customer-guides" aria-label="راهنمای خرید"><a href="/shipping-guide">راهنمای ارسال</a><a href="/payment-guide">راهنمای پرداخت</a><a href="/tracking-guide">راهنمای پیگیری</a></nav></footer>
-<!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/checkout-state.js?v=20261120"></script><script src="/store.js?v=20261127-free-shipping"></script><script src="/courier-checkout.js?v=20261127-free-shipping"></script></body></html>
+</div><!--SERVER_CONTENT--></main><footer class="wrap"><a class="logo" href="/" dir="ltr">MOTIF<span>.</span></a><a href="/contact">تماس با ما</a><div id="socials" class="socials" aria-label="شبکه‌های اجتماعی"></div><nav class="customer-guides" aria-label="راهنمای خرید"><a href="/shipping-guide"><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#package"></use></svg>راهنمای ارسال</a><a href="/payment-guide">راهنمای پرداخت</a><a href="/tracking-guide"><svg class="shipping-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="/shipping-icons.svg#package-search"></use></svg>راهنمای پیگیری</a></nav></footer>
+<!--SITE_CONTENT--><script src="/catalog.js"></script><script src="/site-content.js?v=20261030-theme"></script><script src="/checkout-state.js?v=20261120"></script><script src="/store.js?v=20261127-free-shipping"></script><script src="/courier-checkout.js?v=20261128-icons"></script></body></html>
