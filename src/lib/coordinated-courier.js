@@ -27,6 +27,7 @@ async function request(db,input,token) {
     if(saved){authorize(saved,token);if(saved.requestHash!==input.requestHash)throw fail(409,'شناسه درخواست تکراری با اطلاعات متفاوت');return view(saved);}
     const now=new Date();
     const deliveryDate=p.requestedDeliveryDate(input.deliveryDay,config.courierCutoff,now);
+    if(input.deliveryDate!==undefined&&input.deliveryDate!==deliveryDate)throw fail(409,'تاریخ ارسال تغییر کرده است؛ روز درخواستی را دوباره انتخاب کنید.');
     // Persist limits in PostgreSQL, without exposing whether a mobile number has requests.
     await lock(tx,'client:'+input.clientHash);
     const clientCount=await tx.courierRequest.count({where:{clientHash:input.clientHash,createdAt:{gte:new Date(+now-3600000)}}});

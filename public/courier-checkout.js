@@ -46,7 +46,8 @@ request.onclick=async()=>{
  const selected=day.value;
  await refreshSettings();
  if(!selected||selected!==day.value)throw Error('روز درخواستی تغییر کرده است؛ پس از انتخاب روز، دوباره درخواست کنید.');
- const body=JSON.stringify({...JSON.parse(shippingPayload()),deliveryDay:day.value});
+ const deliveryDate=config?.deliverySchedule?.[day.value];
+ const body=JSON.stringify({...JSON.parse(shippingPayload()),deliveryDay:day.value,deliveryDate});
  const state=await MotifCheckoutState.request(body,sessionStorage);
  if(!saved||saved.fingerprint!==state.key){saved={fingerprint:state.key,key:state.key,token:token(),deliveryDay:day.value};sessionStorage.setItem('motif-courier-request',JSON.stringify(saved));}
  const r=await api('/courier',{method:'POST',headers:{'Idempotency-Key':saved.key},body});saved.id=r.id;sessionStorage.setItem('motif-courier-request',JSON.stringify(saved));
@@ -79,7 +80,7 @@ check.onclick=async()=>{
  const state=await MotifCheckoutState.request(body+saved.id,sessionStorage);
  const order=await api('/courier/'+encodeURIComponent(saved.id)+'/accept',{method:'POST',headers:{'Idempotency-Key':state.key},body});
  const paidOrder={number:order.orderNumber,key:state.key,total:order.totalPrice,expiry:order.expiresAt};
- sessionStorage.setItem('motif-card-order',JSON.stringify(paidOrder));await showOnlinePayment(paidOrder);await showCardReceipt(paidOrder);
+ sessionStorage.setItem('motif-card-order',JSON.stringify(paidOrder));void presentPaymentOptions(paidOrder);
  const ordered=new Map(offer.items.map(x=>[x.variantId,x.quantity]));cart=cart.map(x=>({...x,quantity:x.quantity-(ordered.get(x.variantId)||0)})).filter(x=>x.quantity>0);saveCart();
  status.textContent='شماره سفارش '+order.orderNumber+' · مبلغ '+money(order.totalPrice);result.replaceChildren();MotifCheckoutState.complete(sessionStorage);
  }catch(e){status.textContent=e.message;accept.disabled=false;}

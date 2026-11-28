@@ -291,8 +291,7 @@ $('guestCheckout').addEventListener('submit', async event => {
     form.reset();
     const cardOrder = { number: order.orderNumber, key: checkoutRequest.key, total: order.totalPrice, expiry: order.expiresAt };
     try { sessionStorage.setItem('motif-card-order', JSON.stringify(cardOrder)); } catch {}
-    void showCardReceipt(cardOrder);
-    void showOnlinePayment(cardOrder);
+    void presentPaymentOptions(cardOrder);
     MotifCheckoutState.complete(sessionStorage);
     checkoutRequest = undefined;
     $('checkoutMessage').textContent = 'شماره سفارش ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
@@ -304,6 +303,12 @@ $('guestCheckout').addEventListener('submit', async event => {
     button.disabled = destinationCheckout && (!shippingQuote || (postpaidCheckout&&!$('postpaidAgreement').querySelector('input').checked));
   }
 });
+
+async function presentPaymentOptions(order) {
+  await Promise.all([showCardReceipt(order),showOnlinePayment(order)]);
+  const target=!$('onlinePayment').hidden?$('onlinePayment'):!$('cardReceipt').hidden?$('cardReceipt'):null;
+  target?.scrollIntoView({block:'nearest'});
+}
 
 let activeCardOrder;
 async function showCardReceipt(order) {

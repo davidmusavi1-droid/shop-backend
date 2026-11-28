@@ -41,7 +41,9 @@ router.post('/courier',handle(async(req,res)=>{
  if(req.body.deliveryDay!==undefined){
   if(!['today','tomorrow'].includes(req.body.deliveryDay))throw p.fail(400,'روز ارسال نامعتبر است');
   input.deliveryDay=req.body.deliveryDay;
-  input.requestHash=p.hash([input.requestHash,input.deliveryDay]);
+  input.deliveryDate=req.body.deliveryDate;
+  if(input.deliveryDate!==undefined&&(typeof input.deliveryDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(input.deliveryDate)))throw p.fail(400,'تاریخ ارسال نامعتبر است');
+  input.requestHash=p.hash([input.requestHash,input.deliveryDay,input.deliveryDate]);
  }
  input.clientHash=p.hash(req.ip||'unknown');
  res.status(201).json(await courier.request(prisma,input,req.get('X-Courier-Token')));

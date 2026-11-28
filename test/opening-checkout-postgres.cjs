@@ -132,7 +132,7 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
  if(process.env.MOTIF_PARCEL_BROWSER==='true'){
   const {chromium}=require('playwright');
   const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN||undefined});
-  try{for(const width of [320,1280]){
+  try{for(const width of [320,390,1280]){
    const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage(),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.addInitScript(cart=>localStorage.setItem('motif-cart',JSON.stringify(cart)),[{productId:large.product.id,variantId:large.variant.id,quantity:1}]);
