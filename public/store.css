@@ -40,3 +40,8 @@ input::placeholder,.measure-panel .guide,.measure-panel .hint,.notice{color:var(
 .shipping-method:has(option[value="COORDINATED_COURIER"]:checked) .method-bike{display:inline-block}
 .shipping-method:has(option[value="COORDINATED_COURIER"]:checked) .method-truck{display:none}
 @media(max-width:480px){.customer-guide{padding:20px 0}}
+.shipping-guide-section{margin-block:1.75rem}
+.shipping-guide-section h2{font-size:1.2rem}
+.shipping-guide-section h3{font-size:1rem;margin-block:1rem .5rem}
+.shipping-guide-section ul{padding-inline-start:1.5rem;line-height:2}
+.shipping-guide-section li{margin-block:.4rem;overflow-wrap:anywhere}

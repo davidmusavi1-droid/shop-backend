@@ -75,5 +75,12 @@ function sitemap(products) {
 function errorPage(message) {
   return '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>'+escape(message)+' | MOTIF</title><h1>'+escape(message)+'</h1><a href="/">بازگشت به فروشگاه</a></html>';
 }
-function renderGuide(kind,settings,policy,trackingReady){const g=require('./customer-guides').sections(kind,policy,trackingReady);return page({settings,pathname:'/'+kind,title:g.title+' | MOTIF',body:`<article class="customer-guide"><h1>${shippingIcon(kind==='shipping-guide'?'package':kind==='tracking-guide'?'package-search':'wallet')}${escape(g.title)}</h1>${g.paragraphs.map((p,i)=>`<p>${kind==='shipping-guide'?shippingIcon(['truck','bike','gift','wallet','package','clock','map-pin'][i]):''}${escape(p)}</p>`).join('')}<a href="/cart#order-tracking">${shippingIcon('package-search')}پیگیری سفارش</a> · <a href="/contact">ارتباط با فروشگاه</a></article>`});}
+function renderGuide(kind,settings,policy,trackingReady){
+ const g=require('./customer-guides').sections(kind,policy,trackingReady);
+ const paragraphs=values=>values.map(p=>`<p class="guide-copy">${escape(p)}</p>`).join('');
+ const body=g.groups?`<p class="guide-introduction">${escape(g.introduction)}</p>`+g.groups.map(group=>
+  `<section class="shipping-guide-section"><h2>${shippingIcon(group.icon)}${escape(group.title)}</h2>${paragraphs(group.paragraphs)}${group.times?`<h3>${shippingIcon('clock')}زمان تقریبی تحویل</h3><ul>${group.times.map(time=>`<li>${escape(time)}</li>`).join('')}</ul>`:''}</section>`
+ ).join(''):paragraphs(g.paragraphs);
+ return page({settings,pathname:'/'+kind,title:g.title+' | MOTIF',body:`<article class="customer-guide"><h1>${shippingIcon(kind==='shipping-guide'?'package':kind==='tracking-guide'?'package-search':'wallet')}${escape(g.title)}</h1>${body}<a href="/cart#order-tracking">${shippingIcon('package-search')}پیگیری سفارش</a> · <a href="/contact">ارتباط با فروشگاه</a></article>`});
+}
 module.exports = { renderGuide, ORIGIN, productPath, inStock, renderProduct, renderHome, renderCollection, renderUtility, sitemap, errorPage };

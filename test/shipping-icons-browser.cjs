@@ -3,6 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const storefront=require('../src/lib/storefront'),site=require('../public/site-content');
 const {sections}=require('../src/lib/customer-guides'),policyLib=require('../src/lib/shipping-policy');
 const policy={...policyLib.defaults,...policyLib.thresholds,revision:'icons-fixture'};
+const guideParagraphs=g=>g.groups?g.groups.flatMap(group=>group.paragraphs):g.paragraphs;
 const product={id:'p1',title:'لباس آزمایشی',isActive:true,basePrice:5000000,images:[],variants:[{id:'v1',stock:2,priceDelta:0,size:'L',color:'مشکی'}]};
 const publicDir=path.join(__dirname,'../public'),artifacts=path.join(__dirname,'../artifacts');
 fs.mkdirSync(artifacts,{recursive:true});
@@ -36,12 +37,15 @@ const server=http.createServer((req,res)=>{
   await context.addInitScript(()=>localStorage.setItem('motif-cart',JSON.stringify([{productId:'p1',variantId:'v1',quantity:1}])));
   for(const kind of ['shipping-guide','payment-guide','tracking-guide']){
    await page.goto(origin+'/'+kind);
-   assert.deepEqual(await page.locator('.customer-guide>p').allTextContents(),sections(kind,policy,false).paragraphs);
+   assert.deepEqual(await page.locator('.customer-guide .guide-copy').allTextContents(),guideParagraphs(sections(kind,policy,false)));
    assert.equal(await page.locator('html').getAttribute('dir'),'rtl');
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    assert.equal(await page.locator('.shipping-icon:not([aria-hidden="true"]),.shipping-icon:not([focusable="false"])').count(),0);
    if(kind==='shipping-guide'){
-    assert.deepEqual(await page.locator('.customer-guide>p use').evaluateAll(uses=>uses.map(u=>u.getAttribute('href').split('#')[1])),['truck','bike','gift','wallet','package','clock','map-pin']);
+    assert.deepEqual(await page.locator('.customer-guide h2 use').evaluateAll(uses=>uses.map(u=>u.getAttribute('href').split('#')[1])),['truck','bike','gift','wallet','map-pin']);
+    assert.equal(await page.locator('.customer-guide h3 use[href$="#clock"]').count(),2);
+    assert.deepEqual(await page.locator('.customer-guide li').allTextContents(),sections(kind,policy,false).groups.flatMap(group=>group.times||[]));
+    assert.doesNotMatch(await page.locator('.customer-guide').innerText(),/تنظیمات فروشگاه|تأییدیه|نگه‌داری|ثبت شود/);
     await page.screenshot({path:path.join(artifacts,`shipping-icons-guide-${width}.png`),fullPage:true});
    }
   }
@@ -62,7 +66,7 @@ const server=http.createServer((req,res)=>{
  // Guides and their icons remain rendered without JavaScript.
  const context=await browser.newContext({javaScriptEnabled:false}),page=await context.newPage();
  await page.goto(origin+'/shipping-guide');assert.equal(await page.locator('.customer-guide svg').count(),9);
- assert.deepEqual(await page.locator('.customer-guide>p').allTextContents(),sections('shipping-guide',policy,false).paragraphs);
+ assert.deepEqual(await page.locator('.customer-guide .guide-copy').allTextContents(),guideParagraphs(sections('shipping-guide',policy,false)));
  await context.close();console.log('PASS: 320/390/1280 RTL guides, exact Persian copy, cart threshold, method icons, accessibility attributes, keyboard focus, no-JS guide. Synthetic GET-only fixture.');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
