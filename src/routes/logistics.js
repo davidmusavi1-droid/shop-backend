@@ -16,7 +16,7 @@ router.get('/postpaid',admin,handle(async(req,res)=>{
  res.json({policy:state?.activeTariff||null});
 }));
 router.post('/postpaid',admin,handle(async(req,res)=>res.json(await require('../lib/postpaid-shipping').publish(prisma,req.body))));
-router.get('/settings',handle(async(req,res)=>{const s=await p.settings(prisma);res.json({supportPhone:s.supportPhone,courierEnabled:s.courierEnabled,requestMinutes:s.requestMinutes,offerMinutes:s.offerMinutes,reservationMinutes:s.reservationMinutes,tipaxEnabled:false});}));
+router.get('/settings',handle(async(req,res)=>{const s=await p.settings(prisma);res.json({supportPhone:s.supportPhone,courierEnabled:s.courierEnabled,requestMinutes:s.requestMinutes,offerMinutes:s.offerMinutes,reservationMinutes:s.reservationMinutes,courierCutoff:s.courierCutoff,deliverySchedule:p.deliverySchedule(s.courierCutoff),tipaxEnabled:false});}));
 router.put('/settings',admin,handle(async(req,res)=>{
  const settings=p.settingsInput(req.body);
  await prisma.shippingOperations.upsert({where:{id:'default'},create:{id:'default',settings},update:{settings}});res.json(settings);
@@ -38,6 +38,11 @@ router.post('/packing-plans',admin,handle(async(req,res)=>{
 router.post('/courier',handle(async(req,res)=>{
  const body={...req.body,shippingMethod:undefined,courierAcceptance:undefined,shippingAcceptance:undefined};
  const input=checkout.checkoutInput(body,req.get('Idempotency-Key'));
+ if(req.body.deliveryDay!==undefined){
+  if(!['today','tomorrow'].includes(req.body.deliveryDay))throw p.fail(400,'روز ارسال نامعتبر است');
+  input.deliveryDay=req.body.deliveryDay;
+  input.requestHash=p.hash([input.requestHash,input.deliveryDay]);
+ }
  input.clientHash=p.hash(req.ip||'unknown');
  res.status(201).json(await courier.request(prisma,input,req.get('X-Courier-Token')));
 }));

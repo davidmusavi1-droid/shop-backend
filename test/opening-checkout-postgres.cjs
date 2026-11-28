@@ -153,9 +153,14 @@ const review=(r,approved)=>json('/api/checkout/card-transfer/orders/'+r.order.or
    const quote=page.waitForResponse(r=>r.url().endsWith('/api/checkout/shipping/quote'));
    await page.locator('#quoteShipping').click();
    assert.equal((await quote).status(),200);
-   await form.locator('button.primary:enabled').waitFor();
+   await agreement.waitFor();
+   assert.equal(await agreement.isChecked(),false);
+   const confirm=form.getByRole('button',{name:'تأیید شرایط ارسال و مبلغ کالا',exact:true});
+   assert.equal(await confirm.isEnabled(),false);
+   assert.equal(await page.getByRole('link',{name:'مطالعه کامل شرایط ارسال'}).getAttribute('href'),'/shipping-guide');
+   assert.doesNotMatch(await form.innerText(),/زمان قطعی تضمین نمی‌شود/);
    await agreement.check();
-   assert(await form.locator('button.primary').isEnabled());
+   assert(await confirm.isEnabled());
    const panel=page.locator('#cardReceipt');await panel.evaluate(e=>e.hidden=false);
    assert.equal(await panel.locator('[name="receipt"]').getAttribute('required'),null);
    assert.equal(await panel.locator('[name="bankTrackingCode"]').count(),1);

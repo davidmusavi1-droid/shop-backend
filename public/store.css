@@ -45,3 +45,4 @@ input::placeholder,.measure-panel .guide,.measure-panel .hint,.notice{color:var(
 .shipping-guide-section h3{font-size:1rem;margin-block:1rem .5rem}
 .shipping-guide-section ul{padding-inline-start:1.5rem;line-height:2}
 .shipping-guide-section li{margin-block:.4rem;overflow-wrap:anywhere}
+.shipping-details{display:grid;gap:.7rem;min-width:0}.shipping-details .shipping-line p{margin:0}.shipping-guide-link{display:inline-block;justify-self:start}.shipping-details [hidden]{display:none}

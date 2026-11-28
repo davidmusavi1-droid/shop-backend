@@ -8,6 +8,7 @@ const product={id:'p1',title:'لباس آزمایشی',isActive:true,basePrice:5
 const publicDir=path.join(__dirname,'../public'),artifacts=path.join(__dirname,'../artifacts');
 fs.mkdirSync(artifacts,{recursive:true});
 // This server has no database or payment provider. All writes fail closed.
+let todayAvailable=true;
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://fixture');
  if(req.method!=='GET'){res.writeHead(405);return res.end();}
@@ -15,7 +16,7 @@ const server=http.createServer((req,res)=>{
   const data=url.pathname==='/api/products'?[product]:url.pathname==='/api/products/p1'?product:
    url.pathname==='/api/checkout/shipping-policy'?policy:
    url.pathname==='/api/checkout/shipping'?{mode:'postpaid',ready:true,public:true,trackingAvailable:false,policy,provinces:['البرز','تهران'],cities:{}}:
-   url.pathname==='/api/checkout/logistics/settings'?{courierEnabled:true}:{};
+   url.pathname==='/api/checkout/logistics/settings'?{courierEnabled:true,courierCutoff:'20:00',deliverySchedule:{todayAvailable}}:{};
   res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(data));
  }
  if(['/shipping-guide','/payment-guide','/tracking-guide'].includes(url.pathname)){
@@ -32,6 +33,7 @@ const server=http.createServer((req,res)=>{
  const browser=await chromium.launch({headless:true,...(process.env.CHROME_BIN?{executablePath:process.env.CHROME_BIN}:{})});
  try{
  for(const width of [320,390,1280]){
+  todayAvailable=width!==390;
   const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await context.addInitScript(()=>localStorage.setItem('motif-cart',JSON.stringify([{productId:'p1',variantId:'v1',quantity:1}])));
@@ -54,9 +56,15 @@ const server=http.createServer((req,res)=>{
   await page.locator('.method-truck').waitFor();assert.equal(await page.locator('.method-bike').isVisible(),false);
   await page.selectOption('[aria-label="روش ارسال"]','COORDINATED_COURIER');
   await page.locator('.method-bike').waitFor();assert.equal(await page.locator('.method-truck').isVisible(),false);
-  assert.match(await page.locator('#freeShippingText').innerText(),/پیک کرج.*مشمول ارسال رایگان/);
+  assert.match(await page.locator('#freeShippingText').innerText(),/ارسال فوری کرج.*مشمول ارسال رایگان/);
   assert.equal(await page.locator('#freeShippingMeter').getAttribute('max'),'5000000');
   assert.match(await page.locator('#cartTotal').innerText(),/۵٬۰۰۰٬۰۰۰/);
+  assert.equal(await page.getByLabel('روز ارسال فوری').inputValue(),todayAvailable?'today':'tomorrow');
+  await page.selectOption('[name="province"]','تهران');await page.fill('[name="city"]','تهران');
+  await page.selectOption('[aria-label="روش ارسال"]','COORDINATED_COURIER');
+  assert.match(await page.locator('#freeShippingText').innerText(),/ارسال فوری تهران.*۲٬۰۰۰٬۰۰۰/);
+  await page.fill('[name="city"]','پردیس');
+  await page.locator('.method-truck').waitFor();
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.screenshot({path:path.join(artifacts,`shipping-icons-cart-${width}.png`),fullPage:true});
   await page.getByRole('link',{name:'راهنمای ارسال',exact:true}).focus();

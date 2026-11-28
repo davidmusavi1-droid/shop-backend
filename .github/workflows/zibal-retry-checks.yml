@@ -2,7 +2,7 @@ name: Zibal retry checks
 on:
   pull_request:
     branches: [main]
-    paths: ['src/lib/*retry*', 'src/lib/zibal-live.js', 'src/lib/checkout-access.js', 'src/lib/payment-result.js', 'src/routes/checkout.js', 'src/routes/payment.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'db/add-destination-shipping.sql', 'src/lib/destination-shipping.js', 'test/destination-shipping*', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
+    paths: ['src/lib/*retry*', 'src/lib/zibal-live.js', 'src/lib/checkout-access.js', 'src/lib/payment-result.js', 'src/routes/checkout.js', 'src/routes/payment.js', 'public/store.js', 'public/courier-checkout.js', 'src/lib/coordinated-courier.js', 'prisma/schema.prisma', 'db/add-zibal-retries.sql', 'db/add-destination-shipping.sql', 'src/lib/destination-shipping.js', 'test/destination-shipping*', 'test/zibal-retry*', '.github/workflows/zibal-retry-checks.yml']
 permissions:
   contents: read
 jobs:

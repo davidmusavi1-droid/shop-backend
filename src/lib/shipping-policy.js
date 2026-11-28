@@ -54,14 +54,14 @@ function calculate(policy,method,customer,goodsTotal){
  const courier=method==='COORDINATED_COURIER';
  const karaj=normal(customer.province)==='البرز'&&normal(customer.city)==='کرج';
  const tehran=normal(customer.province)==='تهران'&&normal(customer.city)==='تهران';
- if(courier&&!karaj&&!tehran)throw fail(409,'پیک فقط برای شهر کرج و شهر تهران است');
+ if(courier&&!karaj&&!tehran)throw fail(409,'ارسال فوری فقط برای شهر کرج و شهر تهران است');
  const key=courier?(karaj?'karajFreeThreshold':'tehranFreeThreshold'):'postalFreeThreshold';
  const freeShippingThreshold=policy[key]??thresholds[key];
  const remainingForFreeShipping=Math.max(0,freeShippingThreshold-goodsTotal);
  const freeShipping=remainingForFreeShipping===0;
  const terms=freeShipping
-  ? (courier?'کرایه پیک بر عهده MOTIF است. امکان ارسال و زمان تحویل با هماهنگی تأیید می‌شود.':'ارسال پست پیشتاز رایگان است. MOTIF کرایه را در مبدأ می‌پردازد.')
-  : (courier?'کرایه پیک با توافق مشتری تعیین و هنگام تحویل پرداخت می‌شود؛ این کرایه جدا از مبلغ کالا و پرداخت آنلاین است.':'هزینه پست پیشتاز بر عهده مشتری است و هنگام تحویل به شرکت پست پرداخت می‌شود؛ مبلغ کرایه توسط پست تعیین می‌شود و جدا از مبلغ کالا است.');
+  ? (courier?'کرایه ارسال فوری بر عهده MOTIF است. امکان ارسال و زمان تحویل با هماهنگی تأیید می‌شود.':'ارسال پست پیشتاز رایگان است. MOTIF کرایه را در مبدأ می‌پردازد.')
+  : (courier?'کرایه ارسال فوری با توافق مشتری تعیین و هنگام تحویل پرداخت می‌شود؛ این کرایه جدا از مبلغ کالا و پرداخت آنلاین است.':'هزینه پست پیشتاز بر عهده مشتری است و هنگام تحویل به شرکت پست پرداخت می‌شود؛ مبلغ کرایه توسط پست تعیین می‌شود و جدا از مبلغ کالا است.');
  return {policyRevision:policy.revision,shippingFee:0,goodsTotal,totalPrice:goodsTotal,shippingChargeMode:freeShipping?merchantPays:recipientPays,
   freeShipping,freeShippingThreshold,remainingForFreeShipping,shippingDueAtDelivery:freeShipping?0:null,terms,
  eta:courier?(karaj?policy.karajEta:policy.tehranEta):normal(customer.province)==='البرز'?policy.postalLocalEta:policy.postalEta};

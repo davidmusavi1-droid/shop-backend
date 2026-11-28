@@ -1,5 +1,6 @@
 const {publicView}=require('./shipping-policy');
-function sections(kind,policy,trackingReady){
+const {defaults:deliveryDefaults}=require('./parcel-shipping');
+function sections(kind,policy,trackingReady,courierCutoff=deliveryDefaults.courierCutoff){
  const p=publicView(policy);
  const amount=n=>n.toLocaleString('fa-IR')+' تومان';
  if(kind==='shipping-guide')return {
@@ -10,11 +11,11 @@ function sections(kind,policy,trackingReady){
    'سفارش‌های '+amount(p.postalFreeThreshold)+' و بیشتر در سراسر ایران با پست پیشتاز رایگان ارسال می‌شوند و هزینه پست را MOTIF پرداخت می‌کند.',
    'برای سفارش‌های کمتر از این مبلغ، هزینه پست هنگام تحویل مرسوله بر عهده خریدار است.'
   ],times:['استان البرز: '+p.postalLocalEta,'سایر استان‌ها: '+p.postalEta]},
-  {title:'ارسال با پیک در تهران و کرج',icon:'bike',paragraphs:[
-   'ارسال با پیک در شهر کرج از '+amount(p.karajFreeThreshold)+' و در شهر تهران از '+amount(p.tehranFreeThreshold)+' رایگان است. هزینه ارسال این سفارش‌ها را MOTIF پرداخت می‌کند.',
+  {title:'ارسال فوری در تهران و کرج',icon:'bike',paragraphs:[
+   'ارسال فوری در شهر کرج از '+amount(p.karajFreeThreshold)+' و در شهر تهران از '+amount(p.tehranFreeThreshold)+' رایگان است. هزینه ارسال این سفارش‌ها را MOTIF پرداخت می‌کند.',
    'برای سفارش‌های کمتر از این مبالغ، کرایه با هماهنگی پشتیبانی مشخص می‌شود و مشتری هنگام تحویل آن را پرداخت می‌کند.',
-   'ارسال با پیک به تأیید امکان ارسال و هماهنگی با پشتیبانی فروشگاه بستگی دارد.'
-  ],times:['شهر کرج: '+p.karajEta,'شهر تهران: '+p.tehranEta]},
+   'ارسال فوری به تأیید امکان ارسال، ظرفیت، کرایه واقعی و زمان تحویل توسط پشتیبانی بستگی دارد. MOTIF وسیله حمل را تعیین می‌کند.'
+  ],times:['تا ساعت '+courierCutoff.replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d])+' به وقت تهران، هدف تحویل همان روز است.', 'بعد از این ساعت می‌توانید ارسال روز بعد را درخواست کنید.']},
   {title:'شرایط ارسال رایگان',icon:'gift',paragraphs:[
    'ملاک ارسال رایگان، جمع مبلغ نهایی کالاها پس از اعمال تخفیف است. هزینه ارسال سفارش‌های مشمول را MOTIF پرداخت می‌کند.'
   ]},

@@ -15,7 +15,7 @@ function publicOffer(offer) {
   return visible;
 }
 function view(row) {
-  return {id:row.id,state:row.state,expiresAt:row.expiresAt,revision:row.revision,offer:publicOffer(row.offer),orderNumber:row.orderId,customer:row.payload.customer,items:row.payload.items};
+  return {id:row.id,state:row.state,expiresAt:row.expiresAt,revision:row.revision,offer:publicOffer(row.offer),orderNumber:row.orderId,customer:row.payload.customer,items:row.payload.items,deliveryDate:row.payload.deliveryDate};
 }
 async function request(db,input,token) {
   const config=await p.settings(db);
@@ -26,6 +26,7 @@ async function request(db,input,token) {
     const saved=await tx.courierRequest.findUnique({where:{requestKey:input.requestKey}});
     if(saved){authorize(saved,token);if(saved.requestHash!==input.requestHash)throw fail(409,'شناسه درخواست تکراری با اطلاعات متفاوت');return view(saved);}
     const now=new Date();
+    const deliveryDate=p.requestedDeliveryDate(input.deliveryDay,config.courierCutoff,now);
     // Persist limits in PostgreSQL, without exposing whether a mobile number has requests.
     await lock(tx,'client:'+input.clientHash);
     const clientCount=await tx.courierRequest.count({where:{clientHash:input.clientHash,createdAt:{gte:new Date(+now-3600000)}}});
@@ -35,7 +36,7 @@ async function request(db,input,token) {
     if(recent>=3)throw fail(429,'تعداد درخواست زیاد است؛ بعداً تلاش کنید');
     const parcel=await p.parcel(tx,input.items);
     for(const item of input.items){const v=await tx.variant.findUnique({where:{id:item.variantId},include:{product:true}});if(!v?.product.isActive||v.stock<item.quantity)throw fail(409,'موجودی کافی نیست');}
-    const row=await tx.courierRequest.create({data:{id:randomUUID(),requestKey:input.requestKey,requestHash:input.requestHash,tokenHash:capability(token),clientHash:input.clientHash,phoneHash:p.hash(input.customer.phone),payload:{customer:input.customer,items:input.items,parcel},state:'AWAITING_COORDINATION',expiresAt:new Date(+now+config.requestMinutes*60000)}});
+    const row=await tx.courierRequest.create({data:{id:randomUUID(),requestKey:input.requestKey,requestHash:input.requestHash,tokenHash:capability(token),clientHash:input.clientHash,phoneHash:p.hash(input.customer.phone),payload:{customer:input.customer,items:input.items,parcel,deliveryDate},state:'AWAITING_COORDINATION',expiresAt:new Date(+now+config.requestMinutes*60000)}});
     return view(row);
   });
 }
@@ -50,6 +51,7 @@ async function offer(db,id,body) {
     const row=await tx.courierRequest.findUnique({where:{id}});
     const now=new Date();
     if(!row||row.orderId||!['AWAITING_COORDINATION','OFFERED'].includes(row.state)||+row.expiresAt<=+now||row.revision!==body.expectedRevision)throw fail(409,'درخواست منقضی یا تغییر کرده است');
+    p.ensureDeliveryDate(row.payload.deliveryDate,config.courierCutoff,now);
     const parcel=await p.parcel(tx,row.payload.items);
     let goodsTotal=0;
     const priced=[];
@@ -58,7 +60,7 @@ async function offer(db,id,body) {
     const totalPrice=p.integer(goodsTotal);
     const expiresAt=new Date(Math.min(+row.expiresAt,+now+config.offerMinutes*60000));
     const tariff=await tx.shippingTariff.create({data:{id:randomUUID(),source:'تأیید دستی پشتیبانی؛ پیشنهاد '+id,carrier:'COORDINATED_COURIER',originProvince:'البرز',originCity:'کرج',validFrom:now,validUntil:expiresAt,rules:[]}});
-    const quote={...cost,tariffId:tariff.id,shippingFee:0,courierDueAtDelivery:cost.freeShipping?0:fee,courierAgreedFee:fee,shippingDueAtDelivery:cost.freeShipping?0:fee,goodsTotal,totalPrice,eta:body.eta.trim(),expiresAt:expiresAt.toISOString(),reservationMinutes:30,parcel,items:priced};
+    const quote={...cost,tariffId:tariff.id,shippingFee:0,courierDueAtDelivery:cost.freeShipping?0:fee,courierAgreedFee:fee,shippingDueAtDelivery:cost.freeShipping?0:fee,goodsTotal,totalPrice,eta:body.eta.trim(),deliveryDate:row.payload.deliveryDate,expiresAt:expiresAt.toISOString(),reservationMinutes:30,parcel,items:priced};
     await tx.courierOffer.create({data:{requestId:id,revision:row.revision+1,details:quote}});
     return view(await tx.courierRequest.update({where:{id},data:{state:'OFFERED',revision:row.revision+1,offer:quote}}));
   });
@@ -71,6 +73,7 @@ async function acceptedQuote(tx,input,items) {
   if(row.orderId||row.state!=='OFFERED'||row.revision!==a.revision||!row.offer||+new Date(row.offer.expiresAt)<=Date.now()||+row.expiresAt<=Date.now())throw fail(409,'پیشنهاد تغییر کرده یا منقضی شده است');
   if(p.hash({customer:input.customer,items:input.items})!==p.hash({customer:row.payload.customer,items:row.payload.items}))throw fail(409,'نشانی یا سبد تغییر کرده است؛ درخواست جدید لازم است');
   const config=await p.settings(tx);if(!config.courierEnabled||!p.eligible(input.customer))throw fail(409,'ارسال فوری در دسترس نیست');
+  p.ensureDeliveryDate(row.payload.deliveryDate,config.courierCutoff,new Date());
   const parcel=await p.parcel(tx,items);
   // Reapproval is necessary if measurements/packing changed after the offer.
   if(p.hash(parcel)!==p.hash(row.offer.parcel))throw fail(409,'اطلاعات مرسوله تغییر کرده است؛ پیشنهاد جدید لازم است');

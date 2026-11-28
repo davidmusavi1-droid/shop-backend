@@ -75,8 +75,8 @@ function sitemap(products) {
 function errorPage(message) {
   return '<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>'+escape(message)+' | MOTIF</title><h1>'+escape(message)+'</h1><a href="/">بازگشت به فروشگاه</a></html>';
 }
-function renderGuide(kind,settings,policy,trackingReady){
- const g=require('./customer-guides').sections(kind,policy,trackingReady);
+function renderGuide(kind,settings,policy,trackingReady,courierCutoff){
+ const g=require('./customer-guides').sections(kind,policy,trackingReady,courierCutoff);
  const paragraphs=values=>values.map(p=>`<p class="guide-copy">${escape(p)}</p>`).join('');
  const body=g.groups?`<p class="guide-introduction">${escape(g.introduction)}</p>`+g.groups.map(group=>
   `<section class="shipping-guide-section"><h2>${shippingIcon(group.icon)}${escape(group.title)}</h2>${paragraphs(group.paragraphs)}${group.times?`<h3>${shippingIcon('clock')}زمان تقریبی تحویل</h3><ul>${group.times.map(time=>`<li>${escape(time)}</li>`).join('')}</ul>`:''}</section>`
