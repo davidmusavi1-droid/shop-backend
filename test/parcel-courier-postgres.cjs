@@ -109,7 +109,13 @@ let checks=0;function pass(name){console.log('PASS '+name);checks++;}
      await courier.offer(db,request.id,{fee:700,eta:'Synthetic confirmed delivery window',availabilityConfirmed:true,expectedRevision:0});
      await page.getByRole('button',{name:'بررسی پاسخ پشتیبانی',exact:true}).click();
      const acceptedResponse=page.waitForResponse(r=>r.url().endsWith('/courier/'+request.id+'/accept')&&r.request().method()==='POST');
-     await page.getByRole('button',{name:'تأیید مبلغ قطعی و ثبت سفارش',exact:true}).click();
+     const approval=page.locator('#courierCoordination input[type="checkbox"]');
+     await approval.waitFor();
+     const confirm=page.locator('#courierCoordination').getByRole('button',{name:'تأیید شرایط ارسال و مبلغ کالا',exact:true});
+     assert.equal(await approval.isChecked(),false);
+     assert.equal(await confirm.isEnabled(),false);
+     await approval.check();
+     await confirm.click();
      const acceptedHttp=await acceptedResponse;const acceptedBody=await acceptedHttp.json();
      assert.equal(acceptedHttp.status(),201,JSON.stringify(acceptedBody));
      await page.getByText('شماره سفارش '+acceptedBody.orderNumber+' · مبلغ '+new Intl.NumberFormat('fa-IR').format(10000)+' تومان',{exact:true}).waitFor();

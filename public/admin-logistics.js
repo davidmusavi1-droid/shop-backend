@@ -10,12 +10,13 @@ function action(form,title,callback){const b=E('button',title);b.type='submit';f
 async function load(){
  const data=await api(base+'/admin');root.replaceChildren(status);
  const refresh=E('button','تازه‌سازی تنظیمات و درخواست‌ها');refresh.type='button';refresh.onclick=()=>load().catch(e=>status.textContent=e.message);root.append(refresh);
- const settings=E('form');settings.append(E('h3','پیک فوری و زمان‌ها'));
+ const settings=E('form');settings.append(E('h3','ارسال فوری'));
  field(settings,'supportPhone','شماره عمومی پشتیبانی',data.settings.supportPhone).required=false;
  for(const [n,t]of [['requestMinutes','انقضای درخواست، دقیقه (۱ تا ۱۴۴۰)'],['offerMinutes','اعتبار پیشنهاد، دقیقه (حداکثر ۳۰)'],['reservationMinutes','رزرو اولیه پس از پذیرش، ثابت ۳۰ دقیقه']])field(settings,n,t,data.settings[n],'number');
  settings.elements.reservationMinutes.readOnly=true;settings.elements.reservationMinutes.min='30';settings.elements.reservationMinutes.max='30';
+ const cutoff=field(settings,'courierCutoff','پایان پذیرش امروز، به وقت تهران',data.settings.courierCutoff,'time');cutoff.step='60';
  const enabled=field(settings,'courierEnabled','ارسال فوری برای شهر تهران و شهر کرج','','checkbox');enabled.required=false;enabled.checked=data.settings.courierEnabled;
- action(settings,'ذخیره تنظیمات',async()=>{const f=settings.elements;await api(base+'/settings',{method:'PUT',body:JSON.stringify({supportPhone:f.supportPhone.value.trim(),courierEnabled:f.courierEnabled.checked,requestMinutes:f.requestMinutes.valueAsNumber,offerMinutes:f.offerMinutes.valueAsNumber,reservationMinutes:f.reservationMinutes.valueAsNumber})});});
+ action(settings,'ذخیره تنظیمات',async()=>{const f=settings.elements;await api(base+'/settings',{method:'PUT',body:JSON.stringify({supportPhone:f.supportPhone.value.trim(),courierEnabled:f.courierEnabled.checked,courierCutoff:f.courierCutoff.value,requestMinutes:f.requestMinutes.valueAsNumber,offerMinutes:f.offerMinutes.valueAsNumber,reservationMinutes:f.reservationMinutes.valueAsNumber})});});
  root.append(settings);
  const policy=await api(base+'/policy');
  const policyForm=E('form');policyForm.append(E('h3','سیاست و زمان تقریبی ارسال'));
@@ -68,9 +69,9 @@ async function load(){
  action(packing,'ذخیره بسته‌بندی',async()=>{const body={items:rows.map(r=>({variantId:r.choice.value,quantity:r.qty.valueAsNumber})),approved:approved.checked};for(const n of ['tareGrams','lengthMm','widthMm','heightMm'])body[n]=packing.elements[n].valueAsNumber;await api(base+'/packing-plans',{method:'POST',body:JSON.stringify(body)});await load();});
  root.append(packing,E('p',data.plans.length+' ترکیب بسته‌بندی تأییدشده ثبت است.'));
  root.append(E('h3','درخواست‌های ارسال فوری'));
- for(const r of data.requests){const box=E('article');box.append(E('p',r.id+' · '+r.state+' · مهلت '+new Date(r.expiresAt).toLocaleString('fa-IR')));const c=r.payload.customer;box.append(E('p',[c.fullName,c.phone,c.city,c.address].join(' · ')));box.append(E('p','اقلام: '+r.payload.items.map(x=>x.variantId+' × '+x.quantity).join('، ')));
+ for(const r of data.requests){const box=E('article');box.append(E('p',r.id+' · '+r.state+' · مهلت '+new Date(r.expiresAt).toLocaleString('fa-IR')));if(r.payload.deliveryDate)box.append(E('p','روز درخواستی: '+new Date(r.payload.deliveryDate+'T12:00:00Z').toLocaleDateString('fa-IR',{timeZone:'Asia/Tehran'})));const c=r.payload.customer;box.append(E('p',[c.fullName,c.phone,c.city,c.address].join(' · ')));box.append(E('p','اقلام: '+r.payload.items.map(x=>x.variantId+' × '+x.quantity).join('، ')));
  if(r.offer)box.append(E('p','پیشنهاد فعلی '+r.offer.totalPrice.toLocaleString('fa-IR')+' تومان · '+r.offer.eta));
- if(!r.orderId&&Date.parse(r.expiresAt)>Date.now()){const form=E('form');const fee=field(form,'fee','کرایه توافق‌شده پیک هنگام تحویل، تومان','','number');fee.min='1';const eta=field(form,'eta','بازه تحویل تأییدشده');const ok=field(form,'confirmed','امکان ارسال را بررسی کرده‌ام','','checkbox');ok.checked=false;
+ if(!r.orderId&&Date.parse(r.expiresAt)>Date.now()){const form=E('form');const fee=field(form,'fee','کرایه واقعی توافق‌شده، تومان','','number');fee.min='1';const eta=field(form,'eta','بازه تحویل تأییدشده');const ok=field(form,'confirmed','امکان ارسال، ظرفیت، کرایه و بازه تحویل را بررسی کرده‌ام','','checkbox');ok.checked=false;
  action(form,'اعلام پیشنهاد به مشتری',async()=>{await api(base+'/courier/'+encodeURIComponent(r.id)+'/offer',{method:'POST',body:JSON.stringify({fee:fee.valueAsNumber,eta:eta.value.trim(),availabilityConfirmed:ok.checked,expectedRevision:r.revision})});await load();});box.append(form);}
  if(r.orderId)box.append(E('p','شماره سفارش '+r.orderId));root.append(box);}
 }

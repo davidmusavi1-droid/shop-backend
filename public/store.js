@@ -168,12 +168,17 @@ function shippingPayload() { return JSON.stringify({ items: cart.map(({variantId
 function invalidateShipping() {
   updateShippingEstimate();
   if (!destinationCheckout) return;
-  $('postpaidAgreement').querySelector('input').checked = false;
-  shippingQuote = null; $('shippingTerms').textContent='شرایط ارسال و مبلغ کالا را پیش از ثبت سفارش تأیید می‌کنم.'; $('guestCheckout').querySelector('button.primary').disabled = true;
-  $('checkoutShipping').textContent = postpaidCheckout ? 'ارسال رایگان بر عهده MOTIF است. برای سفارش غیررایگان کرایه جداگانه هنگام تحویل پرداخت می‌شود.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
+  const agreement=$('postpaidAgreement').querySelector('input');
+  agreement.checked=false;agreement.required=false;$('postpaidAgreement').hidden=true;
+  shippingQuote = null; $('guestCheckout').querySelector(':scope > button.primary').disabled = true;
+  $('checkoutShipping').textContent = postpaidCheckout ? 'پس از تکمیل نشانی، شرایط ارسال و مبلغ کالا را ببینید.' : 'پس از تکمیل مقصد، هزینه قطعی ارسال را محاسبه کنید.';
 }
 $('guestCheckout').addEventListener('input', event => {
-  if (!$('postpaidAgreement').contains(event.target)) invalidateShipping();
+  if ($('postpaidAgreement').contains(event.target)) {
+    if(postpaidCheckout)$('guestCheckout').querySelector(':scope > button.primary').disabled=!shippingQuote||!event.target.checked;
+    return;
+  }
+  if(!event.target.closest('#courierCoordination')&&event.target.getAttribute('aria-label')!=='روش ارسال') invalidateShipping();
 });
 $('guestCheckout').elements.province.addEventListener('change', () => {
   if (!destinationCheckout) return;
@@ -195,11 +200,11 @@ $('quoteShipping').onclick = async () => {
     const q = await response.json(); if (!response.ok) throw Error(q.error || 'هزینه ارسال قابل محاسبه نیست.');
     if (body !== shippingPayload() || document.querySelector('[aria-label="روش ارسال"]')?.value==='COORDINATED_COURIER') return;
     shippingQuote = {...q,body};
-    if(q.terms)$('shippingTerms').textContent=q.terms;
+    agreement.checked=false;agreement.required=postpaidCheckout;
+    $('postpaidAgreement').hidden=!postpaidCheckout;
     $('checkoutShipping').textContent = q.shippingChargeMode ? q.terms+' مبلغ کالا / پرداخت آنلاین: '+money(q.totalPrice) : 'هزینه قطعی ارسال '+money(q.shippingFee)+' · جمع نهایی '+money(q.totalPrice)+' · دریافت هزینه اضافی بدون توافق شما مجاز نیست.';
-    if(q.eta)$('checkoutShipping').textContent+=' زمان تقریبی: '+q.eta;
     updateShippingEstimate(q);
-    const submit=form.querySelector('button.primary');submit.disabled=false;submit.textContent='ثبت سفارش با مبلغ '+money(q.totalPrice);
+    const submit=form.querySelector(':scope > button.primary');submit.disabled=postpaidCheckout;
   } catch(error) { invalidateShipping();$('checkoutShipping').textContent=error.message; } finally { button.disabled=false; }
 };
 async function checkoutWrite(url, options) {
@@ -226,8 +231,8 @@ async function showCheckout(ticket, total) {
     const {shippingFee,public:customerCheckout,trackingAvailable}=shippingConfig;
     if (ticket !== requestId || location.pathname !== '/cart') return;
     postpaidCheckout=shippingConfig.mode==='postpaid';
-    $('postpaidAgreement').hidden=!postpaidCheckout;$('postpaidAgreement').querySelector('input').required=postpaidCheckout;
-    $('quoteShipping').textContent=postpaidCheckout?'تأیید شرایط ارسال و مبلغ کالا':'محاسبه هزینه ارسال';
+    $('postpaidAgreement').hidden=true;$('postpaidAgreement').querySelector('input').required=false;
+    $('quoteShipping').textContent=postpaidCheckout?'مشاهده هزینه و شرایط ارسال':'محاسبه هزینه ارسال';
     if(shippingConfig.mode==='destination'||postpaidCheckout){
       destinationCheckout=true;destinationCities=shippingConfig.cities||{};
       const field=$('guestCheckout').elements.province;
@@ -261,12 +266,13 @@ let checkoutRequest;
 $('guestCheckout').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
-  const button = form.querySelector('button.primary');
+  const button = form.querySelector(':scope > button.primary');
   if (button.disabled) return;
   const items = cart.map(({ variantId, quantity }) => ({ variantId, quantity }));
   let body=JSON.stringify({items,customer:Object.fromEntries(new FormData(form))});
   if(destinationCheckout){
     if(!shippingQuote||shippingQuote.body!==body){invalidateShipping();return;}
+    if(postpaidCheckout&&!$('postpaidAgreement').querySelector('input').checked)return;
     body=JSON.stringify({...JSON.parse(body),shippingAcceptance:{tariffId:shippingQuote.tariffId,shippingFee:shippingQuote.shippingFee,totalPrice:shippingQuote.totalPrice,...(shippingQuote.shippingChargeMode?{shippingChargeMode:shippingQuote.shippingChargeMode,policyRevision:shippingQuote.policyRevision,termsAccepted:$('postpaidAgreement').querySelector('input').checked}:{})}});
   }
   button.disabled = true;
@@ -285,8 +291,7 @@ $('guestCheckout').addEventListener('submit', async event => {
     form.reset();
     const cardOrder = { number: order.orderNumber, key: checkoutRequest.key, total: order.totalPrice, expiry: order.expiresAt };
     try { sessionStorage.setItem('motif-card-order', JSON.stringify(cardOrder)); } catch {}
-    void showCardReceipt(cardOrder);
-    void showOnlinePayment(cardOrder);
+    void presentPaymentOptions(cardOrder);
     MotifCheckoutState.complete(sessionStorage);
     checkoutRequest = undefined;
     $('checkoutMessage').textContent = 'شماره سفارش ' + order.orderNumber + ' · مبلغ ' + money(order.totalPrice);
@@ -295,9 +300,15 @@ $('guestCheckout').addEventListener('submit', async event => {
     if (destinationCheckout) invalidateShipping();
     $('checkoutMessage').textContent = error.message;
   } finally {
-    button.disabled = destinationCheckout && !shippingQuote;
+    button.disabled = destinationCheckout && (!shippingQuote || (postpaidCheckout&&!$('postpaidAgreement').querySelector('input').checked));
   }
 });
+
+async function presentPaymentOptions(order) {
+  await Promise.all([showCardReceipt(order),showOnlinePayment(order)]);
+  const target=!$('onlinePayment').hidden?$('onlinePayment'):!$('cardReceipt').hidden?$('cardReceipt'):null;
+  target?.scrollIntoView({block:'nearest'});
+}
 
 let activeCardOrder;
 async function showCardReceipt(order) {
@@ -442,7 +453,7 @@ function updateShippingEstimate(quote) {
  const normal=s=>s.trim().replace(/[يى]/g,'ی').replace(/ك/g,'ک');
  const courier=select?.value==='COORDINATED_COURIER',karaj=normal(f.province.value)==='البرز'&&normal(f.city.value)==='کرج';
  const tehran=normal(f.province.value)==='تهران'&&normal(f.city.value)==='تهران';
- const method=courier?(karaj?'پیک کرج':'پیک تهران'):'پست پیشتاز';
+ const method=courier?(karaj?'ارسال فوری کرج':'ارسال فوری تهران'):'پست پیشتاز';
  const threshold=quote?.freeShippingThreshold??(courier?(karaj?policy.karajFreeThreshold:policy.tehranFreeThreshold):policy.postalFreeThreshold);
  const panel=$('freeShippingProgress');
  panel.hidden=!cartNetGoodsTotal||!Number.isInteger(threshold)||(courier&&!karaj&&!tehran);
@@ -452,5 +463,6 @@ function updateShippingEstimate(quote) {
   meter.max=threshold;meter.value=threshold-remaining;
   $('freeShippingText').textContent=remaining?method+' · '+money(remaining)+' تا ارسال رایگان':method+' · مشمول ارسال رایگان';
  }
- $('shippingEta').textContent='زمان تقریبی: '+(quote?.eta||(courier?(karaj?policy.karajEta:policy.tehranEta):(normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta)))+'؛ زمان قطعی تضمین نمی‌شود.';
+ const eta=quote?.eta||(courier?'':normal(f.province.value)==='البرز'?policy.postalLocalEta:policy.postalEta);
+ $('shippingEta').textContent=eta?'زمان تقریبی: '+eta:'';
 }

@@ -52,3 +52,17 @@ test('JSONB key ordering does not change accepted customer or parcel fingerprint
  assert.equal(p.hash(a),p.hash(b));
  assert.notEqual(p.hash(a),p.hash({...b,customer:{...b.customer,city:'کرج'}}));
 });
+
+test('Tehran cutoff switches from today to tomorrow and rejects stale same-day offers',()=>{
+ const before=new Date('2026-11-28T16:29:00Z'),at=new Date('2026-11-28T16:30:00Z'),after=new Date('2026-11-28T16:31:00Z');
+ assert.deepEqual(p.deliverySchedule('20:00',before),{today:'2026-11-28',tomorrow:'2026-11-29',todayAvailable:true});
+ assert.equal(p.requestedDeliveryDate('today','20:00',at),'2026-11-28');
+ assert.equal(p.requestedDeliveryDate(undefined,'20:00',after),'2026-11-29');
+ assert.throws(()=>p.requestedDeliveryDate('today','20:00',after),e=>e.statusCode===409);
+ assert.equal(p.requestedDeliveryDate('tomorrow','20:00',after),'2026-11-29');
+ assert.throws(()=>p.ensureDeliveryDate('2026-11-28','20:00',after),e=>e.statusCode===409);
+ assert.doesNotThrow(()=>p.ensureDeliveryDate('2026-11-29','20:00',after));
+ assert.equal(p.deliverySchedule('19:30',new Date('2026-12-31T21:00:00Z')).tomorrow,'2027-01-02');
+ assert.throws(()=>p.settingsInput({...p.defaults,courierCutoff:'24:00'}),e=>e.statusCode===400);
+ assert.equal(p.settingsInput({...p.defaults,courierCutoff:'19:15'}).courierCutoff,'19:15');
+});

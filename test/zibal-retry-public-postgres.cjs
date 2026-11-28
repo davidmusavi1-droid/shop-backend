@@ -129,7 +129,7 @@ async function run() {
     const fs = require('node:fs/promises'); await fs.mkdir('artifacts', { recursive: true });
     const browser = await chromium.launch({ executablePath: process.env.CHROME_BIN, headless: true, args: ['--no-sandbox'] });
     try {
-      for (const [label, width] of [['desktop', 1280], ['mobile', 320]]) {
+      for (const [label, width] of [['desktop', 1280], ['mobile', 320], ['mobile-wide', 390]]) {
         const item = await fixtureProduct('Synthetic browser ' + label);
         const context = await browser.newContext({ viewport: { width, height: 900 } });
         const page = await context.newPage(); const origin = 'http://127.0.0.1:' + server.address().port;
@@ -143,8 +143,12 @@ async function run() {
           else await page.locator('#guestCheckout [name="' + name + '"]').fill(value);
         }
         assert.ok(await page.locator('#guestCheckout button.primary').isDisabled());
-        await page.locator('#postpaidAgreement input').check();
         await page.locator('#quoteShipping').click();
+        const approval=page.locator('#postpaidAgreement input');
+        await approval.waitFor();
+        assert.equal(await approval.isChecked(),false);
+        assert.ok(await page.locator('#guestCheckout button.primary').isDisabled());
+        await approval.check();
         await page.waitForFunction(()=>!document.querySelector('#guestCheckout button.primary').disabled);
         assert.ok((await page.locator('#checkoutShipping').innerText()).includes('۱۰٬۰۰۰'));
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
