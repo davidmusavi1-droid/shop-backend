@@ -26,3 +26,4 @@ input::placeholder,.measure-panel .guide,.measure-panel .hint,.notice{color:var(
 .customer-guides{display:flex;flex-wrap:wrap;gap:16px;margin-block:20px}.customer-guide{max-width:760px;margin:auto;padding:24px}.customer-guide p{line-height:2}
 #postpaidAgreement{display:flex;align-items:flex-start;gap:10px}#postpaidAgreement[hidden]{display:none}
 #postpaidAgreement input{width:20px;height:20px;padding:0;flex:0 0 20px}
+.free-shipping{margin-block:1rem;padding:.8rem 1rem;border:1px solid currentColor;border-radius:.75rem}.free-shipping p{margin:0 0 .45rem}.free-shipping progress{display:block;width:100%;height:.65rem;accent-color:currentColor}

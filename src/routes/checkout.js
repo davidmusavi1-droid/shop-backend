@@ -12,6 +12,10 @@ const router = express.Router();
 
 // Tracking remains available for existing orders when new checkout is paused.
 router.use('/tracking', require('./order-tracking'));
+router.get('/shipping-policy', handle(async (req,res)=>{
+  res.set('Cache-Control','no-store');
+  res.json(shippingPolicy.publicView(await shippingPolicy.read(prisma)));
+}));
 router.use((req, res, next) => {
   res.set('Cache-Control', 'no-store');
   if (publicCheckout()) return next();
@@ -38,7 +42,7 @@ router.use('/card-transfer', require('./card-transfer'));
 router.get('/shipping', handle(async (req, res) => {
   if(postpaid.required()){
     let policy;try{policy=await postpaid.active(prisma);}catch(e){if(e.statusCode!==503)throw e;}
-    return res.json({mode:'postpaid',shippingFee:0,ready:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady(),policy:shippingPolicy.publicView(await shippingPolicy.read(prisma))});
+    return res.json({mode:'postpaid',shippingFee:0,ready:true,postpaidReady:Boolean(policy),provinces:shipping.provinces,cities:{},terms:postpaid.terms,public:publicCheckout(),trackingAvailable:liveTrackingReady(),policy:shippingPolicy.publicView(await shippingPolicy.read(prisma))});
   }
   if (shipping.required()) {
     let tariff;
@@ -83,7 +87,7 @@ router.post('/shipping/quote', handle(async (req, res) => {
     lines.push({ ...item, unitPrice: v.product.basePrice + v.priceDelta });
   }
   const q=await (postpaid.required()?postpaid:shipping).quote(prisma,input.customer,lines);
-  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms,eta:q.eta}:{})});
+  res.json({tariffId:q.tariffId,shippingFee:q.shippingFee,goodsTotal:q.goodsTotal,totalPrice:q.totalPrice,carrier:q.details.carrier,...(q.shippingChargeMode?{shippingChargeMode:q.shippingChargeMode,terms:q.terms,eta:q.eta,policyRevision:q.policyRevision,freeShipping:q.freeShipping,freeShippingThreshold:q.freeShippingThreshold,remainingForFreeShipping:q.remainingForFreeShipping}:{})});
 }));
 
 router.post('/orders', handle(async (req, res) => {

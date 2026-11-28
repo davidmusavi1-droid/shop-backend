@@ -19,11 +19,14 @@ async function load(){
  root.append(settings);
  const policy=await api(base+'/policy');
  const policyForm=E('form');policyForm.append(E('h3','سیاست و زمان تقریبی ارسال'));
- policyForm.append(E('p','پست پیشتاز پس‌کرایه و کرایه بر عهده مشتری است، بدون آستانه مبلغ خرید. پیک تهران و کرج فقط با کرایه توافق‌شده؛ تیپاکس غیرفعال است.'));
+ policyForm.append(E('p','آستانه‌ها بر اساس جمع مبلغ کالا پس از تخفیف و به تومان‌اند. در ارسال رایگان کرایه بر عهده MOTIF است؛ تیپاکس غیرفعال است.'));
+ const thresholdFields=[['postalFreeThreshold','آستانه پست پیشتاز'],['karajFreeThreshold','آستانه پیک کرج'],['tehranFreeThreshold','آستانه پیک تهران']];
+ for(const [name,label] of thresholdFields)field(policyForm,name,label+'، تومان',policy[name],'number').max='2147483647';
  for(const [n,t] of [['postalEta','زمان تقریبی پست سایر استان‌ها'],['postalLocalEta','زمان تقریبی پست استان البرز'],['karajEta','زمان تقریبی پیک کرج'],['tehranEta','زمان تقریبی پیک تهران']])field(policyForm,n,t,policy[n]);
- action(policyForm,'ذخیره زمان‌های ارسال',async()=>{
+ action(policyForm,'ذخیره آستانه‌ها و زمان ارسال',async()=>{
   const f=policyForm.elements,body={expectedRevision:policy.revision};
   for(const n of ['postalEta','postalLocalEta','karajEta','tehranEta'])body[n]=f[n].value.trim();
+  for(const [name] of thresholdFields)body[name]=f[name].valueAsNumber;
   await api(base+'/policy',{method:'PUT',body:JSON.stringify(body)});await load();
  });root.append(policyForm);
  const postal=E('form');postal.append(E('h3','پست پیشتاز ـ پس‌کرایه'));

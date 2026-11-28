@@ -9,8 +9,13 @@ function authorize(row,token) {
   if(actual.length!==expected.length||!timingSafeEqual(actual,expected))throw fail(404,'درخواست پیدا نشد');
 }
 async function lock(tx,id){await tx.$queryRaw`SELECT 1::int AS locked FROM pg_advisory_xact_lock(hashtextextended(${'courier:'+id},0))`;}
+function publicOffer(offer) {
+  if(!offer)return offer;
+  const {courierAgreedFee,...visible}=offer;
+  return visible;
+}
 function view(row) {
-  return {id:row.id,state:row.state,expiresAt:row.expiresAt,revision:row.revision,offer:row.offer,orderNumber:row.orderId,customer:row.payload.customer,items:row.payload.items};
+  return {id:row.id,state:row.state,expiresAt:row.expiresAt,revision:row.revision,offer:publicOffer(row.offer),orderNumber:row.orderId,customer:row.payload.customer,items:row.payload.items};
 }
 async function request(db,input,token) {
   const config=await p.settings(db);
@@ -53,7 +58,7 @@ async function offer(db,id,body) {
     const totalPrice=p.integer(goodsTotal);
     const expiresAt=new Date(Math.min(+row.expiresAt,+now+config.offerMinutes*60000));
     const tariff=await tx.shippingTariff.create({data:{id:randomUUID(),source:'تأیید دستی پشتیبانی؛ پیشنهاد '+id,carrier:'COORDINATED_COURIER',originProvince:'البرز',originCity:'کرج',validFrom:now,validUntil:expiresAt,rules:[]}});
-    const quote={...cost,tariffId:tariff.id,shippingFee:0,courierDueAtDelivery:fee,goodsTotal,totalPrice,eta:body.eta.trim(),expiresAt:expiresAt.toISOString(),reservationMinutes:30,parcel,items:priced};
+    const quote={...cost,tariffId:tariff.id,shippingFee:0,courierDueAtDelivery:cost.freeShipping?0:fee,courierAgreedFee:fee,shippingDueAtDelivery:cost.freeShipping?0:fee,goodsTotal,totalPrice,eta:body.eta.trim(),expiresAt:expiresAt.toISOString(),reservationMinutes:30,parcel,items:priced};
     await tx.courierOffer.create({data:{requestId:id,revision:row.revision+1,details:quote}});
     return view(await tx.courierRequest.update({where:{id},data:{state:'OFFERED',revision:row.revision+1,offer:quote}}));
   });
@@ -72,8 +77,12 @@ async function acceptedQuote(tx,input,items) {
   const goodsTotal=items.reduce((sum,x)=>sum+x.unitPrice*x.quantity,0);
   if(goodsTotal!==row.offer.goodsTotal)throw fail(409,'قیمت کالا تغییر کرده است؛ پیشنهاد جدید لازم است');
   const currentCost=policy.calculate(await policy.read(tx),'COORDINATED_COURIER',input.customer,goodsTotal);
-  if(row.offer.shippingChargeMode!=='RECIPIENT_AT_DELIVERY'||row.offer.shippingFee!==0||!Number.isInteger(row.offer.courierDueAtDelivery)||row.offer.courierDueAtDelivery<=0)throw fail(409,'پیشنهاد قدیمی با سیاست فعلی سازگار نیست؛ پیشنهاد جدید لازم است');
-  if(currentCost.policyRevision!==row.offer.policyRevision)throw fail(409,'قانون ارسال تغییر کرده؛ پیشنهاد جدید لازم است');
+  const offer=row.offer;
+  const agreedFee=offer.courierAgreedFee;
+  if(currentCost.policyRevision!==offer.policyRevision||currentCost.shippingChargeMode!==offer.shippingChargeMode||offer.shippingFee!==0||
+     !Number.isInteger(agreedFee)||agreedFee<=0||offer.courierDueAtDelivery!==(currentCost.freeShipping?0:agreedFee)) {
+    throw fail(409,'شرایط ارسال تغییر کرده است؛ پیشنهاد تازه دریافت کنید');
+  }
   const q={...row.offer,details:{...row.offer,method:'COORDINATED_COURIER',carrier:'COORDINATED_COURIER',requestId:row.id,revision:row.revision,destination:destination(input.customer),originProvince:'البرز',originCity:'کرج',customerAccepted:true,allInclusive:false}};
   if(a.totalPrice!==q.totalPrice||a.shippingFee!==q.shippingFee)throw fail(409,'مبلغ پیشنهاد باید صریحاً پذیرفته شود');
   return q;

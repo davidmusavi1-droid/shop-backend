@@ -14,7 +14,7 @@ function eligible(){const f=form.elements,n=s=>s.trim().replace(/[يى]/g,'ی').
 function sync(){
  const available=config?.courierEnabled&&eligible();
  select.options[1].disabled=!available;select.options[1].hidden=!available;
- if(!available)select.value='POST_PISHTAZ';
+ if(!available&&select.value==='COORDINATED_COURIER'){select.value='POST_PISHTAZ';updateShippingEstimate();}
  const courier=select.value==='COORDINATED_COURIER';
  document.getElementById('postpaidAgreement').hidden=courier||!postpaidCheckout;
  document.getElementById('postpaidAgreement').querySelector('input').required=!courier&&postpaidCheckout;
@@ -24,7 +24,7 @@ function sync(){
  form.querySelector('button.primary').hidden=courier;
  note.textContent='درخواست اولیه کالا را رزرو نمی‌کند. امکان ارسال، زمان تحویل و هزینه با پشتیبانی هماهنگ می‌شود؛ تحویل همان‌روز تضمین‌شده نیست.'+(config?.supportPhone?' پشتیبانی: '+config.supportPhone:'');
 }
-select.onchange=()=>{sync();updateShippingEstimate();};form.addEventListener('input',sync);form.addEventListener('change',sync);
+select.onchange=()=>{sync();invalidateShipping();};form.addEventListener('input',sync);form.addEventListener('change',sync);
 new MutationObserver(sync).observe(form,{attributes:true,attributeFilter:['hidden']});
 async function api(url,options={}){const r=await checkoutWrite('/api/checkout/logistics'+url,{...options,headers:{'Content-Type':'application/json','X-Courier-Token':saved?.token||'',...options.headers}});const d=await r.json();if(!r.ok)throw Error(d.error||'خطای ارسال فوری');return d;}
 request.onclick=async()=>{
@@ -45,8 +45,8 @@ check.onclick=async()=>{
  if(Date.parse(offer.expiresAt)<=Date.now()){status.textContent='درخواست منقضی شده است؛ درخواست تازه لازم است.';return;}
  if(!offer.offer){status.textContent='در انتظار هماهنگی پشتیبانی';return;}
  const q=offer.offer;
- updateShippingEstimate(q);
- result.append(E('p',offer.customer.city+' · '+offer.customer.address),E('p','کالا / پرداخت آنلاین '+money(q.goodsTotal)+' · '+('کرایه توافق‌شده پیک هنگام تحویل '+money(q.courierDueAtDelivery))),E('p',q.eta+' · اعتبار تا '+new Date(q.expiresAt).toLocaleString('fa-IR')));
+ if(select.value==='COORDINATED_COURIER')updateShippingEstimate(q);
+ result.append(E('p',offer.customer.city+' · '+offer.customer.address),E('p','کالا / پرداخت آنلاین '+money(q.goodsTotal)+' · '+(q.freeShipping?'ارسال رایگان؛ کرایه بر عهده MOTIF است':'کرایه جداگانه هنگام تحویل '+money(q.courierDueAtDelivery))),E('p',q.eta+' · اعتبار تا '+new Date(q.expiresAt).toLocaleString('fa-IR')));
  const accept=E('button','تأیید مبلغ قطعی و ثبت سفارش');accept.type='button';accept.disabled=Date.parse(q.expiresAt)<=Date.now();result.append(accept);
  accept.onclick=async()=>{
  accept.disabled=true;
